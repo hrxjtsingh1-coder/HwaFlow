@@ -2,34 +2,21 @@
 
 import { useEffect, useRef, useState } from "react";
 import { notifications } from "@/lib/dashboard-data";
-import {
-  Bell,
-  ChevronRight,
-  Menu,
-  Plus,
-  Search,
-  X,
-} from "../icons";
+import { Bell, ChevronRight, Menu } from "../icons";
 import { Logo } from "../logo";
 
 type DashboardTopbarProps = {
-  query: string;
-  onQueryChange: (value: string) => void;
   onOpenMenu: () => void;
-  onOpenUpload: () => void;
 };
 
-export function DashboardTopbar({
-  query,
-  onQueryChange,
-  onOpenMenu,
-  onOpenUpload,
-}: DashboardTopbarProps) {
+export function DashboardTopbar({ onOpenMenu }: DashboardTopbarProps) {
   const [open, setOpen] = useState(false);
   const [readAll, setReadAll] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  const unread = readAll ? 0 : notifications.filter((item) => item.unread).length;
+  const unread = readAll
+    ? 0
+    : notifications.filter((item) => item.unread).length;
 
   useEffect(() => {
     if (!open) return;
@@ -76,27 +63,6 @@ export function DashboardTopbar({
       </div>
 
       <div className="dash-topbar-actions">
-        <label className="dash-search">
-          <Search className="h-3.5 w-3.5 shrink-0" />
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => onQueryChange(event.target.value)}
-            placeholder="Search series, chapters…"
-            aria-label="Search series and chapters"
-          />
-          {query ? (
-            <button
-              type="button"
-              className="dash-search-clear"
-              onClick={() => onQueryChange("")}
-              aria-label="Clear search"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          ) : null}
-        </label>
-
         <div className="dash-notif-wrap" ref={wrapRef}>
           <button
             type="button"
@@ -159,15 +125,6 @@ export function DashboardTopbar({
             </ul>
           </div>
         </div>
-
-        <button
-          type="button"
-          className="btn btn-primary btn-sm dash-upload-btn"
-          onClick={onOpenUpload}
-        >
-          <Plus className="h-4 w-4" />
-          <span className="dash-upload-label">Upload chapter</span>
-        </button>
       </div>
     </header>
   );

@@ -3,95 +3,188 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
-  type ComponentType,
   type CSSProperties,
-  type SVGProps,
+  type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
-import { getInitials, signOut } from "@/lib/auth";
+import { signOut } from "@/lib/auth";
 import {
-  activityFeed,
   approvedThisMonth,
-  demoGroup,
   earningBars,
   earningsThisMonth,
-  initialGlossary,
-  initialPipeline,
-  initialReviewQueue,
   initialWeek,
-  seriesList,
-  teamMembers,
-  type DashTone,
-  type GlossaryTerm,
-  type ReviewChapter,
-  type TeamMember,
-  type WeekDay,
+  type Release,
 } from "@/lib/dashboard-data";
 import { useAuthSession } from "@/lib/use-auth-session";
 import {
-  AlertCircle,
-  ArrowRight,
   ArrowUpRight,
-  BookOpen,
-  Check,
+  CalendarDays,
   Clock,
-  Coins,
-  Inbox,
-  Languages,
-  ScanText,
   ShieldCheck,
-  Sparkles,
   TrendingUp,
   X,
 } from "../icons";
 import { Logo } from "../logo";
-import { PanelArt } from "../panel-art";
 import { DashboardRail } from "./dashboard-rail";
 import { DashboardTopbar } from "./dashboard-topbar";
-import { UploadDialog, type UploadInput } from "./upload-dialog";
 
-type IconType = ComponentType<SVGProps<SVGSVGElement>>;
+/* ------------------------------------------------------------------ */
+/* Focus tracking                                                      */
+/* ------------------------------------------------------------------ */
 
-type Stat = {
+const FOCUS_KEY = "hwaflow.focus.v1";
+const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+type CalendarDay = {
+  key: string;
   label: string;
-  value: string;
-  icon: IconType;
-  tone: DashTone;
-  delta: string;
-  deltaKind: "up" | "warn";
-  foot: string;
+  long: string;
+  date: number;
+  isToday: boolean;
+  seconds: number;
+  releases: Release[];
 };
 
-type ToastState = {
-  title: string;
-  detail: string;
-};
-
-const statusChips: Record<ReviewChapter["status"], string> = {
-  Polished: "chip chip-mint",
-  Translated: "chip chip-accent",
-  "First pass": "chip chip-peach",
-};
-
-const avatarTones: DashTone[] = ["lavender", "mint", "peach", "sky"];
-
-function StageIcon({
-  stage,
-  className,
-}: {
-  stage: "Reading panels" | "Translating" | "Polishing";
-  className?: string;
-}) {
-  if (stage === "Reading panels") return <ScanText className={className} />;
-  if (stage === "Translating") return <Languages className={className} />;
-  return <Sparkles className={className} />;
+function dayKey(date = new Date()): string {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
 }
 
-function releaseChip(status: "Published" | "Scheduled" | "Approved") {
+function readFocusLog(): Record<string, number> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(FOCUS_KEY);
+    if (!raw) return {};
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return {};
+    const log: Record<string, number> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+        log[key] = Math.floor(value);
+      }
+    }
+    return log;
+  } catch {
+    return {};
+  }
+}
+
+function writeFocusLog(log: Record<string, number>): void {
+  try {
+    window.localStorage.setItem(FOCUS_KEY, JSON.stringify(log));
+  } catch {
+    /* Focus tracking is a nicety, never a requirement. */
+  }
+}
+
+function formatFocus(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+
+  if (hours > 0) return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+  if (minutes > 0) return `${minutes}m ${String(total % 60).padStart(2, "0")}s`;
+  return `${total}s`;
+}
+
+/**
+ * Reveals a number from zero once on mount, then follows the live value.
+ * The snapshot is taken on first render so a ticking value (time spent) does
+ * not restart the count.
+ */
+function CountUp({
+  value,
+  delay = 0,
+  format,
+}: {
+  value: number;
+  delay?: number;
+  format: (value: number) => string;
+}) {
+  const [shown, setShown] = useState(0);
+  const [done, setDone] = useState(false);
+  const snapshot = useRef(value);
+
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setShown(snapshot.current);
+      setDone(true);
+      return;
+    }
+
+    const duration = 620;
+    const start = performance.now() + delay;
+    let frame = requestAnimationFrame(function step(now) {
+      const progress = Math.min(1, Math.max(0, (now - start) / duration));
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setShown(snapshot.current * eased);
+      if (progress < 1) {
+        frame = requestAnimationFrame(step);
+      } else {
+        setDone(true);
+      }
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [delay]);
+
+  return <>{format(done ? value : shown)}</>;
+}
+
+/** Human label for a day relative to today, e.g. "Today" or "In 2 days". */
+function relativeDay(day: CalendarDay): string {
+  const target = new Date(`${day.key}T00:00:00`);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diff = Math.round((target.getTime() - today.getTime()) / 86_400_000);
+
+  if (diff === 0) return "Today";
+  if (diff === 1) return "Tomorrow";
+  if (diff === -1) return "Yesterday";
+  if (diff > 1) return `In ${diff} days`;
+  return `${Math.abs(diff)} days ago`;
+}
+
+/** Monday-to-Sunday week around today, with the live session folded into today. */
+function buildWeek(
+  log: Record<string, number>,
+  liveSeconds: number
+): { days: CalendarDay[]; releases: number } {
+  const now = new Date();
+  const todayKey = dayKey(now);
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  const longDate = new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+
+  const days: CalendarDay[] = WEEKDAY_LABELS.map((label, index) => {
+    const date = new Date(monday);
+    date.setDate(monday.getDate() + index);
+    const key = dayKey(date);
+    return {
+      key,
+      label,
+      long: longDate.format(date),
+      date: date.getDate(),
+      isToday: key === todayKey,
+      seconds: key === todayKey ? liveSeconds : (log[key] ?? 0),
+      releases: initialWeek[index]?.releases ?? [],
+    };
+  });
+
+  return {
+    days,
+    releases: days.reduce((total, day) => total + day.releases.length, 0),
+  };
+}
+
+function releaseChip(status: Release["status"]) {
   if (status === "Approved") return "chip chip-mint";
   if (status === "Scheduled") return "chip chip-accent";
   return "chip";
@@ -111,141 +204,131 @@ function DashboardLoading() {
   );
 }
 
+/* ------------------------------------------------------------------ */
+
 export function DashboardHome() {
   const router = useRouter();
   const { user, ready } = useAuthSession();
 
   const [menuOpen, setMenuOpen] = useState(false);
-  const [uploadOpen, setUploadOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [queueFilter, setQueueFilter] = useState<"you" | "all">("you");
-  const [reviewItems, setReviewItems] = useState<ReviewChapter[]>(
-    initialReviewQueue
-  );
-  const [approvedDelta, setApprovedDelta] = useState(0);
-  const [week, setWeek] = useState<WeekDay[]>(initialWeek);
-  const [selectedDay, setSelectedDay] = useState(2);
-  const [pipeline, setPipeline] = useState(initialPipeline);
-  const [glossary, setGlossary] = useState<GlossaryTerm[]>(initialGlossary);
-  const [toast, setToast] = useState<ToastState | null>(null);
-  const toastTimer = useRef<number | null>(null);
+  const [openDay, setOpenDay] = useState<CalendarDay | null>(null);
+  const [tracking, setTracking] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const [baseToday, setBaseToday] = useState(0);
+  const [sessionSeconds, setSessionSeconds] = useState(0);
+  const [focusLog, setFocusLog] = useState<Record<string, number>>({});
+  const focusLogRef = useRef<Record<string, number>>({});
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+
+  const closeDay = () => {
+    setOpenDay(null);
+    triggerRef.current?.focus();
+  };
+
+  // Keep Tab inside the day popup while it is open.
+  const trapDayTab = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Tab") return;
+    const focusable = event.currentTarget.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
+    );
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
 
   useEffect(() => {
     if (ready && !user) router.replace("/login");
   }, [ready, user, router]);
 
   useEffect(() => {
-    if (!menuOpen && !uploadOpen) return;
+    if (!menuOpen && !openDay) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = previous;
     };
-  }, [menuOpen, uploadOpen]);
+  }, [menuOpen, openDay]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setMenuOpen(false);
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+        setOpenDay(null);
+        triggerRef.current?.focus();
+      }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, []);
 
   useEffect(() => {
+    if (!openDay) return;
+    dialogRef.current?.focus();
+  }, [openDay]);
+
+  // Pick up whatever this browser already tracked for today.
+  useEffect(() => {
+    const log = readFocusLog();
+    focusLogRef.current = log;
+    setFocusLog(log);
+    setBaseToday(log[dayKey()] ?? 0);
+    setTracking(true);
+  }, []);
+
+  // Focused means the tab is visible *and* the window has focus.
+  useEffect(() => {
+    const sync = () =>
+      setFocused(
+        document.visibilityState === "visible" && document.hasFocus()
+      );
+
+    sync();
+    window.addEventListener("focus", sync);
+    window.addEventListener("blur", sync);
+    document.addEventListener("visibilitychange", sync);
     return () => {
-      if (toastTimer.current) window.clearTimeout(toastTimer.current);
+      window.removeEventListener("focus", sync);
+      window.removeEventListener("blur", sync);
+      document.removeEventListener("visibilitychange", sync);
     };
   }, []);
 
-  const showToast = useCallback((title: string, detail: string) => {
-    setToast({ title, detail });
-    if (toastTimer.current) window.clearTimeout(toastTimer.current);
-    toastTimer.current = window.setTimeout(() => setToast(null), 4800);
-  }, []);
+  useEffect(() => {
+    if (!tracking || !focused) return;
+    const id = window.setInterval(
+      () => setSessionSeconds((value) => value + 1),
+      1000
+    );
+    return () => window.clearInterval(id);
+  }, [tracking, focused]);
 
-  const handleSignOut = useCallback(() => {
+  // Fold the live session into today's stored total.
+  useEffect(() => {
+    if (!tracking || sessionSeconds === 0) return;
+
+    const key = dayKey();
+    const next = { ...focusLogRef.current, [key]: baseToday + sessionSeconds };
+    focusLogRef.current = next;
+    writeFocusLog(next);
+    setFocusLog(next);
+  }, [tracking, sessionSeconds, baseToday]);
+
+  const handleSignOut = () => {
     signOut();
     router.replace("/login");
-  }, [router]);
-
-  const handleApprove = (item: ReviewChapter) => {
-    setReviewItems((items) => items.filter((entry) => entry.id !== item.id));
-    setApprovedDelta((value) => value + 1);
-    setWeek((days) =>
-      days.map((day) => ({
-        ...day,
-        releases: day.releases.map((release) =>
-          release.series === item.series && release.chapter === item.chapter
-            ? { ...release, status: "Approved" as const }
-            : release
-        ),
-      }))
-    );
-    showToast(
-      `Chapter ${item.chapter} approved`,
-      `${item.series} is ready for release.`
-    );
   };
-
-  const handleUpload = (input: UploadInput) => {
-    const tone: DashTone =
-      input.language === "Japanese"
-        ? "mint"
-        : input.language === "Chinese"
-          ? "sky"
-          : "lavender";
-
-    setPipeline((jobs) => [
-      {
-        id: `queued-${Date.now()}`,
-        series: input.series,
-        chapter: input.chapter,
-        stage: "Reading panels",
-        detail: `${input.pages} page${input.pages === 1 ? "" : "s"} queued`,
-        progress: 3,
-        eta: "Starting now",
-        tone,
-      },
-      ...jobs,
-    ]);
-    setUploadOpen(false);
-    showToast(
-      `Chapter ${input.chapter} queued`,
-      `${input.series} is being read now — it will land in your queue when it's ready.`
-    );
-  };
-
-  const handleConfirmGlossary = (term: GlossaryTerm) => {
-    setGlossary((terms) =>
-      terms.map((entry) =>
-        entry.id === term.id ? { ...entry, status: "kept" as const } : entry
-      )
-    );
-    showToast(
-      "Term confirmed",
-      `${term.source} → ${term.target} is now kept across the group.`
-    );
-  };
-
-  const roster: TeamMember[] = useMemo(() => {
-    if (!user) return [];
-    const owner: TeamMember = {
-      id: user.id,
-      name: user.displayName,
-      initials: getInitials(user.displayName, user.username),
-      role: "Owner",
-      status: "online",
-      workload: `Reviewing ${reviewItems.length}`,
-      tone: "lavender",
-      you: true,
-    };
-    return [owner, ...teamMembers.filter((member) => member.id !== "mira")];
-  }, [user, reviewItems.length]);
 
   if (!ready || !user) return <DashboardLoading />;
 
-  const firstName =
-    user.displayName.trim().split(/\s+/)[0] || user.username;
+  const firstName = user.displayName.trim().split(/\s+/)[0] || user.username;
   const hour = new Date().getHours();
   const greeting =
     hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
@@ -255,718 +338,378 @@ export function DashboardHome() {
     day: "numeric",
   }).format(new Date());
 
-  const pendingCount = reviewItems.length;
-  const mineCount = reviewItems.filter((item) => item.owner === "you").length;
-  const approvedTotal = approvedThisMonth + approvedDelta;
-  const selected = week[selectedDay];
-
-  const search = query.trim().toLowerCase();
-  const matchesSearch = (value: string) => !search || value.toLowerCase().includes(search);
-
-  const filteredQueue = reviewItems.filter((item) => {
-    if (queueFilter === "you" && item.owner !== "you") return false;
-    return (
-      matchesSearch(item.series) || matchesSearch(`chapter ${item.chapter}`)
-    );
-  });
-
-  const filteredSeries = seriesList.filter(
-    (item) => matchesSearch(item.title) || matchesSearch(item.language)
-  );
-
-  const stats: Stat[] = [
-    {
-      label: "In review",
-      value: String(pendingCount),
-      icon: Inbox,
-      tone: "lavender",
-      delta: mineCount ? `${mineCount} need you` : "Clear",
-      deltaKind: mineCount ? "warn" : "up",
-      foot: mineCount ? "Approve or send back" : "Nothing waiting",
-    },
-    {
-      label: "Active series",
-      value: String(seriesList.length),
-      icon: BookOpen,
-      tone: "sky",
-      delta: "+1 this month",
-      deltaKind: "up",
-      foot: "2 updating this week",
-    },
-    {
-      label: "Approved · Oct",
-      value: String(approvedTotal),
-      icon: Check,
-      tone: "mint",
-      delta: "+6 this week",
-      deltaKind: "up",
-      foot: "Across the group",
-    },
-    {
-      label: "Earnings · Oct",
-      value: `$${earningsThisMonth.toFixed(2)}`,
-      icon: Coins,
-      tone: "peach",
-      delta: "+$36.00",
-      deltaKind: "up",
-      foot: `${approvedTotal} approved · about $5.77 each`,
-    },
-  ];
+  const todaySeconds = baseToday + sessionSeconds;
+  const week = buildWeek(focusLog, todaySeconds);
+  const weekSeconds = week.days.reduce((total, day) => total + day.seconds, 0);
+  const peakSeconds = Math.max(1, ...week.days.map((day) => day.seconds));
+  const activeDays = week.days.filter((day) => day.seconds > 0).length;
 
   return (
-    <>
-      <div className="dash-shell">
-        <DashboardRail
-          user={user}
-          reviewCount={mineCount}
-          open={menuOpen}
-          onClose={() => setMenuOpen(false)}
-          onSignOut={handleSignOut}
-        />
-
-        <div className="dash-body">
-          <DashboardTopbar
-            query={query}
-            onQueryChange={setQuery}
-            onOpenMenu={() => setMenuOpen(true)}
-            onOpenUpload={() => setUploadOpen(true)}
-          />
-
-          <main className="dash-main" id="main">
-            <div className="dash-content">
-              <section className="dash-hero dash-enter" id="overview">
-                <div className="dash-hero-copy">
-                  <p className="eyebrow">{today}</p>
-                  <h1 className="dash-hero-title">
-                    {greeting},{" "}
-                    <span className="display-serif text-accent-ink">
-                      {firstName}
-                    </span>
-                    .
-                  </h1>
-                  <p className="dash-hero-sub">
-                    {pendingCount > 0
-                      ? `${pendingCount} chapter${
-                          pendingCount === 1 ? "" : "s"
-                        } in review${
-                          mineCount > 0 ? `, ${mineCount} assigned to you` : ""
-                        }. Your group has shipped ${approvedTotal} chapters this month.`
-                      : `Your review queue is clear. Your group has shipped ${approvedTotal} chapters this month.`}
-                  </p>
-                  <div className="dash-hero-tags">
-                    <span className="chip chip-mint">
-                      <span className="status-dot h-1.5 w-1.5" />
-                      {mineCount > 0
-                        ? `${mineCount} waiting on you`
-                        : "Queue clear"}
-                    </span>
-                    <span className="chip">Next release Fri, Oct 23</span>
-                    <span className="chip">
-                      {pipeline.length} jobs running
-                    </span>
-                  </div>
-                </div>
-
-                <div className="dash-hero-actions">
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={() => setUploadOpen(true)}
-                  >
-                    <Sparkles className="h-4 w-4" />
-                    Upload a chapter
-                  </button>
-                  <a href="#review" className="btn btn-ghost">
-                    Go to the queue
-                    <ArrowRight className="btn-icon h-4 w-4" />
-                  </a>
-                </div>
-              </section>
-
-              <div className="dash-stats">
-                {stats.map((stat, index) => (
-                  <article
-                    key={stat.label}
-                    className="dash-stat dash-enter"
-                    data-tone={stat.tone}
-                    style={
-                      {
-                        "--dash-delay": `${70 + index * 45}ms`,
-                      } as CSSProperties
-                    }
-                  >
-                    <div className="dash-stat-top">
-                      <span className="dash-stat-icon" aria-hidden="true">
-                        <stat.icon className="h-4 w-4" />
-                      </span>
-                      <span className="dash-delta" data-kind={stat.deltaKind}>
-                        {stat.delta}
-                      </span>
-                    </div>
-                    <p className="dash-stat-label">{stat.label}</p>
-                    <p className="dash-stat-value">{stat.value}</p>
-                    <p className="dash-stat-foot">{stat.foot}</p>
-                  </article>
-                ))}
-              </div>
-
-              <div className="dash-grid dash-grid--main">
-                <section className="dash-panel" id="review">
-                  <div className="dash-panel-head">
-                    <div>
-                      <p className="eyebrow">Review queue</p>
-                      <h2 className="dash-panel-title">Needs your eye</h2>
-                    </div>
-                    <div className="dash-filter" aria-label="Filter review queue">
-                      <button
-                        type="button"
-                        aria-pressed={queueFilter === "you"}
-                        onClick={() => setQueueFilter("you")}
-                      >
-                        For you
-                      </button>
-                      <button
-                        type="button"
-                        aria-pressed={queueFilter === "all"}
-                        onClick={() => setQueueFilter("all")}
-                      >
-                        All
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="dash-queue">
-                    {filteredQueue.length > 0 ? (
-                      filteredQueue.map((item) => (
-                        <article className="dash-queue-row" key={item.id}>
-                          <div className="dash-cover" aria-hidden="true">
-                            <PanelArt
-                              id={item.coverId}
-                              className="dash-cover-art"
-                            />
-                            <span className="dash-cover-badge">
-                              Ch. {item.chapter}
-                            </span>
-                          </div>
-
-                          <div className="dash-queue-main">
-                            <div className="dash-queue-top">
-                              <span className={statusChips[item.status]}>
-                                {item.status}
-                              </span>
-                              <span className="dash-queue-updated">
-                                <Clock className="h-3 w-3" />
-                                {item.updated}
-                              </span>
-                            </div>
-                            <h3 className="dash-queue-title">{item.series}</h3>
-                            <p className="dash-queue-sub">
-                              Chapter {item.chapter} · {item.pages} pages ·{" "}
-                              {item.source} → English
-                            </p>
-                            <div className="dash-notes">
-                              {item.notes.map((note) => (
-                                <span className="dash-note" key={note}>
-                                  <AlertCircle className="h-3 w-3" />
-                                  {note}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-
-                          <div className="dash-queue-actions">
-                            <button
-                              type="button"
-                              className="btn btn-primary btn-sm"
-                              onClick={() => handleApprove(item)}
-                            >
-                              <Check className="h-3.5 w-3.5" />
-                              Approve
-                            </button>
-                          </div>
-                        </article>
-                      ))
-                    ) : (
-                      <div className="dash-queue-empty">
-                        <span className="dash-empty-icon" aria-hidden="true">
-                          <Check className="h-4 w-4" />
-                        </span>
-                        <p>
-                          {search
-                            ? `No chapters match “${query.trim()}”.`
-                            : "You're all caught up."}
-                        </p>
-                        <span>
-                          {search
-                            ? "Try a different search, or switch to All."
-                            : "New chapters will land here when they're ready."}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="dash-panel-foot">
-                    <span>
-                      {filteredQueue.length} of {reviewItems.length} chapter
-                      {reviewItems.length === 1 ? "" : "s"}
-                    </span>
-                    <button
-                      type="button"
-                      className="dash-link"
-                      onClick={() =>
-                        setQueueFilter((value) =>
-                          value === "you" ? "all" : "you"
-                        )
-                      }
-                    >
-                      {queueFilter === "you" ? "Show all" : "Only mine"}
-                      <ArrowRight className="h-3 w-3" />
-                    </button>
-                  </div>
-                </section>
-
-                <div className="dash-side">
-                  <section className="dash-panel">
-                    <div className="dash-panel-head">
-                      <div>
-                        <p className="eyebrow">Release week</p>
-                        <h2 className="dash-panel-title">Oct 19 – 25</h2>
-                      </div>
-                      <span className="chip chip-mint">On track</span>
-                    </div>
-
-                    <div className="dash-week" aria-label="Pick a day this week">
-                      {week.map((day, index) => (
-                        <button
-                          key={day.day + day.date}
-                          type="button"
-                          className="dash-day"
-                          data-selected={selectedDay === index ? "true" : "false"}
-                          onClick={() => setSelectedDay(index)}
-                          aria-pressed={selectedDay === index}
-                          aria-label={`${day.day} ${day.date}, ${day.releases.length} release${day.releases.length === 1 ? "" : "s"}`}
-                        >
-                          <span className="dash-day-label">{day.day}</span>
-                          <span className="dash-day-num">{day.date}</span>
-                          <span className="dash-day-dots" aria-hidden="true">
-                            {Array.from({
-                              length: Math.min(day.releases.length, 3),
-                            }).map((_, dot) => (
-                              <span key={dot} />
-                            ))}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-
-                    <ul className="dash-release-list">
-                      {selected.releases.length > 0 ? (
-                        selected.releases.map((release) => (
-                          <li
-                            className="dash-release"
-                            key={`${release.series}-${release.chapter}`}
-                          >
-                            <span className="dash-release-time">
-                              {release.time}
-                            </span>
-                            <span
-                              className="dash-release-bar"
-                              data-tone={release.tone}
-                              aria-hidden="true"
-                            />
-                            <span className="dash-release-body">
-                              <span className="dash-release-title">
-                                {release.series}
-                              </span>
-                              <span className="dash-release-sub">
-                                Chapter {release.chapter}
-                              </span>
-                            </span>
-                            <span className={releaseChip(release.status)}>
-                              {release.status}
-                            </span>
-                          </li>
-                        ))
-                      ) : (
-                        <li className="dash-release-empty">
-                          Nothing scheduled. A quiet day.
-                        </li>
-                      )}
-                    </ul>
-
-                    <p className="dash-panel-foot-note">
-                      Chapters go out at the times your group sets.
-                    </p>
-                  </section>
-
-                  <section className="dash-panel" id="earnings">
-                    <div className="dash-panel-head">
-                      <div>
-                        <p className="eyebrow">Your earnings</p>
-                        <h2 className="dash-panel-title">October</h2>
-                      </div>
-                      <span className="chip chip-mint">
-                        <TrendingUp className="h-3 w-3" />
-                        +$36.00
-                      </span>
-                    </div>
-
-                    <div className="dash-earnings">
-                      <p className="dash-earnings-value">
-                        ${earningsThisMonth.toFixed(2)}
-                      </p>
-                      <p className="dash-earnings-sub">
-                        {approvedTotal} approved chapters · about $5.77 each
-                      </p>
-
-                      <div className="dash-spark" aria-hidden="true">
-                        {earningBars.map((height, index) => (
-                          <span
-                            key={index}
-                            style={
-                              {
-                                height: `${height}%`,
-                                "--dash-bar-delay": `${index * 45}ms`,
-                              } as CSSProperties
-                            }
-                          />
-                        ))}
-                      </div>
-                      <div className="dash-spark-axis" aria-hidden="true">
-                        <span>Week 1</span>
-                        <span>Week 2</span>
-                        <span>Week 3</span>
-                        <span>This week</span>
-                      </div>
-
-                      <p className="dash-earnings-note">
-                        <ShieldCheck className="h-3.5 w-3.5" />
-                        Credit follows approved work. Undo an approval and it
-                        updates.
-                      </p>
-                    </div>
-                  </section>
-                </div>
-              </div>
-
-              <div className="dash-grid dash-grid--split">
-                <section className="dash-panel" id="pipeline">
-                  <div className="dash-panel-head">
-                    <div>
-                      <p className="eyebrow">Pipeline</p>
-                      <h2 className="dash-panel-title">Working in the background</h2>
-                    </div>
-                    <span className="chip">{pipeline.length} jobs</span>
-                  </div>
-
-                  <div className="dash-jobs">
-                    {pipeline.map((job) => (
-                      <article className="dash-job" key={job.id}>
-                        <div className="dash-job-top">
-                          <span
-                            className="dash-job-icon"
-                            data-tone={job.tone}
-                            aria-hidden="true"
-                          >
-                            <StageIcon
-                              stage={job.stage}
-                              className="h-4 w-4"
-                            />
-                          </span>
-                          <span className="dash-job-main">
-                            <span className="dash-job-title">{job.series}</span>
-                            <span className="dash-job-sub">
-                              Chapter {job.chapter} · {job.detail}
-                            </span>
-                          </span>
-                          <span className="dash-job-pct">{job.progress}%</span>
-                        </div>
-
-                        <div className="dash-progress">
-                          <span
-                            data-tone={job.tone}
-                            style={{ width: `${job.progress}%` }}
-                          />
-                        </div>
-
-                        <div className="dash-job-foot">
-                          <span className="chip">{job.stage}</span>
-                          <span>{job.eta}</span>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-
-                  <p className="dash-panel-foot-note">
-                    Close the tab if you like. HwaFlow picks up where it left
-                    off.
-                  </p>
-                </section>
-
-                <section className="dash-panel" id="activity">
-                  <div className="dash-panel-head">
-                    <div>
-                      <p className="eyebrow">Activity</p>
-                      <h2 className="dash-panel-title">Around the group</h2>
-                    </div>
-                    <span className="chip">{demoGroup.members} members</span>
-                  </div>
-
-                  <ol className="dash-feed">
-                    {activityFeed.map((item) => (
-                      <li className="dash-feed-item" key={item.id}>
-                        <span
-                          className="dash-avatar"
-                          data-tone={item.tone}
-                          aria-hidden="true"
-                        >
-                          {item.initials}
-                        </span>
-                        <span className="dash-feed-body">
-                          <span className="dash-feed-text">
-                            <strong>{item.actor}</strong> {item.action}
-                          </span>
-                          <span className="dash-feed-meta">
-                            {item.meta}
-                            {item.credit ? (
-                              <span className="dash-feed-credit">
-                                {item.credit}
-                              </span>
-                            ) : null}
-                          </span>
-                        </span>
-                      </li>
-                    ))}
-                  </ol>
-                </section>
-              </div>
-
-              <section className="dash-section" id="series">
-                <div className="dash-section-head">
-                  <div>
-                    <p className="eyebrow">Series</p>
-                    <h2 className="dash-section-title">Your group&apos;s shelf</h2>
-                  </div>
-                  <span className="chip">{filteredSeries.length} active</span>
-                </div>
-
-                {filteredSeries.length > 0 ? (
-                  <div className="dash-series-grid">
-                    {filteredSeries.map((item) => (
-                      <article
-                        className="dash-series-card"
-                        data-tone={item.tone}
-                        key={item.id}
-                      >
-                        <div className="dash-series-cover">
-                          <PanelArt
-                            id={item.coverId}
-                            className="dash-series-art"
-                          />
-                          <span
-                            className="dash-series-scrim"
-                            aria-hidden="true"
-                          />
-                          <span className="dash-series-lang">
-                            {item.language}
-                          </span>
-                          <span className="dash-series-chapters">
-                            {item.chapters} ch.
-                          </span>
-                          <div className="dash-series-cover-foot">
-                            <p className="dash-series-title">{item.title}</p>
-                            <p className="dash-series-stage">{item.stage}</p>
-                          </div>
-                        </div>
-
-                        <div className="dash-series-info">
-                          <div className="dash-series-row">
-                            <span>Next release</span>
-                            <strong>{item.nextRelease}</strong>
-                          </div>
-                          <div className="dash-progress dash-progress--sm">
-                            <span
-                              data-tone={item.tone}
-                              style={{ width: `${item.progress}%` }}
-                            />
-                          </div>
-                          <div className="dash-series-foot">
-                            <span className="dash-avatars">
-                              {item.team.map((initials, index) => (
-                                <span
-                                  key={initials}
-                                  className="dash-series-avatar"
-                                  data-tone={avatarTones[index % avatarTones.length]}
-                                >
-                                  {initials}
-                                </span>
-                              ))}
-                            </span>
-                            <span>{item.team.length} on it</span>
-                          </div>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="dash-series-empty">
-                    <BookOpen className="h-4 w-4" />
-                    <p>No series match “{query.trim()}”.</p>
-                  </div>
-                )}
-              </section>
-
-              <div className="dash-grid dash-grid--split">
-                <section className="dash-panel" id="glossary">
-                  <div className="dash-panel-head">
-                    <div>
-                      <p className="eyebrow">Glossary</p>
-                      <h2 className="dash-panel-title">Names that stay the same</h2>
-                    </div>
-                    <span className="chip">
-                      {
-                        glossary.filter((term) => term.status === "check")
-                          .length
-                      }{" "}
-                      to confirm
-                    </span>
-                  </div>
-
-                  <div className="dash-glossary">
-                    {glossary.map((term) => (
-                      <div
-                        className="dash-glossary-row"
-                        data-status={term.status}
-                        key={term.id}
-                      >
-                        <span className="ko dash-glossary-source">
-                          {term.source}
-                        </span>
-                        <ArrowRight className="dash-glossary-arrow h-3 w-3" />
-                        <span className="dash-glossary-target">
-                          {term.target}
-                        </span>
-                        <span className="dash-glossary-context">
-                          {term.context} · {term.uses} use
-                          {term.uses === 1 ? "" : "s"}
-                        </span>
-                        {term.status === "check" ? (
-                          <button
-                            type="button"
-                            className="dash-confirm"
-                            onClick={() => handleConfirmGlossary(term)}
-                          >
-                            Confirm
-                          </button>
-                        ) : (
-                          <span className="chip chip-mint">
-                            <Check className="h-2.5 w-2.5" />
-                            Kept
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-
-                  <p className="dash-panel-foot-note">
-                    HwaFlow asks before adding a new name to your group.
-                  </p>
-                </section>
-
-                <section className="dash-panel" id="team">
-                  <div className="dash-panel-head">
-                    <div>
-                      <p className="eyebrow">Team</p>
-                      <h2 className="dash-panel-title">Who&apos;s around</h2>
-                    </div>
-                    <span className="chip chip-mint">
-                      <span className="status-dot h-1.5 w-1.5" />
-                      Live
-                    </span>
-                  </div>
-
-                  <div className="dash-team">
-                    {roster.map((member) => (
-                      <div className="dash-team-row" key={member.id}>
-                        <span
-                          className="dash-avatar"
-                          data-tone={member.tone}
-                          aria-hidden="true"
-                        >
-                          {member.initials}
-                        </span>
-                        <span className="dash-team-main">
-                          <span className="dash-team-name">
-                            {member.name}
-                            {member.you ? (
-                              <span className="dash-you">You</span>
-                            ) : null}
-                          </span>
-                          <span className="dash-team-role">{member.role}</span>
-                        </span>
-                        <span className="dash-team-work">
-                          <span
-                            className="dash-status"
-                            data-status={member.status}
-                            aria-hidden="true"
-                          />
-                          {member.workload}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <p className="dash-panel-foot-note">
-                    1 owner · 2 managers · 3 staff · every screen respects the
-                    role.
-                  </p>
-                </section>
-              </div>
-
-              <footer className="dash-footer">
-                <span>
-                  Preview build — your session and changes stay in this browser.
-                </span>
-                <Link href="/" className="dash-link">
-                  Back to the site
-                  <ArrowUpRight className="h-3 w-3" />
-                </Link>
-              </footer>
-            </div>
-          </main>
-        </div>
-      </div>
-
-      <UploadDialog
-        open={uploadOpen}
-        onClose={() => setUploadOpen(false)}
-        onSubmit={handleUpload}
+    <div className="dash-shell">
+      <DashboardRail
+        user={user}
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        onSignOut={handleSignOut}
       />
 
-      {toast ? (
-        <div
-          className="dash-toast"
-          role="status"
-          aria-live="polite"
-          key={`${toast.title}-${toast.detail}`}
-        >
-          <span className="dash-toast-icon" aria-hidden="true">
-            <Check className="h-4 w-4" />
-          </span>
-          <span className="dash-toast-body">
-            <span className="dash-toast-title">{toast.title}</span>
-            <span className="dash-toast-copy">{toast.detail}</span>
-          </span>
-          <button
-            type="button"
-            className="dash-icon-btn"
-            onClick={() => setToast(null)}
-            aria-label="Dismiss notification"
+      <div className="dash-body">
+        <DashboardTopbar onOpenMenu={() => setMenuOpen(true)} />
+
+        <main className="dash-main" id="main">
+          <div className="dash-content">
+            <section className="dash-hero dash-enter" id="overview">
+              <div className="dash-hero-copy">
+                <p className="eyebrow">{today}</p>
+                <h1 className="dash-hero-title">
+                  {greeting},{" "}
+                  <span className="display-serif text-accent-ink">
+                    {firstName}
+                  </span>
+                  .
+                </h1>
+                <p className="dash-hero-sub">
+                  {week.releases > 0
+                    ? `${week.releases} chapter${
+                        week.releases === 1 ? "" : "s"
+                      } going out this week. Your group has shipped ${approvedThisMonth} chapters this month.`
+                    : `Nothing scheduled this week yet. Your group has shipped ${approvedThisMonth} chapters this month.`}
+                </p>
+                <div className="dash-hero-tags">
+                  <span className="chip chip-mint">
+                    <CalendarDays className="h-3 w-3" />
+                    {week.releases} release
+                    {week.releases === 1 ? "" : "s"} planned
+                  </span>
+                </div>
+              </div>
+            </section>
+
+            <div className="dash-grid dash-grid--split">
+              <section
+                className="dash-panel dash-enter"
+                id="earnings"
+                style={{ "--dash-delay": "70ms" } as CSSProperties}
+              >
+                <div className="dash-panel-head">
+                  <div>
+                    <p className="eyebrow">Money earned</p>
+                    <h2 className="dash-panel-title">October</h2>
+                  </div>
+                  <span className="chip chip-mint">
+                    <TrendingUp className="h-3 w-3" />
+                    +$36.00
+                  </span>
+                </div>
+
+                <div className="dash-earnings">
+                  <p className="dash-earnings-value">
+                    <CountUp
+                      value={earningsThisMonth}
+                      delay={70}
+                      format={(amount) => `$${amount.toFixed(2)}`}
+                    />
+                  </p>
+                  <p className="dash-earnings-sub">
+                    {approvedThisMonth} approved chapters · about $5.77 each
+                  </p>
+
+                  <div className="dash-spark" aria-hidden="true">
+                    {earningBars.map((height, index) => (
+                      <span
+                        key={index}
+                        style={
+                          {
+                            height: `${height}%`,
+                            "--dash-bar-delay": `${index * 45}ms`,
+                          } as CSSProperties
+                        }
+                      />
+                    ))}
+                  </div>
+                  <div className="dash-spark-axis" aria-hidden="true">
+                    <span>Week 1</span>
+                    <span>Week 2</span>
+                    <span>Week 3</span>
+                    <span>This week</span>
+                  </div>
+
+                  <p className="dash-earnings-note">
+                    <ShieldCheck className="h-3.5 w-3.5" />
+                    Credit follows approved work. Undo an approval and it
+                    updates.
+                  </p>
+                </div>
+              </section>
+
+              <section
+                className="dash-panel dash-enter"
+                id="time"
+                style={{ "--dash-delay": "115ms" } as CSSProperties}
+              >
+                <div className="dash-panel-head">
+                  <div>
+                    <p className="eyebrow">Time spent</p>
+                    <h2 className="dash-panel-title">Tab in focus</h2>
+                  </div>
+                  {focused ? (
+                    <span className="chip chip-mint dash-chip-swap">
+                      <span className="status-dot h-1.5 w-1.5" />
+                      Tracking
+                    </span>
+                  ) : (
+                    <span className="chip dash-chip-swap">Paused</span>
+                  )}
+                </div>
+
+                <div className="dash-time">
+                  <p className="dash-time-value">
+                    <CountUp
+                      value={todaySeconds}
+                      delay={115}
+                      format={formatFocus}
+                    />
+                  </p>
+                  <p className="dash-time-sub">
+                    today ·{" "}
+                    {formatFocus(sessionSeconds)} this session ·{" "}
+                    {formatFocus(weekSeconds)} this week
+                  </p>
+
+                  <div
+                    className="dash-spark"
+                    role="img"
+                    aria-label={`Focused time this week: ${week.days
+                      .map((day) => `${day.label} ${formatFocus(day.seconds)}`)
+                      .join(", ")}`}
+                  >
+                    {week.days.map((day, index) => (
+                      <span
+                        key={day.key}
+                        data-today={day.isToday ? "true" : undefined}
+                        style={
+                          {
+                            height: `${Math.max(
+                              8,
+                              Math.round((day.seconds / peakSeconds) * 100)
+                            )}%`,
+                            "--dash-bar-delay": `${index * 45}ms`,
+                          } as CSSProperties
+                        }
+                      />
+                    ))}
+                  </div>
+                  <div className="dash-spark-axis" aria-hidden="true">
+                    {week.days.map((day) => (
+                      <span key={day.key}>{day.label.slice(0, 1)}</span>
+                    ))}
+                  </div>
+
+                  <p className="dash-time-note">
+                    <Clock className="h-3.5 w-3.5" />
+                    Counted only while this tab is open and focused —{" "}
+                    {activeDays} of 7 days so far.
+                  </p>
+                </div>
+              </section>
+            </div>
+
+            <section
+              className="dash-panel dash-enter"
+              id="calendar"
+              style={{ "--dash-delay": "160ms" } as CSSProperties}
+            >
+              <div className="dash-panel-head">
+                <div>
+                  <p className="eyebrow">Calendar</p>
+                  <h2 className="dash-panel-title">This week</h2>
+                </div>
+                <span className="dash-cal-legend">
+                  <span className="dash-cal-dot" aria-hidden="true" />
+                  {week.releases === 0
+                    ? "No releases"
+                    : `${week.releases} release${week.releases === 1 ? "" : "s"}`}
+                </span>
+              </div>
+
+              <div className="dash-calendar">
+                {week.days.map((day, index) => {
+                  const count = day.releases.length;
+                  const names = day.releases
+                    .slice(0, 3)
+                    .map((release) => release.series)
+                    .join(", ");
+                  return (
+                    <button
+                      type="button"
+                      key={day.key}
+                      id={`cal-day-${day.key}`}
+                      className="dash-cal-day"
+                      data-today={day.isToday ? "true" : "false"}
+                      data-weekend={index > 4 ? "true" : "false"}
+                      data-open={openDay?.key === day.key ? "true" : "false"}
+                      style={
+                        {
+                          "--tile-delay": `${260 + index * 35}ms`,
+                        } as CSSProperties
+                      }
+                      disabled={count === 0}
+                      onClick={(event) => {
+                        triggerRef.current = event.currentTarget;
+                        setOpenDay(day);
+                      }}
+                      onKeyDown={(event) => {
+                        if (
+                          event.key !== "ArrowLeft" &&
+                          event.key !== "ArrowRight"
+                        ) {
+                          return;
+                        }
+                        event.preventDefault();
+                        const step = event.key === "ArrowRight" ? 1 : -1;
+                        for (
+                          let cursor = index + step;
+                          cursor >= 0 && cursor < week.days.length;
+                          cursor += step
+                        ) {
+                          if (week.days[cursor].releases.length > 0) {
+                            document
+                              .getElementById(`cal-day-${week.days[cursor].key}`)
+                              ?.focus();
+                            break;
+                          }
+                        }
+                      }}
+                      aria-haspopup={count > 0 ? "dialog" : undefined}
+                      aria-label={
+                        count > 0
+                          ? `${day.long}, ${count} release${
+                              count === 1 ? "" : "s"
+                            }`
+                          : `${day.long}, no releases`
+                      }
+                      title={
+                        count > 0
+                          ? `${day.long} · ${count} chapter${
+                              count === 1 ? "" : "s"
+                            }: ${names}${count > 3 ? "…" : ""}`
+                          : `${day.long} · no releases`
+                      }
+                    >
+                      <span className="dash-cal-name">{day.label}</span>
+                      <span className="dash-cal-date">{day.date}</span>
+                      <span className="dash-cal-dots" aria-hidden="true">
+                        {Array.from({ length: Math.min(count, 5) }).map(
+                          (_, dot) => (
+                            <span
+                              className="dash-cal-dot"
+                              key={dot}
+                              style={
+                                {
+                                  "--dot-delay": `${dot * 70}ms`,
+                                } as CSSProperties
+                              }
+                            />
+                          )
+                        )}
+                        {count > 5 ? (
+                          <span className="dash-cal-more">+{count - 5}</span>
+                        ) : null}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <p className="dash-panel-foot-note">
+                A dot marks a release day. Select one to see every chapter
+                scheduled. Times are shown in your local timezone.
+              </p>
+            </section>
+
+            <footer className="dash-footer">
+              <span>
+                Preview build — your session and changes stay in this browser.
+              </span>
+              <Link href="/" className="dash-link">
+                Back to the site
+                <ArrowUpRight className="h-3 w-3" />
+              </Link>
+            </footer>
+          </div>
+        </main>
+      </div>
+
+      {openDay && openDay.releases.length > 0 ? (
+        <div className="dash-day-layer" onClick={closeDay}>
+          <div
+            className="dash-day-popup"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="dash-day-title"
+            tabIndex={-1}
+            ref={dialogRef}
+            onKeyDown={trapDayTab}
+            onClick={(event) => event.stopPropagation()}
           >
-            <X className="h-3.5 w-3.5" />
-          </button>
+            <div className="dash-day-popup-head">
+              <span className="dash-day-badge" aria-hidden="true">
+                <span className="dash-day-badge-name">{openDay.label}</span>
+                <span className="dash-day-badge-date">{openDay.date}</span>
+              </span>
+              <div className="dash-day-popup-copy">
+                <p className="eyebrow">{relativeDay(openDay)}</p>
+                <h2 className="dash-panel-title" id="dash-day-title">
+                  {openDay.long}
+                </h2>
+                <p className="dash-day-popup-sub">
+                  {openDay.releases.length} chapter
+                  {openDay.releases.length === 1 ? "" : "s"} scheduled
+                </p>
+              </div>
+              <button
+                type="button"
+                className="dash-icon-btn"
+                onClick={closeDay}
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <ul className="dash-release-list">
+              {openDay.releases.map((release, index) => (
+                <li
+                  className="dash-release-row"
+                  data-tone={release.tone}
+                  key={`${release.series}-${release.chapter}`}
+                  style={
+                    { "--row-delay": `${index * 55}ms` } as CSSProperties
+                  }
+                >
+                  <span className="dash-release-dot" aria-hidden="true" />
+                  <span className="dash-release-main">
+                    <span className="dash-release-title">
+                      {release.series}
+                    </span>
+                    <span className="dash-release-meta">
+                      Chapter {release.chapter} · {release.time}
+                    </span>
+                  </span>
+                  <span className={releaseChip(release.status)}>
+                    {release.status}
+                  </span>
+                </li>
+              ))}
+            </ul>
+
+            <p className="dash-day-popup-note">
+              <Clock className="h-3 w-3" />
+              Times are shown in your local timezone.
+            </p>
+          </div>
         </div>
       ) : null}
-    </>
+    </div>
   );
 }
