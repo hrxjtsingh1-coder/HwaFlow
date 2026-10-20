@@ -7,3 +7,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+## Project docs
+
+- `docs/ARCHITECTURE.md` — single source of truth for architecture, data model, RBAC, design system and page inventory. Read before building anything.
+- `docs/GROUPS-PAGE.md` — locked decisions, permissions, data model and build spec for the groups surfaces (`/admin/groups`, `/admin/groups/[id]`, `/settings/members`). Read before starting that work; do not re-ask the decisions recorded there.
+- `docs/context.md` — product intent.
+

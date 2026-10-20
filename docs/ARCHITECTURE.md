@@ -3,6 +3,8 @@
 > **Status:** In build. The landing page (`/`) is complete; app pages are next.
 > **Build mode:** Page-by-page. The user names a page; we build that page fully, then move on.
 > **Last updated:** 2026-10-21
+> **Next up:** Groups (admin console + member settings). Locked build spec and
+> decision record: [`docs/GROUPS-PAGE.md`](GROUPS-PAGE.md) — read it before coding.
 
 This document is the single source of truth for architecture, decisions, and the page
 inventory. Read it before building anything.
@@ -459,6 +461,8 @@ quota-exhausted pipeline banner.
 | 2026-10-21 | Purge page originals on approval, policy swappable | Free-tier storage ceiling |
 | 2026-10-21 | Product name is **HwaFlow** | User decision; replaces the working name MTL |
 | 2026-10-21 | Landing copy is plain language; implementation details stay out of the UI | Readable by non-technical group members and newcomers |
+| 2026-10-21 | Preview build gates `/admin` on the hardcoded username `noddy` until Supabase profiles exist | The localStorage auth store has no `is_platform_admin`; a username check is the narrowest honest stand-in |
+| 2026-10-21 | Groups: Managers add Staff only; invites are pending until accepted; last accepted group is active; icons stored as data URLs behind a swappable adapter | Confirmed in the groups-page discussion — see `docs/GROUPS-PAGE.md` |
 
 ---
 
