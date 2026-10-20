@@ -154,7 +154,8 @@ export function AuthExperience({ initialMode }: { initialMode: AuthMode }) {
 
       <main className="auth-main">
         <div className="auth-main-bg" aria-hidden="true">
-          <div className="auth-main-glow" />
+          <div className="auth-halo auth-halo--lavender" />
+          <div className="auth-halo auth-halo--mint" />
         </div>
 
         <div className="auth-main-body">
@@ -312,7 +313,7 @@ export function AuthExperience({ initialMode }: { initialMode: AuthMode }) {
                     aria-hidden={mode !== "sign-in"}
                     inert={mode !== "sign-in"}
                   >
-                    <div className="auth-head">
+                    <div className="auth-head" key={mode}>
                       <p className="eyebrow">Your workspace</p>
                       <h1 className="auth-title">
                         Welcome{" "}
@@ -340,7 +341,7 @@ export function AuthExperience({ initialMode }: { initialMode: AuthMode }) {
                     aria-hidden={mode !== "sign-up"}
                     inert={mode !== "sign-up"}
                   >
-                    <div className="auth-head">
+                    <div className="auth-head" key={mode}>
                       <p className="eyebrow">Free to start</p>
                       <h1 className="auth-title">
                         Start your{" "}
