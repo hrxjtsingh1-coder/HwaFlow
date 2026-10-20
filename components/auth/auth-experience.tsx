@@ -71,7 +71,7 @@ export function AuthExperience({ initialMode }: { initialMode: AuthMode }) {
 
   useEffect(() => {
     if (!success) return;
-    const timeout = window.setTimeout(() => router.push("/"), 3200);
+    const timeout = window.setTimeout(() => router.push("/dashboard"), 3200);
     return () => window.clearTimeout(timeout);
   }, [success, router]);
 
@@ -188,8 +188,8 @@ export function AuthExperience({ initialMode }: { initialMode: AuthMode }) {
 
                 <p className="auth-success-sub">
                   You&apos;re signed in as{" "}
-                  <strong>@{success.user.username}</strong>. Taking you home in
-                  a moment.
+                  <strong>@{success.user.username}</strong>. Taking you to your
+                  workspace in a moment.
                 </p>
 
                 <div className="auth-success-progress" aria-hidden="true">
@@ -199,9 +199,9 @@ export function AuthExperience({ initialMode }: { initialMode: AuthMode }) {
                 <button
                   type="button"
                   className="auth-submit"
-                  onClick={() => router.push("/")}
+                  onClick={() => router.push("/dashboard")}
                 >
-                  Continue to HwaFlow
+                  Open your dashboard
                   <ArrowRight className="auth-submit-icon h-4 w-4" />
                 </button>
 
@@ -257,9 +257,9 @@ export function AuthExperience({ initialMode }: { initialMode: AuthMode }) {
                 <button
                   type="button"
                   className="auth-submit"
-                  onClick={() => router.push("/")}
+                  onClick={() => router.push("/dashboard")}
                 >
-                  Continue to HwaFlow
+                  Open your dashboard
                   <ArrowRight className="auth-submit-icon h-4 w-4" />
                 </button>
 

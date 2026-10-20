@@ -235,6 +235,11 @@
   }
 }
 
+.auth-back:active {
+  transform: scale(0.97);
+  transition-duration: 0.1s;
+}
+
 /* ------------------------------------------------------------------ */
 /* Centre stage                                                        */
 /* ------------------------------------------------------------------ */
@@ -643,6 +648,26 @@
   transform: scale(0.92);
 }
 
+.auth-eye-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 1rem;
+  height: 1rem;
+}
+
+.auth-eye-icon > svg {
+  position: absolute;
+  inset: 0;
+  transition: opacity 0.18s var(--ease), transform 0.22s var(--ease-out);
+}
+
+.auth-eye-icon[data-visible="false"] > svg:nth-child(2),
+.auth-eye-icon[data-visible="true"] > svg:nth-child(1) {
+  opacity: 0;
+  transform: scale(0.82) rotate(-10deg);
+}
+
 @media (hover: hover) and (pointer: fine) {
   .auth-eye:hover {
     color: var(--text);
@@ -747,8 +772,16 @@
   opacity: 1;
 }
 
-.auth-reveal > div {
+.auth-reveal > div,
+.auth-meter-reveal > div {
   overflow: hidden;
+  transform: translateY(-4px);
+  transition: transform 0.35s var(--ease-out);
+}
+
+.auth-reveal[data-open="true"] > div,
+.auth-meter[data-open="true"] .auth-meter-reveal > div {
+  transform: none;
 }
 
 .auth-forgot-panel[data-open="true"] {

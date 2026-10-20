@@ -511,6 +511,22 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
+.account-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+  padding: 0.15rem 0.35rem 0.15rem 0.15rem;
+  border-radius: 999px;
+  color: inherit;
+  text-decoration: none;
+  transition: background-color 0.2s var(--ease);
+}
+
+.account-main:hover {
+  background: color-mix(in oklab, var(--accent) 8%, transparent);
+}
+
 .account-meta {
   display: flex;
   flex-direction: column;
@@ -990,7 +1006,24 @@
     var(--border-strong) 88%,
     transparent
   );
+  transform-origin: left center;
   z-index: 0;
+}
+
+/* draw the connector once the last step has landed */
+.js .pipeline-grid::before {
+  transform: scaleX(0);
+  transition: transform 0.9s var(--ease-out) 0.18s;
+}
+
+.js .pipeline-grid:has(> .reveal:nth-child(3)[data-visible="true"])::before {
+  transform: scaleX(1);
+}
+
+@supports not selector(:has(*)) {
+  .js .pipeline-grid::before {
+    transform: none;
+  }
 }
 
 .step-card {

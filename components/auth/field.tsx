@@ -119,11 +119,14 @@ export function PasswordField({
             aria-pressed={visible}
             tabIndex={0}
           >
-            {visible ? (
-              <EyeOff className="h-4 w-4" />
-            ) : (
+            <span
+              className="auth-eye-icon"
+              data-visible={visible ? "true" : "false"}
+              aria-hidden="true"
+            >
               <Eye className="h-4 w-4" />
-            )}
+              <EyeOff className="h-4 w-4" />
+            </span>
           </button>
         </>
       }

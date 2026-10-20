@@ -288,3 +288,101 @@ export function AlertCircle(props: IconProps) {
     </Svg>
   );
 }
+
+export function Search(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="11" cy="11" r="6.75" />
+      <path d="m20 20-3.6-3.6" />
+    </Svg>
+  );
+}
+
+export function Bell(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M18 8.5a6 6 0 0 0-12 0c0 5.8-2 7-2 7h16s-2-1.2-2-7Z" />
+      <path d="M10.2 20a2 2 0 0 0 3.6 0" />
+    </Svg>
+  );
+}
+
+export function Plus(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </Svg>
+  );
+}
+
+export function ChevronDown(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="m6 9 6 6 6-6" />
+    </Svg>
+  );
+}
+
+export function ChevronRight(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="m9 6 6 6-6 6" />
+    </Svg>
+  );
+}
+
+export function Clock(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3 2" />
+    </Svg>
+  );
+}
+
+export function TrendingUp(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="m3.5 16.5 5-5 3.5 3.5 6.5-7" />
+      <path d="M15 8h4.5v4.5" />
+    </Svg>
+  );
+}
+
+export function LayoutGrid(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="3.5" y="3.5" width="7" height="7" rx="1.6" />
+      <rect x="13.5" y="3.5" width="7" height="7" rx="1.6" />
+      <rect x="3.5" y="13.5" width="7" height="7" rx="1.6" />
+      <rect x="13.5" y="13.5" width="7" height="7" rx="1.6" />
+    </Svg>
+  );
+}
+
+export function Inbox(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M5.2 5.5h13.6l1.7 7v3.8a2.2 2.2 0 0 1-2.2 2.2H5.7a2.2 2.2 0 0 1-2.2-2.2v-3.8l1.7-7Z" />
+      <path d="M3.5 12.5h4.3l1.4 2.6h5.6l1.4-2.6h4.3" />
+    </Svg>
+  );
+}
+
+export function BookOpen(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 6.6C10.5 5 8 4.4 4 5v13.2c4-.6 6.5 0 8 1.6 1.5-1.6 4-2.2 8-1.6V5c-4-.6-6.5 0-8 1.6Z" />
+      <path d="M12 6.6v13.2" />
+    </Svg>
+  );
+}
+
+export function Activity(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M3.5 12h4l2.4-7 4.2 14 2.4-7h4" />
+    </Svg>
+  );
+}

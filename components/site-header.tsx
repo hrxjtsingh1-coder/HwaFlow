@@ -55,13 +55,19 @@ export function SiteHeader() {
         <div className="hidden items-center gap-2 md:flex">
           {signedIn ? (
             <div className="account-chip">
-              <span className="account-avatar" aria-hidden="true">
-                {getInitials(signedIn.displayName, signedIn.username)}
-              </span>
-              <span className="account-meta">
-                <span className="account-name">{signedIn.displayName}</span>
-                <span className="account-handle">@{signedIn.username}</span>
-              </span>
+              <Link
+                href="/dashboard"
+                className="account-main"
+                aria-label="Open your dashboard"
+              >
+                <span className="account-avatar" aria-hidden="true">
+                  {getInitials(signedIn.displayName, signedIn.username)}
+                </span>
+                <span className="account-meta">
+                  <span className="account-name">{signedIn.displayName}</span>
+                  <span className="account-handle">@{signedIn.username}</span>
+                </span>
+              </Link>
               <button
                 type="button"
                 onClick={handleSignOut}
@@ -91,7 +97,7 @@ export function SiteHeader() {
           aria-expanded={open}
           aria-controls="mobile-nav"
           aria-label={open ? "Close menu" : "Open menu"}
-          className="grid h-10 w-10 place-items-center rounded-full border border-border bg-surface/70 text-ink backdrop-blur transition-colors hover:bg-surface md:hidden"
+          className="grid h-10 w-10 place-items-center rounded-full border border-border bg-surface/70 text-ink backdrop-blur transition-[color,background-color,transform] duration-150 hover:bg-surface active:scale-95 md:hidden"
         >
           {open ? (
             <X className="h-[18px] w-[18px]" />
@@ -126,7 +132,12 @@ export function SiteHeader() {
             <div className="mt-2 border-t border-border pt-4">
               {signedIn ? (
                 <div className="flex items-center justify-between gap-2 rounded-xl border border-border bg-surface px-3 py-2">
-                  <div className="flex min-w-0 items-center gap-2">
+                  <Link
+                    href="/dashboard"
+                    onClick={() => setOpen(false)}
+                    className="flex min-w-0 items-center gap-2"
+                    aria-label="Open your dashboard"
+                  >
                     <span className="account-avatar" aria-hidden="true">
                       {getInitials(signedIn.displayName, signedIn.username)}
                     </span>
@@ -135,10 +146,10 @@ export function SiteHeader() {
                         {signedIn.displayName}
                       </span>
                       <span className="block truncate text-[11px] text-faint">
-                        @{signedIn.username}
+                        @{signedIn.username} · Dashboard
                       </span>
                     </span>
-                  </div>
+                  </Link>
                   <button
                     type="button"
                     onClick={handleSignOut}
