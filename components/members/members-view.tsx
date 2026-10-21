@@ -22,15 +22,20 @@ import {
   type GroupInvite,
   type GroupMember,
 } from "@/lib/groups";
+import {
+  countSeriesForMember,
+  removeMemberAssignments,
+} from "@/lib/series";
 import { useAuthSession } from "@/lib/use-auth-session";
 import { useDialogA11y } from "@/lib/use-dialog";
 import { useGroups } from "@/lib/use-groups";
+import { useSeries } from "@/lib/use-series";
 import { DashboardRail } from "../dashboard/dashboard-rail";
 import { DashboardTopbar } from "../dashboard/dashboard-topbar";
+import { workspaceLinks } from "../dashboard/workspace-nav";
 import {
   AlertCircle,
   Check,
-  LayoutGrid,
   Plus,
   Trash,
   Users,
@@ -128,6 +133,7 @@ export function MembersView() {
   const router = useRouter();
   const { user, ready: authReady } = useAuthSession();
   const { ready: groupsReady } = useGroups();
+  const { ready: seriesReady } = useSeries();
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -166,7 +172,9 @@ export function MembersView() {
     };
   }, [menuOpen]);
 
-  if (!authReady || !groupsReady || !user) return <MembersLoading />;
+  if (!authReady || !groupsReady || !seriesReady || !user) {
+    return <MembersLoading />;
+  }
 
   const active = getActiveGroupFor(user.username);
   const activeGroup: Group | null = active?.group ?? null;
@@ -174,6 +182,15 @@ export function MembersView() {
   const viewerRole = viewerMember?.role ?? null;
 
   const members: GroupMember[] = activeGroup ? getMembers(activeGroup.id) : [];
+
+  const seriesCounts: Record<string, number> = activeGroup
+    ? Object.fromEntries(
+        members.map((member) => [
+          member.id,
+          countSeriesForMember(activeGroup.id, member.username),
+        ])
+      )
+    : {};
 
   // Invites can point at groups other than the active one, so resolve each.
   const receivedWithGroups: InviteItem[] = listInvitesForUser(user.username)
@@ -266,6 +283,7 @@ export function MembersView() {
         userId: removeTarget.userId,
         actor: user.username,
       });
+      removeMemberAssignments(activeGroup.id, removeTarget.userId);
       notify("success", `${removeTarget.displayName} was removed from the group.`);
       setRemoveTarget(null);
     } catch (caught) {
@@ -284,20 +302,7 @@ export function MembersView() {
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
         onSignOut={handleSignOut}
-        links={[
-          {
-            key: "overview",
-            href: "/dashboard",
-            label: "Dashboard",
-            icon: LayoutGrid,
-          },
-          {
-            key: "members",
-            href: "/settings/members",
-            label: "Members",
-            icon: Users,
-          },
-        ]}
+        links={workspaceLinks()}
         active="members"
       />
 
@@ -475,6 +480,7 @@ export function MembersView() {
                         members={members}
                         viewerRole={viewerRole}
                         viewerUsername={user.username}
+                        seriesCounts={seriesCounts}
                         onRoleChange={handleRoleChange}
                         onRemove={setRemoveTarget}
                       />
@@ -511,7 +517,7 @@ export function MembersView() {
                       </div>
                       <div>
                         <dt>Series assigned</dt>
-                        <dd>0</dd>
+                        <dd>{seriesCounts[viewerMember.id] ?? 0}</dd>
                       </div>
                     </dl>
 

@@ -10,19 +10,17 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { signOut } from "@/lib/auth";
+import { initialWeek, type Release } from "@/lib/dashboard-data";
 import {
-  approvedThisMonth,
-  earningBars,
-  earningsThisMonth,
-  initialWeek,
-  type Release,
-} from "@/lib/dashboard-data";
+  approvedChaptersThisMonth,
+  totalEarningsThisMonth,
+} from "@/lib/earnings";
+import { formatMoney } from "@/lib/format";
 import { useAuthSession } from "@/lib/use-auth-session";
 import {
   ArrowUpRight,
   CalendarDays,
   Clock,
-  LayoutGrid,
   ShieldCheck,
   TrendingUp,
   X,
@@ -30,6 +28,7 @@ import {
 import { Logo } from "../logo";
 import { DashboardRail } from "./dashboard-rail";
 import { DashboardTopbar } from "./dashboard-topbar";
+import { workspaceLinks } from "./workspace-nav";
 
 /* ------------------------------------------------------------------ */
 /* Focus tracking                                                      */
@@ -339,6 +338,18 @@ export function DashboardHome() {
     day: "numeric",
   }).format(new Date());
 
+  const earnings = totalEarningsThisMonth(user.username);
+  const approved = approvedChaptersThisMonth();
+  const shippedLine =
+    approved > 0
+      ? `Your group has shipped ${approved} chapter${
+          approved === 1 ? "" : "s"
+        } this month.`
+      : "Your group hasn't shipped any chapters this month yet.";
+  const monthLabel = new Intl.DateTimeFormat("en-US", {
+    month: "long",
+  }).format(new Date());
+
   const todaySeconds = baseToday + sessionSeconds;
   const week = buildWeek(focusLog, todaySeconds);
   const weekSeconds = week.days.reduce((total, day) => total + day.seconds, 0);
@@ -352,14 +363,7 @@ export function DashboardHome() {
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
         onSignOut={handleSignOut}
-        links={[
-          {
-            key: "overview",
-            href: "/dashboard",
-            label: "Dashboard",
-            icon: LayoutGrid,
-          },
-        ]}
+        links={workspaceLinks()}
         active="overview"
       />
 
@@ -382,8 +386,8 @@ export function DashboardHome() {
                   {week.releases > 0
                     ? `${week.releases} chapter${
                         week.releases === 1 ? "" : "s"
-                      } going out this week. Your group has shipped ${approvedThisMonth} chapters this month.`
-                    : `Nothing scheduled this week yet. Your group has shipped ${approvedThisMonth} chapters this month.`}
+                      } going out this week. ${shippedLine}`
+                    : `Nothing scheduled this week yet. ${shippedLine}`}
                 </p>
                 <div className="dash-hero-tags">
                   <span className="chip chip-mint">
@@ -404,45 +408,40 @@ export function DashboardHome() {
                 <div className="dash-panel-head">
                   <div>
                     <p className="eyebrow">Money earned</p>
-                    <h2 className="dash-panel-title">October</h2>
+                    <h2 className="dash-panel-title">{monthLabel}</h2>
                   </div>
-                  <span className="chip chip-mint">
-                    <TrendingUp className="h-3 w-3" />
-                    +$36.00
-                  </span>
+                  {earnings > 0 ? (
+                    <span className="chip chip-mint">
+                      <TrendingUp className="h-3 w-3" />
+                      Earning this month
+                    </span>
+                  ) : (
+                    <span className="chip">Awaiting approvals</span>
+                  )}
                 </div>
 
                 <div className="dash-earnings">
                   <p className="dash-earnings-value">
                     <CountUp
-                      value={earningsThisMonth}
+                      value={earnings}
                       delay={70}
-                      format={(amount) => `$${amount.toFixed(2)}`}
+                      format={(amount) => formatMoney(amount, "USD")}
                     />
                   </p>
                   <p className="dash-earnings-sub">
-                    {approvedThisMonth} approved chapters · about $5.77 each
+                    {approved > 0
+                      ? `${approved} approved chapter${
+                          approved === 1 ? "" : "s"
+                        } · credited to you`
+                      : "No approved chapters yet · credit appears here when a Manager approves work"}
                   </p>
 
-                  <div className="dash-spark" aria-hidden="true">
-                    {earningBars.map((height, index) => (
-                      <span
-                        key={index}
-                        style={
-                          {
-                            height: `${height}%`,
-                            "--dash-bar-delay": `${index * 45}ms`,
-                          } as CSSProperties
-                        }
-                      />
-                    ))}
-                  </div>
-                  <div className="dash-spark-axis" aria-hidden="true">
-                    <span>Week 1</span>
-                    <span>Week 2</span>
-                    <span>Week 3</span>
-                    <span>This week</span>
-                  </div>
+                  {earnings === 0 ? (
+                    <p className="dash-panel-foot-note">
+                      Approved work appears here. Nothing has been approved
+                      this month yet, so there is no chart to show.
+                    </p>
+                  ) : null}
 
                   <p className="dash-earnings-note">
                     <ShieldCheck className="h-3.5 w-3.5" />

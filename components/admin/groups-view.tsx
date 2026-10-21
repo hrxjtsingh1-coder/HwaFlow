@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { seriesCountFor, type Group, type GroupMember } from "@/lib/groups";
+import { type Group, type GroupMember } from "@/lib/groups";
+import { countSeriesInGroup } from "@/lib/series";
 import { useAuthSession } from "@/lib/use-auth-session";
 import { useGroups } from "@/lib/use-groups";
+import { useSeries } from "@/lib/use-series";
 import { Plus, Search, ShieldCheck, X } from "../icons";
 import { CreateGroupDrawer } from "./create-group-drawer";
 import { GroupCard } from "./group-card";
@@ -35,6 +37,7 @@ function GridSkeleton() {
 export function GroupsView() {
   const { user, ready: authReady } = useAuthSession();
   const { state, ready } = useGroups();
+  const { state: seriesState, ready: seriesReady } = useSeries();
 
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortKey>("newest");
@@ -60,9 +63,9 @@ export function GroupsView() {
       memberCount: state.members.filter(
         (member) => member.groupId === group.id
       ).length,
-      seriesCount: seriesCountFor(group.id),
+      seriesCount: countSeriesInGroup(group.id),
     }));
-  }, [state]);
+  }, [state, seriesState]);
 
   const visible = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -97,7 +100,7 @@ export function GroupsView() {
     );
   };
 
-  if (!authReady || !ready || !state || !user) {
+  if (!authReady || !ready || !seriesReady || !state || !user) {
     return (
       <div className="admin-page">
         <div className="admin-page-head">

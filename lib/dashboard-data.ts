@@ -24,18 +24,6 @@ export type WeekDay = {
   releases: Release[];
 };
 
-export type Notification = {
-  id: string;
-  title: string;
-  body: string;
-  time: string;
-  tone: DashTone;
-  unread: boolean;
-};
-
-export const approvedThisMonth = 32;
-export const earningsThisMonth = 184.5;
-
 export const initialWeek: WeekDay[] = [
   {
     day: "Mon",
@@ -101,31 +89,3 @@ export const initialWeek: WeekDay[] = [
   { day: "Sun", date: 25, releases: [] },
 ];
 
-export const notifications: Notification[] = [
-  {
-    id: "ready-review",
-    title: "Chapter 42 is ready for you",
-    body: "The Villainess Reborn · 3 glossary notes to check before tonight.",
-    time: "12 min ago",
-    tone: "lavender",
-    unread: true,
-  },
-  {
-    id: "translating",
-    title: "Moonlit Clinic is translating",
-    body: "Chapter 18 is 68% done — about two minutes left.",
-    time: "18 min ago",
-    tone: "mint",
-    unread: true,
-  },
-  {
-    id: "mention",
-    title: "Sana mentioned you",
-    body: "Can you confirm 새 이름 before Friday's release?",
-    time: "1 hr ago",
-    tone: "peach",
-    unread: false,
-  },
-];
-
-export const earningBars = [38, 56, 44, 72, 60, 84, 68, 96];

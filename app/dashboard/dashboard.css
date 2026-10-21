@@ -466,6 +466,42 @@
   color: var(--faint);
 }
 
+.dash-notif-link {
+  display: flex;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.dash-notif-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 0.5rem;
+}
+
+.dash-notif-empty {
+  padding: 1.2rem 0.9rem 1.35rem;
+  font-size: 0.72rem;
+  line-height: 1.55;
+  color: var(--faint);
+  text-align: center;
+}
+
+.dash-notif-more {
+  padding: 0.55rem 0.8rem 0.7rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.625rem;
+  color: var(--faint);
+  text-align: center;
+}
+
 /* ------------------------------------------------------------------ */
 /* Main + content                                                      */
 /* ------------------------------------------------------------------ */

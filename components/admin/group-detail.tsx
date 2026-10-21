@@ -6,11 +6,12 @@ import { findAccount, getInitials } from "@/lib/auth";
 import { formatShortDate } from "@/lib/format";
 import {
   chapterCountFor,
-  seriesCountFor,
   type GroupMember,
 } from "@/lib/groups";
+import { countSeriesInGroup } from "@/lib/series";
 import { useAuthSession } from "@/lib/use-auth-session";
 import { useGroups } from "@/lib/use-groups";
+import { useSeries } from "@/lib/use-series";
 import {
   ArrowLeft,
   ArrowUpRight,
@@ -37,13 +38,14 @@ function DetailSkeleton() {
 export function GroupDetail({ groupId }: { groupId: string }) {
   const { user, ready: authReady } = useAuthSession();
   const { state, ready } = useGroups();
+  const { ready: seriesReady } = useSeries();
   const [ownerDialogOpen, setOwnerDialogOpen] = useState(false);
 
   useEffect(() => {
     setOwnerDialogOpen(false);
   }, [groupId]);
 
-  if (!authReady || !ready || !state || !user) {
+  if (!authReady || !ready || !seriesReady || !state || !user) {
     return <DetailSkeleton />;
   }
 
@@ -72,7 +74,7 @@ export function GroupDetail({ groupId }: { groupId: string }) {
   );
   const owner = members.find((member) => member.role === "owner") ?? null;
   const managers = members.filter((member) => member.role === "manager").length;
-  const series = seriesCountFor(group.id);
+  const series = countSeriesInGroup(group.id);
   const chapters = chapterCountFor(group.id);
 
   const displayNameFor = (member: GroupMember) =>

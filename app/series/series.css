@@ -1,0 +1,386 @@
+/* ------------------------------------------------------------------ */
+/* Series detail                                                       */
+/* ------------------------------------------------------------------ */
+
+.sr-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding-top: 0.35rem;
+}
+
+.sr-content [data-delay="55"] {
+  --dash-delay: 55ms;
+}
+
+.sr-content [data-delay="80"] {
+  --dash-delay: 80ms;
+}
+
+.sr-content [data-delay="100"] {
+  --dash-delay: 100ms;
+}
+
+.sr-content [data-delay="125"] {
+  --dash-delay: 125ms;
+}
+
+/* ------------------------------------------------------------------ */
+/* Hero                                                                */
+/* ------------------------------------------------------------------ */
+
+.sr-hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(1rem, 2.6vw, 1.8rem);
+  padding: clamp(1.1rem, 2.4vw, 1.6rem);
+  border: 1px solid var(--border);
+  border-radius: 1.6rem;
+  background: radial-gradient(
+      58% 100% at 0% 0%,
+      color-mix(in oklab, var(--lavender) 38%, transparent),
+      transparent 72%
+    ),
+    radial-gradient(
+      52% 90% at 100% 100%,
+      color-mix(in oklab, var(--mint) 30%, transparent),
+      transparent 74%
+    ),
+    var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.sr-hero-cover {
+  flex-shrink: 0;
+}
+
+.sr-hero-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.sr-title {
+  margin-top: 0.4rem;
+  font-size: clamp(1.85rem, 4vw, 2.7rem);
+  font-weight: 600;
+  letter-spacing: -0.05em;
+  line-height: 1.05;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.sr-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.7rem;
+}
+
+.sr-meta .chip {
+  font-size: 0.625rem;
+}
+
+.sr-hero-note {
+  margin-top: 0.85rem;
+  font-size: 0.7rem;
+  color: var(--faint);
+}
+
+/* ------------------------------------------------------------------ */
+/* Layout                                                              */
+/* ------------------------------------------------------------------ */
+
+.sr-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 0.85rem;
+}
+
+.sr-main,
+.sr-side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+.sr-panel {
+  padding: 1.05rem 1.15rem 1.15rem;
+  border: 1px solid var(--border);
+  border-radius: 1.2rem;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.sr-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.65rem;
+}
+
+.sr-panel-title {
+  margin-top: 0.28rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+
+.sr-description {
+  font-size: 0.8125rem;
+  line-height: 1.75;
+  color: var(--muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.sr-description--empty {
+  color: var(--faint);
+}
+
+/* ------------------------------------------------------------------ */
+/* Chapters                                                            */
+/* ------------------------------------------------------------------ */
+
+.sr-chapters-empty {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.9rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: 0.9rem;
+  background: color-mix(in oklab, var(--surface-2) 46%, transparent);
+}
+
+.sr-chapters-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 2.15rem;
+  height: 2.15rem;
+  border-radius: 0.6rem;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.sr-chapters-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.sr-chapters-copy {
+  margin-top: 0.2rem;
+  font-size: 0.72rem;
+  line-height: 1.55;
+  color: var(--faint);
+}
+
+/* ------------------------------------------------------------------ */
+/* Facts                                                               */
+/* ------------------------------------------------------------------ */
+
+.sr-facts {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+}
+
+.sr-facts > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.46rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.sr-facts > div:first-child {
+  border-top: none;
+  padding-top: 0.1rem;
+}
+
+.sr-facts dt {
+  font-size: 0.6875rem;
+  color: var(--faint);
+}
+
+.sr-facts dd {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text);
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.sr-fact-link {
+  color: var(--accent-ink);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklab, var(--accent) 35%, transparent);
+  text-underline-offset: 2px;
+}
+
+.sr-fact-link:hover {
+  color: var(--accent);
+}
+
+/* ------------------------------------------------------------------ */
+/* Assignees                                                           */
+/* ------------------------------------------------------------------ */
+
+.sr-assignees {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sr-assignee {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.5rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.sr-assignee:first-child {
+  border-top: none;
+  padding-top: 0.1rem;
+}
+
+.sr-avatar {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 1.85rem;
+  height: 1.85rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: 0.5875rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
+.sr-assignee-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.sr-assignee-name {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sr-assignee-meta {
+  font-size: 0.625rem;
+  color: var(--faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sr-assignee .role-badge {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.sr-assignees-empty {
+  padding: 0.35rem 0 0.2rem;
+  font-size: 0.72rem;
+  line-height: 1.55;
+  color: var(--faint);
+}
+
+/* ------------------------------------------------------------------ */
+/* Not found                                                           */
+/* ------------------------------------------------------------------ */
+
+.sr-notfound {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  max-width: 34rem;
+  margin-top: 1rem;
+  padding: clamp(1.6rem, 4vw, 2.6rem);
+  border: 1px solid var(--border);
+  border-radius: 1.4rem;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.sr-notfound-title {
+  margin-top: 0.35rem;
+  font-size: 1.65rem;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  color: var(--text);
+}
+
+.sr-notfound-copy {
+  margin-bottom: 0.6rem;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+/* ------------------------------------------------------------------ */
+/* Responsive                                                          */
+/* ------------------------------------------------------------------ */
+
+@media (max-width: 980px) {
+  .sr-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  .sr-hero {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: flex-start;
+    border-radius: 1.35rem;
+  }
+
+  .series-cover--lg {
+    width: 8rem;
+  }
+
+  .sr-panel {
+    padding: 0.95rem 1rem 1rem;
+  }
+}
+
+@media (max-width: 460px) {
+  .sr-title {
+    font-size: 1.7rem;
+  }
+
+  .sr-hero {
+    padding: 1rem;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Reduced motion                                                      */
+/* ------------------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  .sr-hero,
+  .sr-panel {
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { notifications } from "@/lib/dashboard-data";
+import { formatRelativeTime } from "@/lib/format";
+import {
+  markAllNotificationsRead,
+  markNotificationRead,
+} from "@/lib/notifications";
+import { useAuthSession } from "@/lib/use-auth-session";
+import { useNotifications } from "@/lib/use-notifications";
 import { Bell, ChevronRight, Menu } from "../icons";
 import { Logo } from "../logo";
 
@@ -26,13 +32,19 @@ export function DashboardTopbar({
   onOpenMenu,
   trail = DEFAULT_TRAIL,
 }: DashboardTopbarProps) {
+  const { user } = useAuthSession();
+  const { state } = useNotifications();
   const [open, setOpen] = useState(false);
-  const [readAll, setReadAll] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  const unread = readAll
-    ? 0
-    : notifications.filter((item) => item.unread).length;
+  const items =
+    user && state
+      ? state.items
+          .filter((item) => item.username === user.username)
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      : [];
+  const unread = items.filter((item) => !item.read).length;
+  const visible = items.slice(0, 6);
 
   useEffect(() => {
     if (!open) return;
@@ -51,6 +63,16 @@ export function DashboardTopbar({
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);
+
+  const markRead = (id: string) => {
+    if (!user) return;
+    markNotificationRead(id, user.username);
+  };
+
+  const markAllRead = () => {
+    if (!user) return;
+    markAllNotificationsRead(user.username);
+  };
 
   return (
     <header className="dash-topbar">
@@ -123,36 +145,76 @@ export function DashboardTopbar({
               <button
                 type="button"
                 className="dash-link"
-                onClick={() => setReadAll(true)}
+                onClick={markAllRead}
                 disabled={!unread}
               >
                 Mark all read
               </button>
             </div>
 
-            <ul className="dash-notif-list">
-              {notifications.map((item) => {
-                const isUnread = item.unread && !readAll;
-                return (
-                  <li
-                    key={item.id}
-                    className="dash-notif"
-                    data-unread={isUnread ? "true" : "false"}
-                  >
-                    <span
-                      className="dash-notif-dot"
-                      data-tone={item.tone}
-                      aria-hidden="true"
-                    />
-                    <span className="dash-notif-body">
-                      <span className="dash-notif-title">{item.title}</span>
-                      <span className="dash-notif-copy">{item.body}</span>
-                      <span className="dash-notif-time">{item.time}</span>
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
+            {visible.length === 0 ? (
+              <p className="dash-notif-empty">
+                You&apos;re all caught up. When someone assigns you a series,
+                it appears here.
+              </p>
+            ) : (
+              <ul className="dash-notif-list">
+                {visible.map((item) => {
+                  const body = (
+                    <>
+                      <span
+                        className="dash-notif-dot"
+                        data-tone={item.tone}
+                        aria-hidden="true"
+                      />
+                      <span className="dash-notif-body">
+                        <span className="dash-notif-title">{item.title}</span>
+                        <span className="dash-notif-copy">{item.body}</span>
+                        <span className="dash-notif-time">
+                          {formatRelativeTime(item.createdAt)}
+                        </span>
+                      </span>
+                    </>
+                  );
+
+                  return (
+                    <li
+                      key={item.id}
+                      className="dash-notif"
+                      data-unread={item.read ? "false" : "true"}
+                    >
+                      {item.href ? (
+                        <Link
+                          href={item.href}
+                          className="dash-notif-link"
+                          onClick={() => {
+                            markRead(item.id);
+                            setOpen(false);
+                          }}
+                        >
+                          {body}
+                        </Link>
+                      ) : (
+                        <button
+                          type="button"
+                          className="dash-notif-link"
+                          onClick={() => markRead(item.id)}
+                        >
+                          {body}
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+
+            {items.length > visible.length ? (
+              <p className="dash-notif-more">
+                +{items.length - visible.length} older notification
+                {items.length - visible.length === 1 ? "" : "s"}
+              </p>
+            ) : null}
           </div>
         </div>
       </div>

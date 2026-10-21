@@ -417,6 +417,40 @@ export function getActiveGroupFor(
   return { group, member: withDisplayName(member) };
 }
 
+/**
+ * Every group the user is an accepted member of. The active group comes first
+ * so the list makes the current context obvious, then groups sort A-Z.
+ */
+export function listGroupsForUser(
+  username: string
+): Array<{ group: Group; member: GroupMember }> {
+  const normalized = normalizeUsername(username);
+  if (!normalized) return [];
+
+  const state = getGroupsState();
+  const activeId = state.activeByUser[normalized];
+
+  return state.members
+    .filter((member) => member.username === normalized)
+    .map((member) => {
+      const group = state.groups.find(
+        (entry) => entry.id === member.groupId
+      );
+      return group ? { group, member: withDisplayName(member) } : null;
+    })
+    .filter(
+      (
+        item
+      ): item is { group: Group; member: GroupMember } => item !== null
+    )
+    .sort((a, b) => {
+      const aActive = a.group.id === activeId ? 0 : 1;
+      const bActive = b.group.id === activeId ? 0 : 1;
+      if (aActive !== bActive) return aActive - bActive;
+      return a.group.name.localeCompare(b.group.name);
+    });
+}
+
 export function listInvitesForGroup(groupId: string): GroupInvite[] {
   return getGroupsState()
     .invites.filter((invite) => invite.groupId === groupId)
@@ -432,15 +466,9 @@ export function listInvitesForUser(username: string): GroupInvite[] {
 }
 
 /**
- * Series live in a later module. Until then every group honestly reports zero
- * rather than carrying invented numbers.
+ * Chapters live in a later module. Until then every group honestly reports
+ * zero rather than carrying invented numbers.
  */
-export function seriesCountFor(groupId: string): number {
-  void groupId;
-  return 0;
-}
-
-/** Chapters are derived from series, so they are zero for the same reason. */
 export function chapterCountFor(groupId: string): number {
   void groupId;
   return 0;

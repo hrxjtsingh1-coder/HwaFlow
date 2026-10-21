@@ -416,9 +416,10 @@ browser-local localStorage stores, not Supabase yet.
 | 7 | `/admin/users` | All users, group memberships, deactivate/reactivate | profiles |
 
 **Built (preview):** `/admin/groups` (grid, search, sort, create drawer) and
-`/admin/groups/[id]` (stats, Owner card, Change Owner dialog, read-only roster).
-Create is a drawer on the grid — there is no separate `/admin/groups/new` route.
-`/admin` redirects to `/admin/groups`; the overview and `/admin/users` are deferred.
+`/admin/groups/[id]` (stats with real series counts, Owner card, Change Owner dialog,
+read-only roster). Create is a drawer on the grid — there is no separate
+`/admin/groups/new` route. `/admin` redirects to `/admin/groups`; the overview and
+`/admin/users` are deferred. Admin never sees series titles or covers.
 
 ### Core app (group-scoped)
 
@@ -435,6 +436,13 @@ Create is a drawer on the grid — there is no separate `/admin/groups/new` rout
 | 16 | `/chapters/[id]/workspace` | Upload zone → processing progress → side-by-side editor + bubble list + export | pages, jobs, text_blocks |
 | 17 | `/approvals` | Manager/Owner review queue (submitted chapters, grouped by series) | chapters |
 
+**Built (preview):** `/groups` (every membership, active group marked), `/groups/[id]`
+(role-scoped Member/Series/Money stats, Owner/Manager create-series popup, and
+Monday–Sunday horizontally scrollable series lanes), and `/series/[id]` (banner,
+description, assignees, Manage assignments, honest chapters empty state).
+There is no `/series` index, `/series/new`, or edit/delete UI yet — series are created
+from the group detail popup. The dashboard weekly calendar still uses preview data.
+
 ### Settings
 | # | Route | Purpose | Depends on |
 |---|---|---|---|
@@ -444,8 +452,8 @@ Create is a drawer on the grid — there is no separate `/admin/groups/new` rout
 
 **Built (preview):** `/settings/members` — received invites, Staff self-card, and the
 Owner/Manager roster with the invite drawer and remove confirmation. Series-assigned
-counts are a read-only `0` until the series module exists. `/settings/profile` and
-`/settings/group` are deferred.
+counts are real and react to series writes; removing a member also unassigns their
+series. `/settings/profile` and `/settings/group` are deferred.
 
 ### Shared states (not routes)
 Signed-out redirect, no-group-yet screen (signed in but uninvited), 403 for
@@ -489,6 +497,13 @@ quota-exhausted pipeline banner.
 | 2026-10-21 | Group permissions are enforced inside `lib/groups.ts`, not only by hiding controls | A rendered control is not an authorization boundary; the same guards become RLS policies when Supabase lands |
 | 2026-10-21 | `/admin` redirects to `/admin/groups`; the admin overview and `/admin/users` are deferred | The console is limited to groups + users, and the group grid is the only surface with real data today — a fabricated overview would violate "no stubs" |
 | 2026-10-21 | Series/chapter counts return a real `0` until the series module exists | Muted honest zeros beat invented numbers, and the helper signatures stay stable when series lands |
+| 2026-10-21 | Member-facing series live in `lib/series.ts` (one localStorage key for series + assignments); covers are data URLs behind a swappable adapter; release day is a single weekday `0 = Monday` | Mirrors the future `series` / `series_assignments` tables and keeps create + assignment atomic. A single weekday and optional cover match the confirmed page brief |
+| 2026-10-21 | Staff only see assigned series; Managers/Owners see every series in the group | The access boundary for `/groups/[id]` and `/series/[id]`; assignments also decide whose calendar and notifications include the series |
+| 2026-10-21 | Creating a series is a centered popup on group detail, not the admin drawer | The user asked for a member-facing popup; the admin surface never edits series content |
+| 2026-10-21 | Assignments send a persisted per-recipient notification; release-day notifications are deferred | Assignment is the only event that exists today. Notification read state and the bell are real, replacing the static demo rows |
+| 2026-10-21 | Opening `/groups/[id]` never changes the active group used by `/settings/members` | Group detail is read-only context; the active group stays an explicit settings concern |
+| 2026-10-21 | Dashboard money and approved-chapter count derive from `lib/earnings.ts` and are `0` until chapters exist; the weekly calendar stays preview data | Honest zeros are preferable to fabricated totals, and the calendar is explicitly labeled preview until real release days are wired |
+| 2026-10-21 | Removing a member also removes their series assignments; member and admin counts read from the series store | The remove dialog already promised unassignment — cleanup makes it true and keeps visible counts coherent |
 | 2026-10-21 | Member and admin rosters are tables on desktop and stacked cards below 560px | Five columns plus row actions cannot fit a phone, and horizontal scrolling hid the actions; the table semantics stay in the markup |
 
 ---
