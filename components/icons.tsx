@@ -386,3 +386,65 @@ export function Activity(props: IconProps) {
     </Svg>
   );
 }
+
+export function Crown(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="m4 8.5 3.5 2.5L12 5l4.5 6L20 8.5l-1.6 9.2H5.6L4 8.5Z" />
+      <path d="M7 20h10" />
+    </Svg>
+  );
+}
+
+export function MoreHorizontal(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="5.5" cy="12" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="18.5" cy="12" r="1.1" fill="currentColor" stroke="none" />
+    </Svg>
+  );
+}
+
+export function Trash(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M4 7h16" />
+      <path d="M9 7V5.2A1.2 1.2 0 0 1 10.2 4h3.6A1.2 1.2 0 0 1 15 5.2V7" />
+      <path d="M6.5 7 7.4 19a1.8 1.8 0 0 0 1.8 1.7h5.6a1.8 1.8 0 0 0 1.8-1.7L17.5 7" />
+      <path d="M10.3 11v6" />
+      <path d="M13.7 11v6" />
+    </Svg>
+  );
+}
+
+export function Settings(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 14.6a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.4 1.6Z" />
+    </Svg>
+  );
+}
+
+export function Building(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M4 21V5.5A1.5 1.5 0 0 1 5.5 4h8A1.5 1.5 0 0 1 15 5.5V21" />
+      <path d="M15 10h3.5A1.5 1.5 0 0 1 20 11.5V21" />
+      <path d="M3 21h18" />
+      <path d="M7.5 8h4" />
+      <path d="M7.5 12h4" />
+      <path d="M7.5 16h4" />
+    </Svg>
+  );
+}
+
+export function Copy(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="8.5" y="8.5" width="11" height="11" rx="2.2" />
+      <path d="M15.5 8.5v-2A2.5 2.5 0 0 0 13 4H6.5A2.5 2.5 0 0 0 4 6.5V13a2.5 2.5 0 0 0 2.5 2.5h2" />
+    </Svg>
+  );
+}

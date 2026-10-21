@@ -477,3 +477,45 @@ docs/ARCHITECTURE.md                         decision log + page status
   until series assignment exists.
 - Admin cannot see series, chapters, or translation text — metadata counts only, per
   `docs/ARCHITECTURE.md` section 3, item 9.
+
+---
+
+## 16. Implementation notes (recorded after the build)
+
+Deviations from the spec above, all deliberate:
+
+- **`app/admin/page.tsx` exists** and redirects to `/admin/groups`. `/admin` has no
+  overview yet; a dead route would be worse than a redirect. The overview is deferred.
+- **Extra shared files** beyond the §11 inventory: `lib/use-dialog.ts` (the focus-trap
+  hook the spec asked us to copy), `lib/format.ts` (`formatShortDate`), and
+  `components/group-avatar.tsx` / `components/role-badge.tsx` (primitives both shells
+  need, so neither CSS file owns them). Their styles live in `app/globals.css`.
+- **Rail entry is labelled "Members", not "Settings"**, on `/settings/members`. There is
+  no `/settings` index route, so a "Settings" link would 404. The topbar trail is still
+  `Workspace / Members`.
+- **`revokeInvite` accepts two call shapes** — `revokeInvite(id, actor)` and
+  `revokeInvite({ inviteId, actor })` — so the §4 signature and a more readable call
+  site both work.
+- **Card menu reads "Open group"** rather than "Open", to match the admin detail verb.
+- **`app/admin/layout.tsx` re-declares the title template** (`{ default: "Admin",
+  template: "%s · HwaFlow" }`). A plain `title` there consumes the root template, which
+  left `/admin/groups` rendering as `<title>Groups</title>`.
+- **Stagger delays are capped** at the ninth card so a long grid does not crawl in.
+- **Rosters stack into cards at ≤560px** rather than scrolling sideways. Both
+  `MemberTable` and the admin-detail roster switch their rows to CSS grid and hide the
+  `thead`; Chrome keeps the table/row/cell roles in the accessibility tree, so the
+  markup stays a real table. The member table's wrapper also stopped being an
+  `overflow-x: auto` container — that container was silently clipping the row-action
+  menu vertically on the last row.
+- **The admin topbar logo no longer shrinks** (`flex-shrink: 0`). With `min-width: 0` it
+  was compressed by ~14px at phone widths and the breadcrumb drew over the wordmark;
+  only the trailing crumb segment gives up width now.
+- **The stacked member row reserves a 2.35rem actions slot**, so "Joined" lines up on
+  owner and non-owner rows even though the owner has no menu button.
+
+Verification actually run: `npx tsc --noEmit`, `npm run build`, all routes returning
+200 with `noindex, nofollow`, a 54-assertion harness against `lib/groups.ts` covering
+every guard in §3 (it is not committed; there is no test runner), and layout probes at
+320 / 360 / 390 / 561 / 600 px confirming `scrollWidth === innerWidth` and unclipped
+row menus.
+

@@ -1,16 +1,29 @@
 "use client";
 
+import type { ComponentType, SVGProps } from "react";
 import { getInitials, type AuthUser } from "@/lib/auth";
-import { LayoutGrid, LogOut, X } from "../icons";
+import { isPlatformAdmin } from "@/lib/groups";
+import { Building, LayoutGrid, LogOut, X } from "../icons";
 import { Logo } from "../logo";
 
-const links = [{ href: "#overview", label: "Dashboard", icon: LayoutGrid }];
+export type RailLink = {
+  key: string;
+  href: string;
+  label: string;
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
+};
 
 type DashboardRailProps = {
   user: AuthUser;
   open: boolean;
   onClose: () => void;
   onSignOut: () => void;
+  /** Navigation entries for the workspace shell. */
+  links?: RailLink[];
+  /** Key of the currently active link. */
+  active?: string;
+  /** Small heading above the links. */
+  sectionLabel?: string;
 };
 
 export function DashboardRail({
@@ -18,7 +31,14 @@ export function DashboardRail({
   open,
   onClose,
   onSignOut,
+  links = [
+    { key: "overview", href: "/dashboard", label: "Dashboard", icon: LayoutGrid },
+  ],
+  active = "overview",
+  sectionLabel = "Workspace",
 }: DashboardRailProps) {
+  const admin = isPlatformAdmin(user.username);
+
   return (
     <>
       <button
@@ -49,15 +69,15 @@ export function DashboardRail({
         </div>
 
         <div className="dash-rail-scroll">
-          <p className="dash-rail-label">Workspace</p>
-          <nav className="dash-nav" aria-label="Workspace">
+          <p className="dash-rail-label">{sectionLabel}</p>
+          <nav className="dash-nav" aria-label={sectionLabel}>
             {links.map((link) => (
               <a
-                key={link.href}
+                key={link.key}
                 href={link.href}
                 className="dash-nav-link"
-                data-active="true"
-                aria-current="page"
+                data-active={link.key === active ? "true" : "false"}
+                aria-current={link.key === active ? "page" : undefined}
                 onClick={onClose}
               >
                 <link.icon className="h-4 w-4 shrink-0" />
@@ -65,6 +85,25 @@ export function DashboardRail({
               </a>
             ))}
           </nav>
+
+          {admin ? (
+            <>
+              <p className="dash-rail-label dash-rail-label--spaced">
+                Platform
+              </p>
+              <nav className="dash-nav" aria-label="Platform">
+                <a
+                  href="/admin/groups"
+                  className="dash-nav-link"
+                  data-active="false"
+                  onClick={onClose}
+                >
+                  <Building className="h-4 w-4 shrink-0" />
+                  <span className="dash-nav-text">Admin console</span>
+                </a>
+              </nav>
+            </>
+          ) : null}
         </div>
 
         <div className="dash-user">

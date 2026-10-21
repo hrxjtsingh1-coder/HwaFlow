@@ -399,6 +399,103 @@
 }
 
 /* ------------------------------------------------------------------ */
+/* Group primitives (shared by the admin and member surfaces)          */
+/* ------------------------------------------------------------------ */
+
+.group-avatar {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 0.85rem;
+  background: var(--surface-2);
+  color: var(--text);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.group-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.group-avatar--sm {
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 0.6rem;
+  font-size: 0.7rem;
+}
+
+.group-avatar--md {
+  width: 2.6rem;
+  height: 2.6rem;
+  font-size: 0.95rem;
+}
+
+.group-avatar--lg {
+  width: 3.6rem;
+  height: 3.6rem;
+  border-radius: 1rem;
+  font-size: 1.35rem;
+}
+
+.group-avatar[data-accent="mint"] {
+  background: color-mix(in oklab, var(--mint) 72%, var(--surface));
+  color: var(--mint-ink);
+}
+
+.group-avatar[data-accent="lavender"] {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.group-avatar[data-accent="peach"] {
+  background: color-mix(in oklab, var(--peach) 68%, var(--surface));
+  color: var(--warning);
+}
+
+.group-avatar[data-accent="sky"] {
+  background: color-mix(in oklab, var(--sky) 68%, var(--surface));
+  color: color-mix(in oklab, var(--accent-ink) 70%, var(--text));
+}
+
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  padding: 0.18rem 0.52rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.role-badge[data-role="owner"] {
+  background: var(--accent-soft);
+  border-color: color-mix(in oklab, var(--accent) 24%, transparent);
+  color: var(--accent-ink);
+}
+
+.role-badge[data-role="manager"] {
+  background: color-mix(in oklab, var(--peach) 58%, var(--surface));
+  border-color: color-mix(in oklab, var(--warning) 18%, transparent);
+  color: var(--warning);
+}
+
+.role-badge[data-role="staff"] {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+/* ------------------------------------------------------------------ */
 /* Header                                                             */
 /* ------------------------------------------------------------------ */
 

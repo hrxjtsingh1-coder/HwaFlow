@@ -304,6 +304,22 @@ export async function signIn(input: {
   return toUser(account);
 }
 
+/**
+ * Public account reads.
+ *
+ * These deliberately return `AuthUser`, never `StoredAccount`, so password
+ * material (`salt`, `hash`) can travel no further than this module.
+ */
+export function findAccount(username: string): AuthUser | null {
+  const normalized = normalizeUsername(username);
+  const account = readAccounts().find((entry) => entry.username === normalized);
+  return account ? toUser(account) : null;
+}
+
+export function listAccounts(): AuthUser[] {
+  return readAccounts().map(toUser);
+}
+
 export function getSession(): AuthUser | null {
   const session = readJson<StoredSession | null>(SESSION_KEY, null);
   if (!session?.userId) return null;

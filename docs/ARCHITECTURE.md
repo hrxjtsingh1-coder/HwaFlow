@@ -1,10 +1,11 @@
 # HwaFlow — Manhwa Translation Platform
 
-> **Status:** In build. The landing page (`/`) is complete; app pages are next.
+> **Status:** In build. Landing, auth, workspace and the groups delivery (admin console
+> + member settings) are complete.
 > **Build mode:** Page-by-page. The user names a page; we build that page fully, then move on.
 > **Last updated:** 2026-10-21
-> **Next up:** Groups (admin console + member settings). Locked build spec and
-> decision record: [`docs/GROUPS-PAGE.md`](GROUPS-PAGE.md) — read it before coding.
+> **Next up:** Series module (tiles grid, create/edit, assignments). The groups build
+> spec and decision record stays at [`docs/GROUPS-PAGE.md`](GROUPS-PAGE.md).
 
 This document is the single source of truth for architecture, decisions, and the page
 inventory. Read it before building anything.
@@ -306,6 +307,9 @@ processing_jobs
 | Edit group settings (currency, retention) | — | ✅ | — | — |
 | Invite members | — | ✅ | ✅ | — |
 | Change member roles | — | ✅ | — | — |
+| Remove members | — | ✅ | — | — |
+| Revoke a pending invite | — | ✅ | own invites only | — |
+| Transfer group ownership | ✅ | — | — | — |
 | Create/edit series | — | ✅ | ✅ | — |
 | Assign staff to series | — | ✅ | ✅ | — |
 | Create chapter | — | ✅ | ✅ | assigned series |
@@ -377,6 +381,9 @@ processing_jobs
   through tokens; no hard-coded hex in components.
 - **Shape:** generous rounding (12–16 px), 1px soft borders, low-opacity shadows.
 - **Density:** roomy. This is a tool people stare at for hours.
+- **Shared primitives:** `.chip` (+ `chip-mint`, `chip-accent`, `chip-peach`), `.eyebrow`,
+  `.display-serif`, `.status-dot`, `.group-avatar`, `.role-badge`, `Logo`, `getInitials`.
+  Both the admin and workspace shells compose these rather than each defining their own.
 - **Type:** Inter for UI; Noto Sans KR/JP/SC as CJK fallback for source text.
 - **Motion:** 120–180 ms ease-out, no bounce. Respect `prefers-reduced-motion`.
 - **Layout:** 240 px sidebar nav, max-width content, page headers with title + actions.
@@ -396,6 +403,9 @@ Build order is the user's call. This is the full surface area, with dependencies
 | 1 | `/login` | Username + password sign-in, error states | Supabase auth |
 | 2 | `/register` | Create account (username, password, display name) | Supabase auth, profiles |
 
+**Built (preview):** `/`, `/login`, `/register`, `/dashboard` — against the
+browser-local localStorage stores, not Supabase yet.
+
 ### Platform admin
 | # | Route | Purpose | Depends on |
 |---|---|---|---|
@@ -405,7 +415,13 @@ Build order is the user's call. This is the full surface area, with dependencies
 | 6 | `/admin/groups/[id]` | Group detail: change Owner, member list (metadata only) | group_members |
 | 7 | `/admin/users` | All users, group memberships, deactivate/reactivate | profiles |
 
+**Built (preview):** `/admin/groups` (grid, search, sort, create drawer) and
+`/admin/groups/[id]` (stats, Owner card, Change Owner dialog, read-only roster).
+Create is a drawer on the grid — there is no separate `/admin/groups/new` route.
+`/admin` redirects to `/admin/groups`; the overview and `/admin/users` are deferred.
+
 ### Core app (group-scoped)
+
 | # | Route | Purpose | Depends on |
 |---|---|---|---|
 | 8 | `/dashboard` | Money earned this month, chapters translated, weekly release calendar w/ day drill-down | chapters, series_release_days |
@@ -425,6 +441,11 @@ Build order is the user's call. This is the full surface area, with dependencies
 | 18 | `/settings/profile` | Display name, avatar, password change | profiles |
 | 19 | `/settings/group` | Owner: group name, currency, retention policy | groups |
 | 20 | `/settings/members` | Invite by username, pending invites, change roles, remove | group_members, group_invites |
+
+**Built (preview):** `/settings/members` — received invites, Staff self-card, and the
+Owner/Manager roster with the invite drawer and remove confirmation. Series-assigned
+counts are a read-only `0` until the series module exists. `/settings/profile` and
+`/settings/group` are deferred.
 
 ### Shared states (not routes)
 Signed-out redirect, no-group-yet screen (signed in but uninvited), 403 for
@@ -463,6 +484,12 @@ quota-exhausted pipeline banner.
 | 2026-10-21 | Landing copy is plain language; implementation details stay out of the UI | Readable by non-technical group members and newcomers |
 | 2026-10-21 | Preview build gates `/admin` on the hardcoded username `noddy` until Supabase profiles exist | The localStorage auth store has no `is_platform_admin`; a username check is the narrowest honest stand-in |
 | 2026-10-21 | Groups: Managers add Staff only; invites are pending until accepted; last accepted group is active; icons stored as data URLs behind a swappable adapter | Confirmed in the groups-page discussion — see `docs/GROUPS-PAGE.md` |
+| 2026-10-21 | Admin and workspace shells stay separate components over shared tokens and shared `.group-avatar` / `.role-badge` primitives | The admin shell must not depend on `dashboard.css`; sharing markup would couple two surfaces that diverge (narrower rail, platform badge, no day popup) |
+| 2026-10-21 | `/dashboard` is not moved into a route group; the existing rail and topbar take `links` / `active` / `trail` props instead | Avoids a large route reshuffle for one extra shell, and keeps the workspace markup identical for every page under it |
+| 2026-10-21 | Group permissions are enforced inside `lib/groups.ts`, not only by hiding controls | A rendered control is not an authorization boundary; the same guards become RLS policies when Supabase lands |
+| 2026-10-21 | `/admin` redirects to `/admin/groups`; the admin overview and `/admin/users` are deferred | The console is limited to groups + users, and the group grid is the only surface with real data today — a fabricated overview would violate "no stubs" |
+| 2026-10-21 | Series/chapter counts return a real `0` until the series module exists | Muted honest zeros beat invented numbers, and the helper signatures stay stable when series lands |
+| 2026-10-21 | Member and admin rosters are tables on desktop and stacked cards below 560px | Five columns plus row actions cannot fit a phone, and horizontal scrolling hid the actions; the table semantics stay in the markup |
 
 ---
 

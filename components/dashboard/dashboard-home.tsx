@@ -22,6 +22,7 @@ import {
   ArrowUpRight,
   CalendarDays,
   Clock,
+  LayoutGrid,
   ShieldCheck,
   TrendingUp,
   X,
@@ -351,6 +352,15 @@ export function DashboardHome() {
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
         onSignOut={handleSignOut}
+        links={[
+          {
+            key: "overview",
+            href: "/dashboard",
+            label: "Dashboard",
+            icon: LayoutGrid,
+          },
+        ]}
+        active="overview"
       />
 
       <div className="dash-body">

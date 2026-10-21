@@ -1,15 +1,31 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { notifications } from "@/lib/dashboard-data";
 import { Bell, ChevronRight, Menu } from "../icons";
 import { Logo } from "../logo";
 
-type DashboardTopbarProps = {
-  onOpenMenu: () => void;
+export type Crumb = {
+  label: string;
+  href?: string;
 };
 
-export function DashboardTopbar({ onOpenMenu }: DashboardTopbarProps) {
+type DashboardTopbarProps = {
+  onOpenMenu: () => void;
+  /** Breadcrumb trail, root first. The last entry is the current page. */
+  trail?: Crumb[];
+};
+
+const DEFAULT_TRAIL: Crumb[] = [
+  { label: "Workspace" },
+  { label: "Overview" },
+];
+
+export function DashboardTopbar({
+  onOpenMenu,
+  trail = DEFAULT_TRAIL,
+}: DashboardTopbarProps) {
   const [open, setOpen] = useState(false);
   const [readAll, setReadAll] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -54,11 +70,25 @@ export function DashboardTopbar({ onOpenMenu }: DashboardTopbarProps) {
         </div>
 
         <nav className="dash-crumb" aria-label="Breadcrumb">
-          <span className="dash-crumb-muted">Workspace</span>
-          <ChevronRight className="h-3 w-3" />
-          <span className="dash-crumb-current" aria-current="page">
-            Overview
-          </span>
+          {trail.map((crumb, index) => {
+            const last = index === trail.length - 1;
+            return (
+              <span className="dash-crumb-item" key={`${crumb.label}-${index}`}>
+                {index > 0 ? <ChevronRight className="h-3 w-3" /> : null}
+                {last ? (
+                  <span className="dash-crumb-current" aria-current="page">
+                    {crumb.label}
+                  </span>
+                ) : crumb.href ? (
+                  <Link href={crumb.href} className="dash-crumb-muted dash-crumb-link">
+                    {crumb.label}
+                  </Link>
+                ) : (
+                  <span className="dash-crumb-muted">{crumb.label}</span>
+                )}
+              </span>
+            );
+          })}
         </nav>
       </div>
 
