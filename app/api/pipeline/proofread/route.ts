@@ -27,6 +27,8 @@ import { requirePipelineViewer } from "@/lib/pipeline-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+/** Gemini can take over a minute on a dense chapter; Vercel defaults lower. */
+export const maxDuration = 300;
 
 type BlockInput = {
   index: number;

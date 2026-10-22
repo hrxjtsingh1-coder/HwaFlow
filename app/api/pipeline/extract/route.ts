@@ -3,7 +3,7 @@
  *
  * multipart/form-data in, JSON out. Images stay binary on the wire: base64 in a
  * JSON body would inflate a 4 MB batch past the function body limit before
- * `BATCH_MAX_BYTES` ever got a chance to halve it.
+ * `EXTRACT_BATCH_MAX_BYTES` ever got a chance to halve it.
  *
  *   part "meta"      JSON { panels: [{ panelId, index }], language, readingDirection }
  *   part "panel-0"   image/webp blob
@@ -14,13 +14,13 @@
  */
 
 import {
-  BATCH_MAX_BYTES,
   extractPanels,
   hasGeminiKey,
   isMockPipeline,
   mockExtract,
   type ImageInput,
 } from "@/lib/ai/gemini";
+import { EXTRACT_BATCH_MAX_BYTES } from "@/lib/ai/batch";
 import {
   PipelineError,
   toPipelineFailure,
@@ -32,6 +32,8 @@ import { requirePipelineViewer } from "@/lib/pipeline-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+/** Gemini can take over a minute on a dense chapter; Vercel defaults lower. */
+export const maxDuration = 300;
 
 type MetaPanel = { panelId: string; index: number };
 
@@ -104,7 +106,7 @@ async function parseMeta(raw: FormDataEntryValue | null): Promise<{
 }
 
 /**
- * Size valve: a batch whose encoded images exceed `BATCH_MAX_BYTES` is split in
+ * Size valve: a batch whose encoded images exceed `EXTRACT_BATCH_MAX_BYTES` is split in
  * half and sent twice, recursively. Denser scans then complete with one extra
  * request instead of failing on a body limit. Split is sequential so a single
  * run cannot burst past the per-minute cap.
@@ -117,7 +119,7 @@ async function extractChunk(
   if (images.length === 0) return [];
 
   const encoded = images.reduce((total, image) => total + image.base64.length, 0);
-  if (encoded > BATCH_MAX_BYTES && images.length > 1) {
+  if (encoded > EXTRACT_BATCH_MAX_BYTES && images.length > 1) {
     const midpoint = Math.ceil(images.length / 2);
     const head = await extractChunk(
       images.slice(0, midpoint),

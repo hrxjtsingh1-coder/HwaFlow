@@ -33,8 +33,6 @@ import {
 } from "./prompts";
 
 export const GEMINI_MODEL = "gemini-3.5-flash-lite";
-export const PANEL_BATCH_MAX = 10;
-export const BATCH_MAX_BYTES = 3_000_000;
 
 const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 /**

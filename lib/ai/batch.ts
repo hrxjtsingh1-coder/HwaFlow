@@ -20,6 +20,13 @@
 
 export const PANEL_BATCH_MAX = 10;
 
+/**
+ * Hard cap for one `/api/pipeline/extract` multipart body. Vercel rejects
+ * function requests over 4.5 MB, so keep a margin for multipart overhead.
+ * Panels are compressed to at most 400 KB, but never assume that held.
+ */
+export const EXTRACT_BATCH_MAX_BYTES = 3_000_000;
+
 export function splitIntoBatches<T>(items: T[], max = PANEL_BATCH_MAX): T[][] {
   if (items.length === 0) return [];
   const limit = Math.max(1, Math.floor(max));

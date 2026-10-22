@@ -20,7 +20,12 @@
  * and write functions. The pipeline never reads localStorage.
  */
 
-import { PANEL_BATCH_MAX, splitIntoBatches } from "./ai/batch";
+import {
+  EXTRACT_BATCH_MAX_BYTES,
+  PANEL_BATCH_MAX,
+  chunkWithinByteBudget,
+  splitIntoBatches,
+} from "./ai/batch";
 import { readingDirectionFor } from "./ai/languages";
 import {
   isPipelineError,
@@ -332,7 +337,13 @@ async function runExtract(
   ctx: PipelineContext,
   panels: Panel[]
 ): Promise<number> {
-  const batches = splitIntoBatches(panels, PANEL_BATCH_MAX);
+  const batches = splitIntoBatches(panels, PANEL_BATCH_MAX).flatMap((batch) =>
+    chunkWithinByteBudget(
+      batch,
+      (panel) => panel.byteSize,
+      EXTRACT_BATCH_MAX_BYTES
+    )
+  );
   patch({
     stage: "extract",
     batchCount: batches.length,
