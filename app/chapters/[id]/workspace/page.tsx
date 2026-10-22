@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
+
 import { WorkspaceView } from "@/components/chapters/workspace-view";
+import { getWorkspaceBundle } from "@/lib/server/chapters";
+import { getViewer } from "@/lib/session";
 
 export const metadata: Metadata = {
   title: "Chapter workspace",
@@ -17,5 +21,11 @@ export default async function ChapterWorkspacePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return <WorkspaceView chapterId={id} />;
+
+  const viewer = await getViewer();
+  if (!viewer) redirect("/login");
+
+  const bundle = await getWorkspaceBundle(id, viewer);
+
+  return <WorkspaceView viewer={viewer} bundle={bundle} />;
 }

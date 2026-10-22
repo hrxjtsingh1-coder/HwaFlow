@@ -16,7 +16,7 @@
  * `changeRole` throws even if a control is accidentally rendered.
  */
 
-import { findAccount, normalizeUsername } from "./auth";
+import { normalizeUsername, type ProfileRef } from "./auth";
 import {
   MAX_GROUP_ICON_BYTES,
   groupIconByteSize,
@@ -106,9 +106,6 @@ export class GroupError extends Error {
 const GROUPS_KEY = "hwaflow.groups.v1";
 const GROUPS_EVENT = "hwaflow:groups";
 
-/** Preview-build stand-in until `profiles.is_platform_admin` exists. */
-export const PLATFORM_ADMIN_USERNAME = "noddy";
-
 export const GROUP_CURRENCIES = [
   "USD",
   "EUR",
@@ -126,11 +123,6 @@ export const ROLE_LABEL: Record<GroupRole, string> = {
   manager: "Manager",
   staff: "Staff",
 };
-
-export function isPlatformAdmin(username?: string | null): boolean {
-  if (!username) return false;
-  return normalizeUsername(username) === PLATFORM_ADMIN_USERNAME;
-}
 
 export function roleRank(role: GroupRole): number {
   if (role === "owner") return 3;
@@ -302,9 +294,21 @@ function createId(prefix: string): string {
   return `${prefix}_${hex}`;
 }
 
-function withDisplayName(member: GroupMember): GroupMember {
-  const account = findAccount(member.username);
-  return account ? { ...member, displayName: account.displayName } : member;
+/**
+ * Resolves a username to the display name recorded when that person joined.
+ *
+ * This replaces the old account-directory lookup. `profiles` is self-read-only,
+ * so a browser cannot resolve arbitrary usernames — but it does not need to:
+ * every GroupMember row denormalises `displayName` when the member joins.
+ * Returns null so each caller keeps control of its own fallback.
+ */
+export function displayNameFor(username: string): string | null {
+  const normalized = normalizeUsername(username);
+  if (!normalized) return null;
+  const member = getGroupsState().members.find(
+    (entry) => entry.username === normalized
+  );
+  return member?.displayName ?? null;
 }
 
 function requireGroup(state: GroupsState, groupId: string): Group {
@@ -340,7 +344,6 @@ export function getGroup(id: string): Group | null {
 export function getMembers(groupId: string): GroupMember[] {
   return getGroupsState()
     .members.filter((member) => member.groupId === groupId)
-    .map(withDisplayName)
     .sort((a, b) => {
       const rank = roleRank(b.role) - roleRank(a.role);
       if (rank !== 0) return rank;
@@ -357,7 +360,7 @@ export function getMember(
     groupId,
     (entry) => entry.userId === userId
   );
-  return member ? withDisplayName(member) : null;
+  return member ?? null;
 }
 
 export function getMemberByUsername(
@@ -370,7 +373,7 @@ export function getMemberByUsername(
     groupId,
     (entry) => entry.username === normalized
   );
-  return member ? withDisplayName(member) : null;
+  return member ?? null;
 }
 
 export function getOwner(groupId: string): GroupMember | null {
@@ -379,7 +382,7 @@ export function getOwner(groupId: string): GroupMember | null {
     groupId,
     (entry) => entry.role === "owner"
   );
-  return owner ? withDisplayName(owner) : null;
+  return owner ?? null;
 }
 
 export function countMembers(groupId: string): number {
@@ -414,7 +417,7 @@ export function getActiveGroupFor(
   const group = state.groups.find((entry) => entry.id === member.groupId);
   if (!group) return null;
 
-  return { group, member: withDisplayName(member) };
+  return { group, member };
 }
 
 /**
@@ -436,7 +439,7 @@ export function listGroupsForUser(
       const group = state.groups.find(
         (entry) => entry.id === member.groupId
       );
-      return group ? { group, member: withDisplayName(member) } : null;
+      return group ? { group, member } : null;
     })
     .filter(
       (
@@ -477,15 +480,22 @@ export function listInvitesForUser(username: string): GroupInvite[] {
 
 export type CreateGroupInput = {
   name: string;
-  ownerUsername: string;
+  /**
+   * Resolved by the caller through `lookupProfile` before this runs. The
+   * browser cannot read the profile directory itself: `profiles` is
+   * self-read-only and the lookup goes through the `profile_lookup` RPC.
+   */
+  owner: ProfileRef;
   currency?: string;
   iconDataUrl?: string | null;
-  /** Signed-in account performing the action; must be the platform admin. */
+  /** Signed-in account performing the action. */
   actor: string;
+  /** The viewer's `profiles.is_platform_admin`, not a username guess. */
+  actorIsPlatformAdmin: boolean;
 };
 
 export function createGroup(input: CreateGroupInput): Group {
-  if (!isPlatformAdmin(input.actor)) {
+  if (!input.actorIsPlatformAdmin) {
     throw new GroupError(
       "forbidden",
       "Only the platform admin can create groups."
@@ -501,14 +511,7 @@ export function createGroup(input: CreateGroupInput): Group {
     throw new GroupError("invalid-currency", "Pick a supported currency.");
   }
 
-  const ownerUsername = normalizeUsername(input.ownerUsername);
-  const owner = ownerUsername ? findAccount(ownerUsername) : null;
-  if (!owner) {
-    throw new GroupError(
-      "owner-not-found",
-      "No account with that username. They need to register first."
-    );
-  }
+  const owner = input.owner;
 
   const iconDataUrl = input.iconDataUrl ?? null;
   if (iconDataUrl) {
@@ -560,7 +563,8 @@ export function createGroup(input: CreateGroupInput): Group {
 
 export type InviteMemberInput = {
   groupId: string;
-  username: string;
+  /** Resolved through `profile_lookup` by the caller. */
+  invitee: ProfileRef;
   role: "manager" | "staff";
   actor: string;
 };
@@ -593,9 +597,9 @@ export function inviteMember(input: InviteMemberInput): GroupInvite {
     );
   }
 
-  const inviteeUsername = normalizeUsername(input.username);
-  const invitee = inviteeUsername ? findAccount(inviteeUsername) : null;
-  if (!invitee) {
+  const invitee = input.invitee;
+  const inviteeUsername = normalizeUsername(invitee.username);
+  if (!inviteeUsername) {
     throw new GroupError(
       "invitee-not-found",
       "No account with that username. They need to register first."
@@ -742,10 +746,12 @@ export type TransferOwnershipInput = {
   newOwnerId: string;
   outgoingRole: "manager" | "staff";
   actor: string;
+  /** The viewer's `profiles.is_platform_admin`. */
+  actorIsPlatformAdmin: boolean;
 };
 
 export function transferOwnership(input: TransferOwnershipInput): void {
-  if (!isPlatformAdmin(input.actor)) {
+  if (!input.actorIsPlatformAdmin) {
     throw new GroupError(
       "forbidden",
       "Only the platform admin can change a group's Owner."
@@ -849,7 +855,7 @@ export function revokeInvite(
   });
 }
 
-export function acceptInvite(inviteId: string, username: string): void {
+export function acceptInvite(inviteId: string, viewer: ProfileRef): void {
   const state = getGroupsState();
   const invite = state.invites.find((entry) => entry.id === inviteId);
   if (!invite) {
@@ -862,7 +868,7 @@ export function acceptInvite(inviteId: string, username: string): void {
     );
   }
 
-  const normalized = normalizeUsername(username);
+  const normalized = normalizeUsername(viewer.username);
   if (normalized !== invite.username) {
     throw new GroupError(
       "forbidden",
@@ -888,9 +894,9 @@ export function acceptInvite(inviteId: string, username: string): void {
         {
           id: createId("gm"),
           groupId: invite.groupId,
-          userId: findAccount(normalized)?.id ?? createId("u"),
+          userId: viewer.id,
           username: normalized,
-          displayName: findAccount(normalized)?.displayName ?? normalized,
+          displayName: viewer.displayName,
           role: invite.role,
           invitedBy: invite.invitedBy,
           joinedAt: new Date().toISOString(),

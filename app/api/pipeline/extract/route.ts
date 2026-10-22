@@ -28,6 +28,7 @@ import {
   type ReadingDirection,
   type SourceLanguage,
 } from "@/lib/ai/types";
+import { requirePipelineViewer } from "@/lib/pipeline-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -137,6 +138,9 @@ async function extractChunk(
 
 export async function POST(request: Request) {
   try {
+    const auth = await requirePipelineViewer();
+    if (!auth.ok) return auth.response;
+
     if (!isMockPipeline() && !hasGeminiKey()) {
       throw new PipelineError("missing-key");
     }
@@ -197,4 +201,19 @@ export async function POST(request: Request) {
     const { status, body } = toPipelineFailure(error);
     return Response.json(body, { status });
   }
+}
+
+/**
+ * The workspace posts here. A GET is almost always someone opening the URL in
+ * a browser, so say that instead of returning an empty 405.
+ */
+export function GET() {
+  return Response.json(
+    {
+      error: "method-not-allowed",
+      message:
+        "This endpoint only accepts POST. Start the run from the chapter workspace.",
+    },
+    { status: 405, headers: { Allow: "POST" } }
+  );
 }

@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { findAccount, normalizeUsername } from "@/lib/auth";
+import { normalizeUsername } from "@/lib/auth";
+import { lookupProfile } from "@/lib/auth-actions";
+import { createGroupAction } from "@/lib/groups-actions";
 import {
   GROUP_CURRENCIES,
-  GroupError,
   cleanGroupName,
-  createGroup,
   slugBase,
   uniqueSlug,
   validateGroupName,
@@ -24,7 +24,6 @@ type LookupState =
 
 type CreateGroupDrawerProps = {
   open: boolean;
-  actor: string;
   existingSlugs: string[];
   onClose: () => void;
   onCreated: (group: Group) => void;
@@ -32,7 +31,6 @@ type CreateGroupDrawerProps = {
 
 export function CreateGroupDrawer({
   open,
-  actor,
   existingSlugs,
   onClose,
   onCreated,
@@ -66,7 +64,8 @@ export function CreateGroupDrawer({
     setSubmitting(false);
   }, [open]);
 
-  // Debounced account lookup.
+  // Debounced profile lookup. Async now: `profiles` is self-read-only, so the
+  // browser resolves usernames through the `profile_lookup` RPC.
   useEffect(() => {
     if (!open) return;
     const normalized = normalizeUsername(ownerUsername);
@@ -75,21 +74,26 @@ export function CreateGroupDrawer({
       return;
     }
 
+    let cancelled = false;
     setLookup({ status: "checking" });
-    const timer = window.setTimeout(() => {
-      const account = findAccount(normalized);
+    const timer = window.setTimeout(async () => {
+      const profile = await lookupProfile(normalized);
+      if (cancelled) return;
       setLookup(
-        account
+        profile
           ? {
               status: "found",
-              displayName: account.displayName,
-              username: account.username,
+              displayName: profile.displayName,
+              username: profile.username,
             }
           : { status: "missing" }
       );
     }, 340);
 
-    return () => window.clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, [ownerUsername, open]);
 
   if (!open) return null;
@@ -99,18 +103,15 @@ export function CreateGroupDrawer({
     existingSlugs
   );
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (submitting) return;
 
     const nextNameError = validateGroupName(name);
     const normalizedOwner = normalizeUsername(ownerUsername);
-    const ownerAccount = normalizedOwner ? findAccount(normalizedOwner) : null;
     const nextOwnerError = !normalizedOwner
       ? "Enter the Owner's username."
-      : !ownerAccount
-        ? "No account with that username. They need to register first."
-        : null;
+      : null;
 
     setNameError(nextNameError);
     setOwnerError(nextOwnerError);
@@ -126,35 +127,47 @@ export function CreateGroupDrawer({
     }
 
     setSubmitting(true);
-    try {
-      const group = createGroup({
-        name,
-        ownerUsername: normalizedOwner,
-        currency,
-        iconDataUrl,
-        actor,
-      });
-      onCreated(group);
-      onClose();
-    } catch (caught) {
-      if (caught instanceof GroupError) {
-        if (caught.code === "invalid-name") {
-          setNameError(caught.message);
-          nameRef.current?.focus();
-        } else if (
-          caught.code === "owner-not-found" ||
-          caught.code === "already-member"
-        ) {
-          setOwnerError(caught.message);
-          ownerRef.current?.focus();
-        } else {
-          setFormError(caught.message);
-        }
+
+    /*
+     * Resolve the Owner before writing. The debounced hint above can be stale
+     * (or still in flight), and createGroup no longer has a directory to fall
+     * back on.
+     */
+    const owner = await lookupProfile(normalizedOwner);
+    if (!owner) {
+      setOwnerError("No account with that username. They need to register first.");
+      ownerRef.current?.focus();
+      setSubmitting(false);
+      return;
+    }
+
+    const payload = new FormData();
+    payload.set("name", name);
+    payload.set("currency", currency);
+    payload.set("ownerId", owner.id);
+    if (iconDataUrl) payload.set("icon", iconDataUrl);
+
+    const result = await createGroupAction(payload);
+
+    if (!result.ok) {
+      if (result.code === "invalid-name") {
+        setNameError(result.message);
+        nameRef.current?.focus();
+      } else if (
+        result.code === "invitee-not-found" ||
+        result.code === "already-member"
+      ) {
+        setOwnerError(result.message);
+        ownerRef.current?.focus();
       } else {
-        setFormError("Something went wrong creating that group. Try again.");
+        setFormError(result.message);
       }
       setSubmitting(false);
+      return;
     }
+
+    onCreated(result.data);
+    onClose();
   };
 
   return (

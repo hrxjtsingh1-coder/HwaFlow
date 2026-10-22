@@ -38,6 +38,7 @@
   --glow-sky: rgba(170, 216, 244, 0.62);
   --grid-line: rgba(23, 24, 28, 0.055);
   --header-bg: rgba(250, 249, 246, 0.88);
+  --spotlight: rgba(255, 255, 255, 0.72);
   --shadow-tint: 24 24 34;
 
   --ease: cubic-bezier(0.22, 0.72, 0.22, 1);
@@ -79,6 +80,7 @@
     --glow-sky: rgba(64, 139, 190, 0.15);
     --grid-line: rgba(255, 255, 255, 0.045);
     --header-bg: rgba(16, 19, 25, 0.88);
+    --spotlight: rgba(255, 255, 255, 0.055);
     --shadow-tint: 0 0 0;
   }
 }
@@ -312,6 +314,26 @@
   color: var(--bg);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16),
     0 12px 26px -16px rgb(var(--shadow-tint) / 0.75);
+}
+
+/* light sweeps across the primary button on hover */
+.btn-primary::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 34%,
+    rgba(255, 255, 255, 0.22) 48%,
+    transparent 62%
+  );
+  transform: translateX(-130%);
+  transition: transform 0.75s var(--ease);
+  pointer-events: none;
+}
+
+.btn-primary:hover::after {
+  transform: translateX(130%);
 }
 
 .btn-primary:hover {
@@ -649,6 +671,32 @@
 /* Ambient decoration                                                 */
 /* ------------------------------------------------------------------ */
 
+/* pointer-follow spotlight over the hero */
+.atmosphere {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.atmosphere::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(
+    540px circle at var(--mx, 50%) var(--my, 18%),
+    var(--spotlight),
+    transparent 68%
+  );
+  opacity: 0;
+  transition: opacity 0.45s var(--ease);
+}
+
+.atmosphere:hover::after {
+  opacity: 1;
+}
+
 .grid-field {
   background-image: linear-gradient(
       to right,
@@ -711,6 +759,34 @@
 /* Hero page mock                                                     */
 /* ------------------------------------------------------------------ */
 
+/* the mock tilts toward the pointer and catches a soft glare */
+.preview-tilt {
+  transform: perspective(1700px) rotateX(var(--rx, 2deg))
+    rotateY(var(--ry, 0deg)) translateY(var(--ty, 0px));
+  transform-style: preserve-3d;
+  transition: transform 0.65s var(--ease-out);
+  will-change: transform;
+}
+
+.preview-tilt[data-tilting="true"] {
+  transition: transform 0.14s linear;
+}
+
+.preview-glare {
+  background: radial-gradient(
+    440px circle at var(--px, 50%) var(--py, 0%),
+    rgba(255, 255, 255, 0.5),
+    transparent 62%
+  );
+  mix-blend-mode: soft-light;
+  opacity: 0;
+  transition: opacity 0.35s var(--ease);
+}
+
+.preview-tilt:hover .preview-glare {
+  opacity: 1;
+}
+
 /* speech bubbles in the page mock */
 .speech-bubble {
   position: absolute;
@@ -746,37 +822,77 @@
 /* ------------------------------------------------------------------ */
 
 .feature-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 1.5rem;
   background: var(--surface);
   transition: transform 0.35s var(--ease-out), border-color 0.35s var(--ease),
-    box-shadow 0.35s var(--ease);
+    box-shadow 0.35s var(--ease), background-color 0.35s var(--ease);
+}
+
+/* gradient edge traced along the card on hover */
+.feature-card::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: 2;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    135deg,
+    var(--glow-a, var(--accent-soft)),
+    transparent 38%,
+    transparent 62%,
+    var(--glow-b, var(--sky))
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.4s var(--ease);
+  pointer-events: none;
 }
 
 .feature-card:hover {
   transform: translateY(-4px);
-  border-color: var(--border-strong);
+  border-color: transparent;
   box-shadow: var(--shadow-card);
+}
+
+.feature-card:hover::before {
+  opacity: 0.9;
 }
 
 .feature-card[data-tone="mint"] {
   --tone: var(--mint);
   --tone-ink: var(--mint-ink);
+  --glow-a: color-mix(in oklab, var(--mint) 90%, transparent);
+  --glow-b: color-mix(in oklab, var(--sky) 80%, transparent);
 }
 
 .feature-card[data-tone="lavender"] {
   --tone: var(--lavender);
   --tone-ink: var(--accent-ink);
+  --glow-a: color-mix(in oklab, var(--lavender) 95%, transparent);
+  --glow-b: color-mix(in oklab, var(--peach) 70%, transparent);
 }
 
 .feature-card[data-tone="peach"] {
   --tone: var(--peach);
   --tone-ink: var(--warning);
+  --glow-a: color-mix(in oklab, var(--peach) 90%, transparent);
+  --glow-b: color-mix(in oklab, var(--lavender) 70%, transparent);
 }
 
 .feature-card[data-tone="sky"] {
   --tone: var(--sky);
   --tone-ink: color-mix(in oklab, var(--accent-ink) 72%, var(--text));
+  --glow-a: color-mix(in oklab, var(--sky) 95%, transparent);
+  --glow-b: color-mix(in oklab, var(--mint) 75%, transparent);
 }
 
 .icon-tile {
@@ -788,6 +904,15 @@
   border: 1px solid color-mix(in oklab, var(--tone-ink, var(--text)) 18%, transparent);
   background: color-mix(in oklab, var(--tone, var(--surface-2)) 46%, var(--surface));
   color: var(--tone-ink, var(--text));
+  transition: transform 0.35s var(--ease-out), background-color 0.35s var(--ease),
+    border-color 0.35s var(--ease), color 0.35s var(--ease);
+}
+
+.feature-card:hover .icon-tile {
+  transform: translateY(-2px) rotate(-4deg);
+  background: var(--accent-soft);
+  border-color: color-mix(in oklab, var(--accent) 22%, transparent);
+  color: var(--accent-ink);
 }
 
 /* scroll reveal — only hidden when JS is available, so no-JS renders fully */
@@ -823,6 +948,8 @@
 /* pipeline */
 
 .step-card {
+  position: relative;
+  z-index: 1;
   border: 1px solid var(--border);
   border-radius: 1.5rem;
   background: var(--surface);
@@ -830,10 +957,28 @@
     box-shadow 0.35s var(--ease);
 }
 
+/* a thin accent line draws across the top of the card on hover */
+.step-card::after {
+  content: "";
+  position: absolute;
+  left: 1.6rem;
+  right: 1.6rem;
+  top: -1px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  transform: scaleX(0);
+  transition: transform 0.45s var(--ease-out);
+}
+
 .step-card:hover {
   transform: translateY(-4px);
   border-color: var(--border-strong);
   box-shadow: var(--shadow-card);
+}
+
+.step-card:hover::after {
+  transform: scaleX(1);
 }
 
 /* progress bar */

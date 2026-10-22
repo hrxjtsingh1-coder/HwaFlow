@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
+
 import { GroupsView } from "@/components/admin/groups-view";
+import { listGroupsForAdmin } from "@/lib/server/groups";
+import { getViewer } from "@/lib/session";
 
 export const metadata: Metadata = {
   title: "Groups",
@@ -11,6 +15,12 @@ export const metadata: Metadata = {
   },
 };
 
-export default function AdminGroupsPage() {
-  return <GroupsView />;
+export default async function AdminGroupsPage() {
+  const viewer = await getViewer();
+  if (!viewer) redirect("/login");
+  if (!viewer.isPlatformAdmin) redirect("/dashboard");
+
+  const cards = await listGroupsForAdmin();
+
+  return <GroupsView cards={cards} />;
 }

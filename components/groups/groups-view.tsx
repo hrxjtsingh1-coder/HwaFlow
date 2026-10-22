@@ -1,51 +1,39 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+
 import { signOut } from "@/lib/auth";
-import {
-  getActiveGroupFor,
-  listGroupsForUser,
-} from "@/lib/groups";
-import {
-  countSeriesForMember,
-  countSeriesInGroup,
-} from "@/lib/series";
-import { useAuthSession } from "@/lib/use-auth-session";
-import { useGroups } from "@/lib/use-groups";
-import { useSeries } from "@/lib/use-series";
+import { useActiveGroupId } from "@/lib/active-group";
+import type { Group, GroupMember } from "@/lib/groups";
+import type { AuthUser } from "@/lib/identity";
 import { DashboardRail } from "../dashboard/dashboard-rail";
 import { DashboardTopbar } from "../dashboard/dashboard-topbar";
 import { workspaceLinks } from "../dashboard/workspace-nav";
 import { ArrowRight, Layers } from "../icons";
-import { Logo } from "../logo";
 import { GroupCard } from "./group-card";
 
-function GroupsLoading() {
-  return (
-    <div className="dash-loading">
-      <div className="dash-loading-inner">
-        <Logo href="/" />
-        <div className="dash-loading-card" role="status" aria-live="polite">
-          <span className="dash-spinner" aria-hidden="true" />
-          <p>Opening your groups…</p>
-        </div>
-      </div>
-    </div>
-  );
-}
+type Membership = {
+  group: Group;
+  member: GroupMember;
+  memberCount: number;
+  seriesCount: number;
+};
 
-export function GroupsView() {
-  const router = useRouter();
-  const { user, ready: authReady } = useAuthSession();
-  const { state, ready: groupsReady } = useGroups();
-  const { ready: seriesReady } = useSeries();
+type GroupsViewProps = {
+  viewer: AuthUser;
+  memberships: Membership[];
+  /** Latest joined group; used until this device picks one. */
+  defaultActiveId: string | null;
+};
+
+export function GroupsView({
+  viewer,
+  memberships,
+  defaultActiveId,
+}: GroupsViewProps) {
   const [menuOpen, setMenuOpen] = useState(false);
-
-  useEffect(() => {
-    if (authReady && !user) router.replace("/login");
-  }, [authReady, user, router]);
+  const activeId = useActiveGroupId(viewer.username, defaultActiveId);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -61,22 +49,14 @@ export function GroupsView() {
     };
   }, [menuOpen]);
 
-  if (!authReady || !groupsReady || !seriesReady || !state || !user) {
-    return <GroupsLoading />;
-  }
-
-  const memberships = listGroupsForUser(user.username);
-  const activeId = getActiveGroupFor(user.username)?.group.id ?? null;
-
   const handleSignOut = () => {
-    signOut();
-    router.replace("/login");
+    void signOut();
   };
 
   return (
     <div className="dash-shell">
       <DashboardRail
-        user={user}
+        user={viewer}
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
         onSignOut={handleSignOut}
@@ -116,7 +96,7 @@ export function GroupsView() {
                   Ask an Owner to invite your username, or accept a pending
                   invite. Invites live on the member settings page.
                 </p>
-                <span className="grp-username-chip">@{user.username}</span>
+                <span className="grp-username-chip">@{viewer.username}</span>
                 <Link href="/settings/members" className="btn btn-primary btn-sm">
                   Go to member settings
                   <ArrowRight className="h-3.5 w-3.5" />
@@ -124,34 +104,24 @@ export function GroupsView() {
               </section>
             ) : (
               <div className="grp-grid">
-                {memberships.map(({ group, member }, index) => {
-                  const memberCount = state.members.filter(
-                    (entry) => entry.groupId === group.id
-                  ).length;
-                  const seriesCount =
-                    member.role === "staff"
-                      ? countSeriesForMember(group.id, user.username)
-                      : countSeriesInGroup(group.id);
-
-                  return (
-                    <GroupCard
-                      key={group.id}
-                      group={group}
-                      member={member}
-                      memberCount={memberCount}
-                      seriesCount={seriesCount}
-                      active={group.id === activeId}
-                      index={index}
-                    />
-                  );
-                })}
+                {memberships.map(({ group, member, memberCount, seriesCount }, index) => (
+                  <GroupCard
+                    key={group.id}
+                    group={group}
+                    member={member}
+                    memberCount={memberCount}
+                    seriesCount={seriesCount}
+                    active={group.id === activeId}
+                    index={index}
+                  />
+                ))}
               </div>
             )}
 
             <footer className="grp-footer">
               <span>
-                Preview build — groups, series and assignments stay in this
-                browser.
+                Groups and members sync with your team — changes appear after a
+                refresh.
               </span>
               <Link href="/dashboard" className="dash-link">
                 Back to dashboard

@@ -16,14 +16,12 @@
  *   4. proofread once, write finalText, upsert new glossary terms
  *   5. chapter → ready only when every panel succeeded
  *
- * A failed batch marks only its own panels failed and the loop continues; a
- * failure in batch 2 never blocks batch 3.
+ * The workspace supplies a `PipelineContext` with the current server snapshot
+ * and write functions. The pipeline never reads localStorage.
  */
 
-import {
-  PANEL_BATCH_MAX,
-  splitIntoBatches,
-} from "./ai/batch";
+import { PANEL_BATCH_MAX, splitIntoBatches } from "./ai/batch";
+import { readingDirectionFor } from "./ai/languages";
 import {
   isPipelineError,
   pipelineErrorMessage,
@@ -31,26 +29,18 @@ import {
   type ExtractedPanel,
   type GlossaryPromptTerm,
   type ProofreadResponse,
-  type ReadingDirection,
   type SourceLanguage,
   type TranslateResponse,
 } from "./ai/types";
 import {
   ChapterError,
-  blocksForChapter,
-  getChapter,
-  listBlocks,
-  listPanels,
-  setChapterStatus,
-  setPanelBlocks,
-  updateBlockPipelineText,
   type Chapter,
+  type ChapterStatus,
+  type IncomingBlock,
   type Panel,
   type PanelPipelineState,
+  type TextBlock,
 } from "./chapters";
-import { activeGlossaryTerms, upsertAutoTerms } from "./glossary";
-import { getPanelImage } from "./panel-store";
-import { getSeries } from "./series";
 
 /* ------------------------------------------------------------------ */
 /* Public types                                                        */
@@ -74,13 +64,40 @@ export type RunState = {
   error: { code: string; message: string } | null;
 };
 
-/**
- * Source language default. HwaFlow is a Korean manhwa tool; there is no
- * per-series language field yet (deliberately deferred), so this pair is the
- * single place to change when one arrives.
- */
-const SOURCE_LANGUAGE: SourceLanguage = "ko";
-const READING_DIRECTION: ReadingDirection = "ttb";
+export type PipelineSeries = {
+  title: string;
+  description: string | null;
+  language: SourceLanguage;
+};
+
+export type PipelineContext = {
+  chapter: Chapter;
+  panels: Panel[];
+  blocks: TextBlock[];
+  series: PipelineSeries;
+  glossary: GlossaryPromptTerm[];
+  readPanelImage: (panelId: string) => Promise<Blob | null>;
+  setPanelBlocks: (
+    panelId: string,
+    blocks: IncomingBlock[]
+  ) => Promise<TextBlock[]>;
+  updateBlockPipelineText: (
+    updates: Array<{
+      blockId: string;
+      baseTranslation?: string;
+      finalText?: string;
+    }>
+  ) => Promise<void>;
+  setChapterStatus: (
+    next: ChapterStatus,
+    note?: string | null
+  ) => Promise<void>;
+  upsertAutoTerms?: (
+    terms: ProofreadResponse["terms"]
+  ) => Promise<void>;
+  /** Lets the workspace show extracted/translated text as it lands. */
+  onBlocks?: (panelId: string, blocks: TextBlock[]) => void;
+};
 
 /* ------------------------------------------------------------------ */
 /* Store                                                               */
@@ -102,6 +119,7 @@ function emptyRun(): RunState {
 let runState: RunState = emptyRun();
 let activeChapterId: string | null = null;
 let cancelRequested = false;
+let workingBlocks: TextBlock[] = [];
 
 const listeners = new Set<() => void>();
 
@@ -180,21 +198,40 @@ function toFailure(error: unknown): Failure {
 }
 
 /* ------------------------------------------------------------------ */
+/* Block cache                                                         */
+/* ------------------------------------------------------------------ */
+
+function blocksForPanel(panelId: string): TextBlock[] {
+  return workingBlocks
+    .filter((block) => block.panelId === panelId)
+    .sort((a, b) => a.index - b.index);
+}
+
+function replacePanelBlocks(panelId: string, blocks: TextBlock[]): void {
+  workingBlocks = [
+    ...workingBlocks.filter((block) => block.panelId !== panelId),
+    ...blocks,
+  ];
+}
+
+function blockIndex(): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const block of workingBlocks) {
+    map.set(`${block.panelId}:${block.index}`, block.id);
+  }
+  return map;
+}
+
+/* ------------------------------------------------------------------ */
 /* Stage helpers                                                       */
 /* ------------------------------------------------------------------ */
 
-function seriesContext(chapter: Chapter): ChapterContext {
-  const series = getSeries(chapter.seriesId);
+function seriesContext(ctx: PipelineContext): ChapterContext {
   return {
-    seriesTitle: series?.title ?? "Untitled series",
-    synopsis: series?.description ?? null,
-    chapterNumber: chapter.number,
+    seriesTitle: ctx.series.title || "Untitled series",
+    synopsis: ctx.series.description,
+    chapterNumber: ctx.chapter.number,
   };
-}
-
-/** Upload order is panel order — extraction must not reorder the chapter. */
-function chapterPanels(chapterId: string): Panel[] {
-  return listPanels(chapterId);
 }
 
 /**
@@ -202,16 +239,15 @@ function chapterPanels(chapterId: string): Panel[] {
  * count them and never has to re-read the store mid-loop.
  */
 async function extractBatch(
+  ctx: PipelineContext,
   panels: Panel[],
-  actor: string,
-  chapterId: string
+  language: SourceLanguage
 ): Promise<{ extractedPanelIds: string[]; failure: Failure | null }> {
-  // Read the images first. A panel whose blob is gone cannot be sent, and the
-  // manifest must describe exactly the parts that are attached — one entry per
-  // `panel-{n}` part, in the same order.
+  // Read the images first. A panel whose image is gone cannot be sent, and the
+  // manifest must describe exactly the parts that are attached.
   const usable: Array<{ panel: Panel; blob: Blob }> = [];
   for (const panel of panels) {
-    const blob = await getPanelImage(panel.id);
+    const blob = await ctx.readPanelImage(panel.id);
     if (!blob) continue;
     usable.push({ panel, blob });
   }
@@ -234,8 +270,8 @@ async function extractBatch(
         panelId: entry.panel.id,
         index: position,
       })),
-      language: SOURCE_LANGUAGE,
-      readingDirection: READING_DIRECTION,
+      language,
+      readingDirection: readingDirectionFor(language),
     })
   );
 
@@ -266,18 +302,23 @@ async function extractBatch(
 
   for (const panel of returned) {
     if (!usable.some((entry) => entry.panel.id === panel.panelId)) continue;
-    setPanelBlocks({
-      chapterId,
-      panelId: panel.panelId,
-      actor,
-      blocks: panel.blocks.map((block) => ({
-        index: block.index,
-        sourceText: block.sourceText,
-        bbox: block.bbox,
-        confidence: block.confidence,
-      })),
-    });
-    written.push(panel.panelId);
+
+    try {
+      const blocks = await ctx.setPanelBlocks(
+        panel.panelId,
+        panel.blocks.map((block) => ({
+          index: block.index,
+          sourceText: block.sourceText,
+          bbox: block.bbox,
+          confidence: block.confidence,
+        }))
+      );
+      replacePanelBlocks(panel.panelId, blocks);
+      ctx.onBlocks?.(panel.panelId, blocks);
+      written.push(panel.panelId);
+    } catch {
+      // Leave this panel failed; the loop continues with the next one.
+    }
   }
 
   return { extractedPanelIds: written, failure: null };
@@ -288,9 +329,8 @@ async function extractBatch(
  * Mutates run state as it goes and never throws — a failed batch is data.
  */
 async function runExtract(
-  chapterId: string,
-  panels: Panel[],
-  actor: string
+  ctx: PipelineContext,
+  panels: Panel[]
 ): Promise<number> {
   const batches = splitIntoBatches(panels, PANEL_BATCH_MAX);
   patch({
@@ -312,15 +352,13 @@ async function runExtract(
     });
 
     const { extractedPanelIds, failure } = await extractBatch(
+      ctx,
       batch,
-      actor,
-      chapterId
+      ctx.series.language
     );
 
     if (failure) {
-      setPanelStates(batchIds, "failed", {
-        error: failure,
-      });
+      setPanelStates(batchIds, "failed", { error: failure });
       continue;
     }
 
@@ -335,35 +373,27 @@ async function runExtract(
   return extracted;
 }
 
-function blockIndex(chapterId: string): Map<string, string> {
-  const map = new Map<string, string>();
-  for (const block of blocksForChapter(chapterId)) {
-    map.set(`${block.panelId}:${block.index}`, block.id);
-  }
-  return map;
-}
-
 /**
  * Translate + proofread over every usable panel. Returns true only when both
  * passes succeeded; a failure leaves the chapter editable and retryable.
  */
-async function runTextStages(
-  chapter: Chapter,
-  actor: string
-): Promise<boolean> {
-  const panels = chapterPanels(chapter.id).filter((panel) => {
+async function runTextStages(ctx: PipelineContext): Promise<boolean> {
+  const panels = ctx.panels.filter((panel) => {
     const state = runState.panels[panel.id];
     return state === "extracted" || state === "done";
   });
 
   if (panels.length === 0) return false;
 
-  const context = seriesContext(chapter);
+  const context = seriesContext(ctx);
+  const language = ctx.series.language;
   const usableIds = panels.map((panel) => panel.id);
+
+  const glossary: GlossaryPromptTerm[] = ctx.glossary;
 
   const sourcePayload = panels.map((panel) => ({
     panelId: panel.id,
-    blocks: listBlocks(panel.id)
+    blocks: blocksForPanel(panel.id)
       .filter((block) => block.sourceText.trim().length > 0)
       .map((block) => ({
         index: block.index,
@@ -384,7 +414,8 @@ async function runTextStages(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         panels: sourcePayload,
-        language: SOURCE_LANGUAGE,
+        language,
+        glossary,
         context,
       }),
     });
@@ -394,11 +425,13 @@ async function runTextStages(
     }
     translations = ((await response.json()) as TranslateResponse).translations;
   } catch {
-    patch({ error: { code: "network", message: pipelineErrorMessage("network") } });
+    patch({
+      error: { code: "network", message: pipelineErrorMessage("network") },
+    });
     return false;
   }
 
-  const translationIds = blockIndex(chapter.id);
+  const translationIds = blockIndex();
   const translationUpdates = translations
     .map((entry) => {
       const blockId = translationIds.get(`${entry.panelId}:${entry.index}`);
@@ -411,10 +444,21 @@ async function runTextStages(
     );
 
   if (translationUpdates.length > 0) {
-    updateBlockPipelineText({
-      chapterId: chapter.id,
-      updates: translationUpdates,
-    });
+    try {
+      await ctx.updateBlockPipelineText(translationUpdates);
+      const byId = new Map(
+        translationUpdates.map((update) => [update.blockId, update])
+      );
+      workingBlocks = workingBlocks.map((block) => {
+        const update = byId.get(block.id);
+        return update
+          ? { ...block, baseTranslation: update.baseTranslation }
+          : block;
+      });
+    } catch (error) {
+      patch({ running: false, error: toFailure(error) });
+      return false;
+    }
   }
 
   if (cancelRequested) return false;
@@ -423,17 +467,9 @@ async function runTextStages(
 
   patch({ stage: "proofread" });
 
-  const glossary: GlossaryPromptTerm[] = activeGlossaryTerms(
-    chapter.seriesId
-  ).map((term) => ({
-    sourceTerm: term.sourceTerm,
-    targetTerm: term.targetTerm,
-    category: term.category,
-  }));
-
   const proofPayload = panels.map((panel) => ({
     panelId: panel.id,
-    blocks: listBlocks(panel.id)
+    blocks: blocksForPanel(panel.id)
       .filter((block) => block.sourceText.trim().length > 0)
       .map((block) => ({
         index: block.index,
@@ -449,6 +485,7 @@ async function runTextStages(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         panels: proofPayload,
+        language,
         glossary,
         context,
       }),
@@ -459,11 +496,13 @@ async function runTextStages(
     }
     proof = (await response.json()) as ProofreadResponse;
   } catch {
-    patch({ error: { code: "network", message: pipelineErrorMessage("network") } });
+    patch({
+      error: { code: "network", message: pipelineErrorMessage("network") },
+    });
     return false;
   }
 
-  const finalIds = blockIndex(chapter.id);
+  const finalIds = blockIndex();
   const finalUpdates = proof.results
     .map((entry) => {
       const blockId = finalIds.get(`${entry.panelId}:${entry.index}`);
@@ -476,19 +515,28 @@ async function runTextStages(
     );
 
   if (finalUpdates.length > 0) {
-    updateBlockPipelineText({ chapterId: chapter.id, updates: finalUpdates });
+    try {
+      await ctx.updateBlockPipelineText(finalUpdates);
+      const byId = new Map(finalUpdates.map((update) => [update.blockId, update]));
+      workingBlocks = workingBlocks.map((block) => {
+        const update = byId.get(block.id);
+        return update ? { ...block, finalText: update.finalText } : block;
+      });
+    } catch (error) {
+      patch({ running: false, error: toFailure(error) });
+      return false;
+    }
   }
 
-  // One write for the whole chapter: the pass is chapter-wide precisely so this
-  // array is deduplicated once instead of forty overlapping times.
-  upsertAutoTerms({
-    seriesId: chapter.seriesId,
-    chapterId: chapter.id,
-    terms: proof.terms,
-  });
+  if (ctx.upsertAutoTerms && proof.terms.length > 0) {
+    try {
+      await ctx.upsertAutoTerms(proof.terms);
+    } catch {
+      // Glossary suggestions are a bonus; a failure must not fail the run.
+    }
+  }
 
   setPanelStates(usableIds, "done", { stage: "done" });
-  void actor;
   return true;
 }
 
@@ -497,10 +545,10 @@ function failureCount(): number {
     .length;
 }
 
-function finish(chapterId: string, actor: string, ready: boolean): void {
+async function finish(ctx: PipelineContext, ready: boolean): Promise<void> {
   if (ready && !cancelRequested && failureCount() === 0) {
     try {
-      setChapterStatus({ chapterId, next: "ready", actor });
+      await ctx.setChapterStatus("ready");
       patch({ stage: "done", running: false, error: null });
       return;
     } catch (error) {
@@ -531,25 +579,18 @@ function beginRun(chapterId: string, panels: Panel[]): void {
 /* Public actions                                                      */
 /* ------------------------------------------------------------------ */
 
-export async function startRun(
-  chapterId: string,
-  actor: string
-): Promise<void> {
+export async function startRun(ctx: PipelineContext): Promise<void> {
+  const chapter = ctx.chapter;
+
   if (runState.running) {
-    // The run state is module-level and holds one chapter at a time. Starting
-    // a second run would wipe the first one's progress.
     throw new ChapterError(
       "bad-transition",
-      activeChapterId === chapterId
+      activeChapterId === chapter.id
         ? "A run is already in progress."
         : "Another chapter is still running. Wait for it to finish."
     );
   }
 
-  const chapter = getChapter(chapterId);
-  if (!chapter) {
-    throw new ChapterError("not-found", "That chapter no longer exists.");
-  }
   if (chapter.status === "submitted" || chapter.status === "approved") {
     throw new ChapterError(
       "bad-transition",
@@ -559,27 +600,31 @@ export async function startRun(
     );
   }
 
-  const panels = chapterPanels(chapterId);
-  if (panels.length === 0) {
+  if (ctx.panels.length === 0) {
     throw new ChapterError("no-content", "Upload a panel first.");
   }
 
-  beginRun(chapterId, panels);
+  workingBlocks = [...ctx.blocks];
+  beginRun(chapter.id, ctx.panels);
 
   try {
-    // ready → processing is a legal transition; rejected has to reopen first.
+    // ready → processing is a legal transition; rejected reopens first.
     if (chapter.status === "rejected") {
-      setChapterStatus({ chapterId, next: "draft", actor });
+      await ctx.setChapterStatus("draft");
     }
-    if (chapter.status === "draft" || chapter.status === "ready" || chapter.status === "rejected") {
-      setChapterStatus({ chapterId, next: "processing", actor });
+    if (
+      chapter.status === "draft" ||
+      chapter.status === "ready" ||
+      chapter.status === "rejected"
+    ) {
+      await ctx.setChapterStatus("processing");
     }
   } catch (error) {
     patch({ running: false, error: toFailure(error) });
     return;
   }
 
-  const extracted = await runExtract(chapterId, panels, actor);
+  const extracted = await runExtract(ctx, ctx.panels);
 
   if (extracted === 0) {
     patch({
@@ -592,23 +637,18 @@ export async function startRun(
     return;
   }
 
-  const textOk = await runTextStages(chapter, actor);
-  finish(chapterId, actor, textOk);
+  const textOk = await runTextStages(ctx);
+  await finish(ctx, textOk);
 }
 
-export async function retryFailed(
-  chapterId: string,
-  actor: string
-): Promise<void> {
-  const chapter = getChapter(chapterId);
-  if (!chapter) {
-    throw new ChapterError("not-found", "That chapter no longer exists.");
-  }
+export async function retryFailed(ctx: PipelineContext): Promise<void> {
+  const chapter = ctx.chapter;
+
   if (runState.running) {
     throw new ChapterError("bad-transition", "A run is already in progress.");
   }
 
-  const panels = chapterPanels(chapterId);
+  const panels = ctx.panels;
   const failed = panels.filter(
     (panel) => runState.panels[panel.id] === "failed"
   );
@@ -617,13 +657,13 @@ export async function retryFailed(
   // keep every panel's extracted text and re-run both passes over the chapter.
   const retryExtract = failed.length > 0;
 
-  beginRun(chapterId, panels);
+  workingBlocks = [...ctx.blocks];
+  beginRun(chapter.id, panels);
 
   if (retryExtract) {
     for (const panel of panels) {
       if (!failed.some((entry) => entry.id === panel.id)) {
-        // A missing block set means the panel never extracted; redo those too.
-        const hasText = listBlocks(panel.id).length > 0;
+        const hasText = blocksForPanel(panel.id).length > 0;
         runState.panels[panel.id] = hasText ? "extracted" : "pending";
       }
     }
@@ -632,13 +672,13 @@ export async function retryFailed(
     ).length;
     emit();
 
-    await runExtract(chapterId, failed, actor);
+    await runExtract(ctx, failed);
   } else {
     for (const panel of panels) runState.panels[panel.id] = "extracted";
     runState.extracted = panels.length;
     emit();
   }
 
-  const textOk = await runTextStages(chapter, actor);
-  finish(chapterId, actor, textOk);
+  const textOk = await runTextStages(ctx);
+  await finish(ctx, textOk);
 }

@@ -3,30 +3,23 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+
 import { signOut } from "@/lib/auth";
-import {
-  groupEarningsThisMonth,
-  memberEarningsThisMonth,
-} from "@/lib/earnings";
+import { useActiveGroupId } from "@/lib/active-group";
 import { formatMoney } from "@/lib/format";
-import {
-  getActiveGroupFor,
-  getMembers,
-  type GroupMember,
+import type {
+  Group,
+  GroupInvite,
+  GroupMember,
 } from "@/lib/groups";
+import type { AuthUser } from "@/lib/identity";
 import {
   RELEASE_DAY_LABELS,
   canManageSeries,
-  countSeriesForMember,
-  countSeriesInGroup,
-  listSeriesForGroup,
-  listSeriesForViewer,
   type ReleaseDay,
   type Series,
+  type SeriesAssignment,
 } from "@/lib/series";
-import { useAuthSession } from "@/lib/use-auth-session";
-import { useGroups } from "@/lib/use-groups";
-import { useSeries } from "@/lib/use-series";
 import { DashboardRail } from "../dashboard/dashboard-rail";
 import { DashboardTopbar } from "../dashboard/dashboard-topbar";
 import { workspaceLinks } from "../dashboard/workspace-nav";
@@ -42,37 +35,46 @@ import {
   X,
 } from "../icons";
 import { GroupAvatar } from "../group-avatar";
-import { Logo } from "../logo";
 import { RoleBadge } from "../role-badge";
 import { CreateSeriesDialog } from "./create-series-dialog";
 import { DayLane } from "./day-lane";
+import type { SeriesAssignee } from "./series-tile";
 
 type Notice = { tone: "success" | "error"; text: string };
 
-function DetailLoading() {
-  return (
-    <div className="dash-loading">
-      <div className="dash-loading-inner">
-        <Logo href="/" />
-        <div className="dash-loading-card" role="status" aria-live="polite">
-          <span className="dash-spinner" aria-hidden="true" />
-          <p>Opening the group…</p>
-        </div>
-      </div>
-    </div>
-  );
-}
+/**
+ * The page passes the bundle straight from the server. `null` means RLS found
+ * no group for this viewer; "not found" and "no access" are intentionally the
+ * same answer.
+ */
+type GroupDetailBundle = {
+  group: Group;
+  viewerMember: GroupMember;
+  members: GroupMember[];
+  invites: GroupInvite[];
+  seriesCount: number;
+};
 
-export function GroupDetailView({ groupId }: { groupId: string }) {
+type GroupDetailViewProps = {
+  viewer: AuthUser;
+  bundle: GroupDetailBundle | null;
+  /** Non-archived series this viewer can read, already filtered by RLS. */
+  series: Series[];
+  assignments: SeriesAssignment[];
+};
+
+export function GroupDetailView({
+  viewer,
+  bundle,
+  series,
+  assignments,
+}: GroupDetailViewProps) {
   const router = useRouter();
-  const { user, ready: authReady } = useAuthSession();
-  const { state, ready: groupsReady } = useGroups();
-  const { state: seriesState, ready: seriesReady } = useSeries();
-
   const [menuOpen, setMenuOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const noticeTimer = useRef<number | null>(null);
+  const activeId = useActiveGroupId(viewer.username);
 
   const notify = (tone: Notice["tone"], text: string) => {
     setNotice({ tone, text });
@@ -85,10 +87,6 @@ export function GroupDetailView({ groupId }: { groupId: string }) {
       if (noticeTimer.current) window.clearTimeout(noticeTimer.current);
     };
   }, []);
-
-  useEffect(() => {
-    if (authReady && !user) router.replace("/login");
-  }, [authReady, user, router]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -104,33 +102,18 @@ export function GroupDetailView({ groupId }: { groupId: string }) {
     };
   }, [menuOpen]);
 
-  if (
-    !authReady ||
-    !groupsReady ||
-    !seriesReady ||
-    !state ||
-    !seriesState ||
-    !user
-  ) {
-    return <DetailLoading />;
-  }
+  const handleSignOut = () => {
+    void signOut();
+  };
 
-  const group = state.groups.find((entry) => entry.id === groupId);
-  const viewerMember: GroupMember | undefined = state.members.find(
-    (entry) => entry.groupId === groupId && entry.username === user.username
-  );
-
-  if (!group || !viewerMember) {
+  if (!bundle) {
     return (
       <div className="dash-shell">
         <DashboardRail
-          user={user}
+          user={viewer}
           open={menuOpen}
           onClose={() => setMenuOpen(false)}
-          onSignOut={() => {
-            signOut();
-            router.replace("/login");
-          }}
+          onSignOut={handleSignOut}
           links={workspaceLinks()}
           active="groups"
         />
@@ -145,8 +128,7 @@ export function GroupDetailView({ groupId }: { groupId: string }) {
                 <p className="eyebrow">Groups</p>
                 <h1 className="grp-notfound-title">Group not found</h1>
                 <p className="grp-notfound-copy">
-                  You may not have access, or this group was removed from this
-                  browser.
+                  You may not have access, or this group was removed.
                 </p>
                 <Link href="/groups" className="btn btn-ghost btn-sm">
                   <ArrowLeft className="h-4 w-4" />
@@ -160,55 +142,49 @@ export function GroupDetailView({ groupId }: { groupId: string }) {
     );
   }
 
-  const members = getMembers(group.id);
+  const { group, viewerMember, members } = bundle;
   const viewerRole = viewerMember.role;
   const canManage = canManageSeries(viewerRole);
-  const active = getActiveGroupFor(user.username)?.group.id === group.id;
+  const active = activeId === group.id;
 
-  const visibleSeries =
-    viewerRole === "staff"
-      ? listSeriesForViewer(group.id, user.username)
-      : listSeriesForGroup(group.id);
-  const seriesCount =
-    viewerRole === "staff"
-      ? countSeriesForMember(group.id, user.username)
-      : countSeriesInGroup(group.id);
+  const visibleSeries = series;
 
-  const money =
-    viewerRole === "owner"
-      ? groupEarningsThisMonth(group.id)
-      : memberEarningsThisMonth(group.id, user.username);
+  // Earnings need approved chapters; they arrive in Phase 3.
+  const money = 0;
   const moneyNote =
     viewerRole === "owner"
       ? "Group total this month"
       : "Your approved work in this group";
 
-  const assigneesBySeries: Record<string, string[]> = {};
-  for (const assignment of seriesState.assignments) {
-    if (assignment.groupId !== group.id) continue;
+  const memberByUsername = new Map(
+    members.map((member) => [member.username, member])
+  );
+  const assigneesBySeries: Record<string, SeriesAssignee[]> = {};
+  for (const assignment of assignments) {
+    const member = memberByUsername.get(assignment.username);
+    if (!member) continue;
     if (!assigneesBySeries[assignment.seriesId]) {
       assigneesBySeries[assignment.seriesId] = [];
     }
-    assigneesBySeries[assignment.seriesId].push(assignment.username);
+    assigneesBySeries[assignment.seriesId].push({
+      username: member.username,
+      displayName: member.displayName,
+    });
   }
 
   const byDay = (day: number) =>
-    visibleSeries.filter((entry) => entry.releaseDay === day);
+    visibleSeries.filter((entry) => entry.releaseDays.includes(day as ReleaseDay));
 
-  const handleCreated = (series: Series) => {
+  const handleCreated = (created: Series) => {
     setCreateOpen(false);
-    notify("success", `${series.title} was created.`);
-  };
-
-  const handleSignOut = () => {
-    signOut();
-    router.replace("/login");
+    notify("success", `${created.title} was created.`);
+    router.refresh();
   };
 
   return (
     <div className="dash-shell">
       <DashboardRail
-        user={user}
+        user={viewer}
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
         onSignOut={handleSignOut}
@@ -294,7 +270,7 @@ export function GroupDetailView({ groupId }: { groupId: string }) {
                   <Layers className="h-3.5 w-3.5" />
                   Series
                 </span>
-                <p className="grp-stat-value">{seriesCount}</p>
+                <p className="grp-stat-value">{visibleSeries.length}</p>
                 <span className="grp-stat-note">
                   {viewerRole === "staff"
                     ? "Assigned to you"
@@ -322,9 +298,7 @@ export function GroupDetailView({ groupId }: { groupId: string }) {
                 <h2 className="grp-section-title">Series</h2>
               </div>
               <div className="grp-section-actions">
-                <span className="chip">
-                  {seriesCount} series
-                </span>
+                <span className="chip">{visibleSeries.length} series</span>
                 {canManage ? (
                   <button
                     type="button"
@@ -339,7 +313,10 @@ export function GroupDetailView({ groupId }: { groupId: string }) {
             </div>
 
             {visibleSeries.length === 0 ? (
-              <section className="grp-empty grp-empty--series dash-enter" data-delay="140">
+              <section
+                className="grp-empty grp-empty--series dash-enter"
+                data-delay="140"
+              >
                 <span className="grp-empty-icon" aria-hidden="true">
                   <Layers className="h-6 w-6" />
                 </span>
@@ -373,17 +350,14 @@ export function GroupDetailView({ groupId }: { groupId: string }) {
                   day={index as ReleaseDay}
                   series={byDay(index)}
                   viewerRole={viewerRole}
-                  viewerUsername={user.username}
+                  viewerUsername={viewer.username}
                   assigneesBySeries={assigneesBySeries}
                 />
               ))}
             </div>
 
             <footer className="grp-footer">
-              <span>
-                Preview build — groups, series and assignments stay in this
-                browser.
-              </span>
+              <span>Group and member data syncs with your team.</span>
               <Link href="/dashboard" className="dash-link">
                 Back to dashboard
                 <ArrowRight className="h-3 w-3" />
@@ -397,7 +371,6 @@ export function GroupDetailView({ groupId }: { groupId: string }) {
         <CreateSeriesDialog
           group={group}
           members={members}
-          actor={user.username}
           onClose={() => setCreateOpen(false)}
           onCreated={handleCreated}
         />

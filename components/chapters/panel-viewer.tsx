@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import type { Panel, TextBlock } from "@/lib/chapters";
 import type { RunState } from "@/lib/pipeline";
-import { getPanelImage } from "@/lib/panel-store";
 import { useDialogA11y } from "@/lib/use-dialog";
 import {
   ArrowLeft,
@@ -79,31 +78,17 @@ export function PanelViewer({
   }, [run.stage, run.running]);
 
   useEffect(() => {
-    let cancelled = false;
-    let objectUrl: string | null = null;
     setImageUrl(null);
     setMissing(false);
     if (!panel) return;
 
-    getPanelImage(panel.id)
-      .then((blob) => {
-        if (cancelled) return;
-        if (!blob) {
-          setMissing(true);
-          return;
-        }
-        objectUrl = URL.createObjectURL(blob);
-        setImageUrl(objectUrl);
-      })
-      .catch(() => {
-        if (!cancelled) setMissing(true);
-      });
+    if (!panel.imageUrl) {
+      setMissing(panel.storageState !== "purged");
+      return;
+    }
 
-    return () => {
-      cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [panel?.id]);
+    setImageUrl(panel.imageUrl);
+  }, [panel?.id, panel?.imageUrl, panel?.storageState]);
 
   useEffect(() => {
     if (!lightbox) return;

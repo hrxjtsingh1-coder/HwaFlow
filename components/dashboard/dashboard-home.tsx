@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   useEffect,
   useRef,
@@ -10,15 +9,14 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { signOut } from "@/lib/auth";
-import { initialWeek, type Release } from "@/lib/dashboard-data";
-import {
-  approvedChaptersThisMonth,
-  totalEarningsThisMonth,
-} from "@/lib/earnings";
+import type {
+  DashTone,
+  Release,
+  ReleaseStatus,
+} from "@/lib/dashboard-data";
 import { formatMoney } from "@/lib/format";
-import { useAuthSession } from "@/lib/use-auth-session";
-import { useChapters } from "@/lib/use-chapters";
-import { useGroups } from "@/lib/use-groups";
+import type { AuthUser } from "@/lib/identity";
+import type { DashboardWeek } from "@/lib/server/chapters";
 import {
   ArrowUpRight,
   CalendarDays,
@@ -27,7 +25,6 @@ import {
   TrendingUp,
   X,
 } from "../icons";
-import { Logo } from "../logo";
 import { DashboardRail } from "./dashboard-rail";
 import { DashboardTopbar } from "./dashboard-topbar";
 import { workspaceLinks } from "./workspace-nav";
@@ -151,9 +148,37 @@ function relativeDay(day: CalendarDay): string {
 }
 
 /** Monday-to-Sunday week around today, with the live session folded into today. */
+const TONES: DashTone[] = ["mint", "lavender", "peach", "sky"];
+
+function toneFor(seriesId: string): DashTone {
+  let hash = 0;
+  for (let index = 0; index < seriesId.length; index += 1) {
+    hash = (hash * 31 + seriesId.charCodeAt(index)) | 0;
+  }
+  return TONES[Math.abs(hash) % TONES.length];
+}
+
+function serverRelease(
+  entry: DashboardWeek["releases"][number]
+): Release | null {
+  if (entry.chapterNumber === null) return null;
+
+  const status: ReleaseStatus =
+    entry.chapterStatus === "approved" ? "Approved" : "Scheduled";
+
+  return {
+    series: entry.title,
+    chapter: entry.chapterNumber,
+    time: "Release day",
+    status,
+    tone: toneFor(entry.seriesId),
+  };
+}
+
 function buildWeek(
   log: Record<string, number>,
-  liveSeconds: number
+  liveSeconds: number,
+  releases: DashboardWeek["releases"]
 ): { days: CalendarDay[]; releases: number } {
   const now = new Date();
   const todayKey = dayKey(now);
@@ -176,7 +201,10 @@ function buildWeek(
       date: date.getDate(),
       isToday: key === todayKey,
       seconds: key === todayKey ? liveSeconds : (log[key] ?? 0),
-      releases: initialWeek[index]?.releases ?? [],
+      releases: releases
+        .filter((entry) => entry.weekday === index)
+        .map(serverRelease)
+        .filter((entry): entry is Release => entry !== null),
     };
   });
 
@@ -192,29 +220,26 @@ function releaseChip(status: Release["status"]) {
   return "chip";
 }
 
-function DashboardLoading() {
-  return (
-    <div className="dash-loading">
-      <div className="dash-loading-inner">
-        <Logo href="/" />
-        <div className="dash-loading-card" role="status" aria-live="polite">
-          <span className="dash-spinner" aria-hidden="true" />
-          <p>Opening your workspace…</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* ------------------------------------------------------------------ */
 
-export function DashboardHome() {
-  const router = useRouter();
-  const { user, ready } = useAuthSession();
-  const { state: groupsState } = useGroups();
-  // Subscribing is the point: a chapter approved in another tab must move the
-  // money on this one. The value itself is derived, never stored.
-  useChapters();
+type DashboardHomeProps = {
+  viewer: AuthUser;
+  /** Currency of the viewer's newest group, or USD before they join one. */
+  currency: string;
+  week: DashboardWeek;
+  earnings: number;
+  approved: number;
+};
+
+export function DashboardHome({
+  viewer,
+  currency,
+  week: serverWeek,
+  earnings,
+  approved,
+}: DashboardHomeProps) {
+  // `viewer` keeps the existing JSX readable; the page owns auth now.
+  const user = viewer;
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [openDay, setOpenDay] = useState<CalendarDay | null>(null);
@@ -249,10 +274,6 @@ export function DashboardHome() {
       first.focus();
     }
   };
-
-  useEffect(() => {
-    if (ready && !user) router.replace("/login");
-  }, [ready, user, router]);
 
   useEffect(() => {
     if (!menuOpen && !openDay) return;
@@ -328,11 +349,8 @@ export function DashboardHome() {
   }, [tracking, sessionSeconds, baseToday]);
 
   const handleSignOut = () => {
-    signOut();
-    router.replace("/login");
+    void signOut();
   };
-
-  if (!ready || !user) return <DashboardLoading />;
 
   const firstName = user.displayName.trim().split(/\s+/)[0] || user.username;
   const hour = new Date().getHours();
@@ -344,15 +362,6 @@ export function DashboardHome() {
     day: "numeric",
   }).format(new Date());
 
-  const earnings = totalEarningsThisMonth(user.username);
-  const approved = approvedChaptersThisMonth(user.username);
-  const currency =
-    groupsState?.groups.find((group) =>
-      groupsState.members.some(
-        (member) =>
-          member.groupId === group.id && member.username === user.username
-      )
-    )?.currency ?? "USD";
   const shippedLine =
     approved > 0
       ? `You've shipped ${approved} chapter${
@@ -364,7 +373,7 @@ export function DashboardHome() {
   }).format(new Date());
 
   const todaySeconds = baseToday + sessionSeconds;
-  const week = buildWeek(focusLog, todaySeconds);
+  const week = buildWeek(focusLog, todaySeconds, serverWeek.releases);
   const weekSeconds = week.days.reduce((total, day) => total + day.seconds, 0);
   const peakSeconds = Math.max(1, ...week.days.map((day) => day.seconds));
   const activeDays = week.days.filter((day) => day.seconds > 0).length;
@@ -651,7 +660,7 @@ export function DashboardHome() {
 
             <footer className="dash-footer">
               <span>
-                Preview build — your session and changes stay in this browser.
+                Your work is saved to your workspace and syncs across devices.
               </span>
               <Link href="/" className="dash-link">
                 Back to the site

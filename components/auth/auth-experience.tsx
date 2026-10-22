@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -14,7 +13,6 @@ import {
 } from "react";
 import {
   getInitials,
-  getSession,
   setRememberedUsername,
   signOut,
   type AuthUser,
@@ -37,14 +35,20 @@ const titles: Record<AuthMode, string> = {
   "sign-up": "Create your account · HwaFlow",
 };
 
-export function AuthExperience({ initialMode }: { initialMode: AuthMode }) {
-  const router = useRouter();
+export function AuthExperience({
+  initialMode,
+  initialUser = null,
+}: {
+  initialMode: AuthMode;
+  /** Resolved on the server; null when signed out (the normal case). */
+  initialUser?: AuthUser | null;
+}) {
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [success, setSuccess] = useState<{
     user: AuthUser;
     intent: AuthMode;
   } | null>(null);
-  const [resumeUser, setResumeUser] = useState<AuthUser | null>(null);
+  const [resumeUser, setResumeUser] = useState<AuthUser | null>(initialUser);
   const [stageHeight, setStageHeight] = useState<number>();
 
   const cardRef = useRef<HTMLDivElement>(null);
@@ -66,14 +70,15 @@ export function AuthExperience({ initialMode }: { initialMode: AuthMode }) {
   }, [mode, success]);
 
   useEffect(() => {
-    setResumeUser(getSession());
-  }, []);
-
-  useEffect(() => {
     if (!success) return;
-    const timeout = window.setTimeout(() => router.push("/dashboard"), 3200);
+    // Full navigation, not router.push: it drops the cached viewer and the
+    // localStorage stores hydrated before this sign-in.
+    const timeout = window.setTimeout(
+      () => window.location.assign("/dashboard"),
+      3200
+    );
     return () => window.clearTimeout(timeout);
-  }, [success, router]);
+  }, [success]);
 
   useEffect(() => {
     return () => {
@@ -199,7 +204,7 @@ export function AuthExperience({ initialMode }: { initialMode: AuthMode }) {
                 <button
                   type="button"
                   className="auth-submit"
-                  onClick={() => router.push("/dashboard")}
+                  onClick={() => window.location.assign("/dashboard")}
                 >
                   Open your dashboard
                   <ArrowRight className="auth-submit-icon h-4 w-4" />
@@ -209,7 +214,7 @@ export function AuthExperience({ initialMode }: { initialMode: AuthMode }) {
                   type="button"
                   className="auth-link auth-success-exit"
                   onClick={() => {
-                    signOut();
+                    void signOut();
                     setSuccess(null);
                     switchMode(mode, false);
                   }}
@@ -257,7 +262,7 @@ export function AuthExperience({ initialMode }: { initialMode: AuthMode }) {
                 <button
                   type="button"
                   className="auth-submit"
-                  onClick={() => router.push("/dashboard")}
+                  onClick={() => window.location.assign("/dashboard")}
                 >
                   Open your dashboard
                   <ArrowRight className="auth-submit-icon h-4 w-4" />
@@ -267,7 +272,7 @@ export function AuthExperience({ initialMode }: { initialMode: AuthMode }) {
                   type="button"
                   className="auth-link auth-success-exit"
                   onClick={() => {
-                    signOut();
+                    void signOut();
                     setRememberedUsername(null);
                     setResumeUser(null);
                   }}
@@ -366,7 +371,8 @@ export function AuthExperience({ initialMode }: { initialMode: AuthMode }) {
 
             <p className="auth-demo">
               <span className="auth-demo-dot" aria-hidden="true" />
-              Preview build — accounts and sessions stay in this browser.
+              Early build — accounts are real. Group data still lives in this
+              browser.
             </p>
           </div>
 

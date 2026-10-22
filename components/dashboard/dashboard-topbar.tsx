@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { formatRelativeTime } from "@/lib/format";
 import {
-  markAllNotificationsRead,
-  markNotificationRead,
-} from "@/lib/notifications";
-import { useAuthSession } from "@/lib/use-auth-session";
-import { useNotifications } from "@/lib/use-notifications";
+  listNotificationsAction,
+  markAllNotificationsReadAction,
+  markNotificationReadAction,
+} from "@/lib/notification-actions";
+import type { AppNotification } from "@/lib/notifications";
 import { Bell, ChevronRight, Menu } from "../icons";
 import { Logo } from "../logo";
 
@@ -32,18 +32,26 @@ export function DashboardTopbar({
   onOpenMenu,
   trail = DEFAULT_TRAIL,
 }: DashboardTopbarProps) {
-  const { user } = useAuthSession();
-  const { state } = useNotifications();
+  const [items, setItems] = useState<AppNotification[]>([]);
+  const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  const items =
-    user && state
-      ? state.items
-          .filter((item) => item.username === user.username)
-          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      : [];
-  const unread = items.filter((item) => !item.read).length;
+  const load = useCallback(async () => {
+    const result = await listNotificationsAction();
+    if (!result.ok) return;
+    setItems(result.data.items);
+    setUnread(result.data.unread);
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    if (open) void load();
+  }, [open, load]);
+
   const visible = items.slice(0, 6);
 
   useEffect(() => {
@@ -64,14 +72,25 @@ export function DashboardTopbar({
     };
   }, [open]);
 
-  const markRead = (id: string) => {
-    if (!user) return;
-    markNotificationRead(id, user.username);
+  const markRead = async (id: string) => {
+    const target = items.find((item) => item.id === id);
+    if (!target || target.read) return;
+
+    setItems((current) =>
+      current.map((item) => (item.id === id ? { ...item, read: true } : item))
+    );
+    setUnread((current) => Math.max(0, current - 1));
+
+    const result = await markNotificationReadAction(id);
+    if (!result.ok) void load();
   };
 
-  const markAllRead = () => {
-    if (!user) return;
-    markAllNotificationsRead(user.username);
+  const markAllRead = async () => {
+    setItems((current) => current.map((item) => ({ ...item, read: true })));
+    setUnread(0);
+
+    const result = await markAllNotificationsReadAction();
+    if (!result.ok) void load();
   };
 
   return (

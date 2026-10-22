@@ -3,16 +3,20 @@
 import { useRef, useState, type FormEvent } from "react";
 import type { Group } from "@/lib/groups";
 import {
+  SOURCE_LANGUAGES,
+  SOURCE_LANGUAGE_LABELS,
+  type SourceLanguage,
+} from "@/lib/ai/types";
+import {
   MAX_SERIES_DESCRIPTION,
   MAX_SERIES_GENRE,
   MAX_SERIES_RATE,
   MAX_SERIES_TITLE,
   RELEASE_DAY_SHORT,
-  SeriesError,
-  updateSeries,
   validateSeriesTitle,
   type Series,
 } from "@/lib/series";
+import { updateSeriesAction } from "@/lib/series-actions";
 import { useDialogA11y } from "@/lib/use-dialog";
 import { AlertCircle, Settings, X } from "../icons";
 import { SeriesCoverField } from "../groups/series-cover-field";
@@ -35,7 +39,6 @@ const GENRE_SUGGESTIONS = [
 type EditSeriesDialogProps = {
   series: Series;
   group: Group;
-  actor: string;
   onClose: () => void;
   onSaved: (series: Series) => void;
 };
@@ -47,7 +50,6 @@ type EditSeriesDialogProps = {
 export function EditSeriesDialog({
   series,
   group,
-  actor,
   onClose,
   onSaved,
 }: EditSeriesDialogProps) {
@@ -61,7 +63,10 @@ export function EditSeriesDialog({
   );
   const [genre, setGenre] = useState(series.genre ?? "");
   const [description, setDescription] = useState(series.description ?? "");
-  const [releaseDay, setReleaseDay] = useState<number | null>(series.releaseDay);
+  const [language, setLanguage] = useState<SourceLanguage>(series.language);
+  const [releaseDays, setReleaseDays] = useState<number[]>(
+    series.releaseDays
+  );
   const [rate, setRate] = useState(
     series.rateAmount > 0 ? String(series.rateAmount) : ""
   );
@@ -69,7 +74,7 @@ export function EditSeriesDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (busy || coverBusy) return;
     setError(null);
@@ -80,31 +85,33 @@ export function EditSeriesDialog({
       titleRef.current?.focus();
       return;
     }
-    if (releaseDay === null) {
-      setError("Pick a release day.");
+    if (releaseDays.length === 0) {
+      setError("Pick at least one release day.");
       firstDayRef.current?.focus();
       return;
     }
 
     setBusy(true);
     try {
-      const updated = updateSeries({
+      const result = await updateSeriesAction({
         seriesId: series.id,
         title,
         genre,
         description,
         coverDataUrl,
-        releaseDay,
+        releaseDays,
+        language,
         rateAmount: rate.trim() === "" ? 0 : Number(rate),
-        actor,
       });
-      onSaved(updated);
-    } catch (caught) {
-      setError(
-        caught instanceof SeriesError
-          ? caught.message
-          : "Something went wrong. Try again."
-      );
+
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+
+      onSaved(result.data);
+    } catch {
+      setError("Something went wrong. Try again.");
     } finally {
       setBusy(false);
     }
@@ -205,31 +212,67 @@ export function EditSeriesDialog({
               </span>
             </label>
 
+            <label className="grp-field">
+              <span className="grp-field-label">
+                Source language <span className="grp-field-required">required</span>
+              </span>
+              <select
+                className="grp-input"
+                value={language}
+                onChange={(event) =>
+                  setLanguage(event.target.value as SourceLanguage)
+                }
+                disabled={busy}
+              >
+                {SOURCE_LANGUAGES.map((code) => (
+                  <option key={code} value={code}>
+                    {SOURCE_LANGUAGE_LABELS[code]}
+                  </option>
+                ))}
+              </select>
+              <span className="grp-field-count">
+                Changing this applies to the next pipeline run, not to chapters
+                already translated.
+              </span>
+            </label>
+
             <div className="grp-field">
               <span className="grp-field-label" id="edit-release-day-label">
-                Release day <span className="grp-field-required">required</span>
+                Release days <span className="grp-field-required">required</span>
               </span>
               <div
                 className="grp-day-picker"
-                role="radiogroup"
+                role="group"
                 aria-labelledby="edit-release-day-label"
               >
-                {RELEASE_DAY_SHORT.map((label, index) => (
-                  <button
-                    type="button"
-                    key={label}
-                    ref={index === 0 ? firstDayRef : undefined}
-                    role="radio"
-                    aria-checked={releaseDay === index}
-                    data-active={releaseDay === index ? "true" : "false"}
-                    className="grp-day-option"
-                    onClick={() => setReleaseDay(index)}
-                    disabled={busy}
-                  >
-                    {label}
-                  </button>
-                ))}
+                {RELEASE_DAY_SHORT.map((label, index) => {
+                  const active = releaseDays.includes(index);
+                  return (
+                    <button
+                      type="button"
+                      key={label}
+                      ref={index === 0 ? firstDayRef : undefined}
+                      aria-pressed={active}
+                      data-active={active ? "true" : "false"}
+                      className="grp-day-option"
+                      onClick={() =>
+                        setReleaseDays((current) =>
+                          current.includes(index)
+                            ? current.filter((day) => day !== index)
+                            : [...current, index].sort((a, b) => a - b)
+                        )
+                      }
+                      disabled={busy}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
               </div>
+              <span className="grp-field-count">
+                Pick every day it releases. A series appears in each matching
+                lane.
+              </span>
             </div>
 
             <label className="grp-field">

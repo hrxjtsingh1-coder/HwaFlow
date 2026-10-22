@@ -35,7 +35,7 @@ export function SiteHeader() {
   }, []);
 
   const handleSignOut = () => {
-    signOut();
+    void signOut();
     setOpen(false);
   };
 

@@ -1,11 +1,9 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { type Group, type GroupMember } from "@/lib/groups";
-import { countSeriesInGroup } from "@/lib/series";
-import { useAuthSession } from "@/lib/use-auth-session";
-import { useGroups } from "@/lib/use-groups";
-import { useSeries } from "@/lib/use-series";
+
+import type { Group, GroupMember } from "@/lib/groups";
 import { Plus, Search, ShieldCheck, X } from "../icons";
 import { CreateGroupDrawer } from "./create-group-drawer";
 import { GroupCard } from "./group-card";
@@ -19,25 +17,12 @@ type CardModel = {
   seriesCount: number;
 };
 
-function GridSkeleton() {
-  return (
-    <div className="admin-grid" aria-hidden="true">
-      {[0, 1, 2].map((index) => (
-        <div className="admin-skeleton-card" key={index}>
-          <span className="admin-skeleton-line admin-skeleton-line--icon" />
-          <span className="admin-skeleton-line admin-skeleton-line--title" />
-          <span className="admin-skeleton-line" />
-          <span className="admin-skeleton-line admin-skeleton-line--short" />
-        </div>
-      ))}
-    </div>
-  );
-}
+type GroupsViewProps = {
+  cards: CardModel[];
+};
 
-export function GroupsView() {
-  const { user, ready: authReady } = useAuthSession();
-  const { state, ready } = useGroups();
-  const { state: seriesState, ready: seriesReady } = useSeries();
+export function GroupsView({ cards }: GroupsViewProps) {
+  const router = useRouter();
 
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortKey>("newest");
@@ -52,27 +37,10 @@ export function GroupsView() {
     };
   }, []);
 
-  const cards = useMemo<CardModel[]>(() => {
-    if (!state) return [];
-    return state.groups.map((group) => ({
-      group,
-      owner:
-        state.members.find(
-          (member) => member.groupId === group.id && member.role === "owner"
-        ) ?? null,
-      memberCount: state.members.filter(
-        (member) => member.groupId === group.id
-      ).length,
-      seriesCount: countSeriesInGroup(group.id),
-    }));
-  }, [state, seriesState]);
-
   const visible = useMemo(() => {
     const term = search.trim().toLowerCase();
     const filtered = term
-      ? cards.filter((card) =>
-          card.group.name.toLowerCase().includes(term)
-        )
+      ? cards.filter((card) => card.group.name.toLowerCase().includes(term))
       : cards;
 
     return [...filtered].sort((a, b) => {
@@ -94,26 +62,9 @@ export function GroupsView() {
     setSort("newest");
     setSearch("");
     if (createdTimer.current) window.clearTimeout(createdTimer.current);
-    createdTimer.current = window.setTimeout(
-      () => setJustCreatedId(null),
-      4200
-    );
+    createdTimer.current = window.setTimeout(() => setJustCreatedId(null), 4200);
+    router.refresh();
   };
-
-  if (!authReady || !ready || !seriesReady || !state || !user) {
-    return (
-      <div className="admin-page">
-        <div className="admin-page-head">
-          <div>
-            <p className="eyebrow">Platform</p>
-            <h1 className="admin-page-title">Groups</h1>
-            <p className="admin-page-sub">Loading your groups…</p>
-          </div>
-        </div>
-        <GridSkeleton />
-      </div>
-    );
-  }
 
   const total = cards.length;
   const searching = search.trim().length > 0;
@@ -238,6 +189,7 @@ export function GroupsView() {
               memberCount={card.memberCount}
               seriesCount={card.seriesCount}
               justCreated={card.group.id === justCreatedId}
+              detailHref={null}
               index={index}
             />
           ))}
@@ -246,7 +198,6 @@ export function GroupsView() {
 
       <CreateGroupDrawer
         open={drawerOpen}
-        actor={user.username}
         existingSlugs={cards.map((card) => card.group.slug)}
         onClose={() => setDrawerOpen(false)}
         onCreated={handleCreated}

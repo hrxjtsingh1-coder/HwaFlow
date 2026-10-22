@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
+
 import { MembersView } from "@/components/members/members-view";
+import { getMembersBundle } from "@/lib/server/groups";
+import { getViewer } from "@/lib/session";
 
 export const metadata: Metadata = {
   title: "Members",
@@ -11,6 +15,11 @@ export const metadata: Metadata = {
   },
 };
 
-export default function MembersPage() {
-  return <MembersView />;
+export default async function MembersPage() {
+  const viewer = await getViewer();
+  if (!viewer) redirect("/login");
+
+  const bundle = await getMembersBundle(viewer);
+
+  return <MembersView viewer={viewer} bundle={bundle} />;
 }

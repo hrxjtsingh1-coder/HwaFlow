@@ -3,27 +3,21 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { findAccount, getInitials, signOut } from "@/lib/auth";
+import { getInitials, signOut } from "@/lib/auth";
 import {
-  ChapterError,
-  createChapter,
-  deleteChapter,
-  listChaptersForSeries,
-  type Chapter,
-} from "@/lib/chapters";
+  createChapterAction,
+  deleteChapterAction,
+} from "@/lib/chapter-actions";
+import { type Chapter } from "@/lib/chapters";
 import { formatMoney, formatShortDate } from "@/lib/format";
-import { getMembers, type GroupMember } from "@/lib/groups";
-import { deleteChapterImages } from "@/lib/panel-store";
+import type { Group, GroupMember, GroupRole } from "@/lib/groups";
+import type { AuthUser } from "@/lib/identity";
 import {
   RELEASE_DAY_LABELS,
   canManageSeries,
   type Series,
   type SeriesAssignment,
 } from "@/lib/series";
-import { useAuthSession } from "@/lib/use-auth-session";
-import { useChapters } from "@/lib/use-chapters";
-import { useGroups } from "@/lib/use-groups";
-import { useSeries } from "@/lib/use-series";
 import { DashboardRail } from "../dashboard/dashboard-rail";
 import { DashboardTopbar } from "../dashboard/dashboard-topbar";
 import { workspaceLinks } from "../dashboard/workspace-nav";
@@ -36,7 +30,6 @@ import {
   Users,
   X,
 } from "../icons";
-import { Logo } from "../logo";
 import { RoleBadge } from "../role-badge";
 import { ChapterList } from "../chapters/chapter-list";
 import { DeleteChapterDialog } from "../chapters/delete-chapter-dialog";
@@ -45,20 +38,6 @@ import { SeriesCover } from "../groups/series-cover";
 import { EditSeriesDialog } from "./edit-series-dialog";
 
 type Notice = { tone: "success" | "error"; text: string };
-
-function SeriesLoading() {
-  return (
-    <div className="dash-loading">
-      <div className="dash-loading-inner">
-        <Logo href="/" />
-        <div className="dash-loading-card" role="status" aria-live="polite">
-          <span className="dash-spinner" aria-hidden="true" />
-          <p>Opening the series…</p>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function SeriesNotFound({ accessDenied = false }: { accessDenied?: boolean }) {
   return (
@@ -70,7 +49,7 @@ function SeriesNotFound({ accessDenied = false }: { accessDenied?: boolean }) {
       <p className="sr-notfound-copy">
         {accessDenied
           ? "You don't have access to this series. Ask a Manager or Owner to assign you."
-          : "This link may be stale, it was removed from this browser, or you don't have access to it."}
+          : "This link may be stale, or you don't have access to it."}
       </p>
       <Link href="/groups" className="btn btn-ghost btn-sm">
         <ArrowLeft className="h-4 w-4" />
@@ -82,15 +61,27 @@ function SeriesNotFound({ accessDenied = false }: { accessDenied?: boolean }) {
 
 type AssigneeRow = {
   assignment: SeriesAssignment;
-  member: GroupMember;
+  member: GroupMember | null;
 };
 
-export function SeriesView({ seriesId }: { seriesId: string }) {
+type SeriesBundle = {
+  series: Series;
+  group: Group;
+  viewerMember: GroupMember;
+  viewerRole: GroupRole;
+  members: GroupMember[];
+  assignments: SeriesAssignment[];
+  creatorName: string;
+};
+
+type SeriesViewProps = {
+  viewer: AuthUser;
+  bundle: SeriesBundle | null;
+  chapters: Chapter[];
+};
+
+export function SeriesView({ viewer, bundle, chapters }: SeriesViewProps) {
   const router = useRouter();
-  const { user, ready: authReady } = useAuthSession();
-  const { state: groupsState, ready: groupsReady } = useGroups();
-  const { state: seriesState, ready: seriesReady } = useSeries();
-  const { state: chaptersState, ready: chaptersReady } = useChapters();
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
@@ -113,10 +104,6 @@ export function SeriesView({ seriesId }: { seriesId: string }) {
   }, []);
 
   useEffect(() => {
-    if (authReady && !user) router.replace("/login");
-  }, [authReady, user, router]);
-
-  useEffect(() => {
     if (!menuOpen) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -130,56 +117,18 @@ export function SeriesView({ seriesId }: { seriesId: string }) {
     };
   }, [menuOpen]);
 
-  if (
-    !authReady ||
-    !groupsReady ||
-    !seriesReady ||
-    !chaptersReady ||
-    !groupsState ||
-    !seriesState ||
-    !user
-  ) {
-    return <SeriesLoading />;
-  }
+  const handleSignOut = () => {
+    void signOut();
+  };
 
-  const series: Series | undefined = seriesState.series.find(
-    (entry) => entry.id === seriesId && !entry.archived
-  );
-  const group = series
-    ? groupsState.groups.find((entry) => entry.id === series.groupId)
-    : undefined;
-  const viewerMember: GroupMember | undefined =
-    series && group
-      ? groupsState.members.find(
-          (entry) =>
-            entry.groupId === group.id && entry.username === user.username
-        )
-      : undefined;
-
-  const assignedToViewer =
-    series && viewerMember
-      ? seriesState.assignments.some(
-          (entry) =>
-            entry.seriesId === series.id &&
-            entry.username === user.username
-        )
-      : false;
-
-  const allowed =
-    Boolean(series && group && viewerMember) &&
-    (viewerMember?.role !== "staff" || assignedToViewer);
-
-  if (!series || !group || !viewerMember || !allowed) {
+  if (!bundle) {
     return (
       <div className="dash-shell">
         <DashboardRail
-          user={user}
+          user={viewer}
           open={menuOpen}
           onClose={() => setMenuOpen(false)}
-          onSignOut={() => {
-            signOut();
-            router.replace("/login");
-          }}
+          onSignOut={handleSignOut}
           links={workspaceLinks()}
           active="groups"
         />
@@ -190,13 +139,7 @@ export function SeriesView({ seriesId }: { seriesId: string }) {
           />
           <main className="dash-main" id="main">
             <div className="dash-content sr-content">
-              <SeriesNotFound
-                accessDenied={
-                  Boolean(series && group && viewerMember) &&
-                  viewerMember?.role === "staff" &&
-                  !assignedToViewer
-                }
-              />
+              <SeriesNotFound />
             </div>
           </main>
         </div>
@@ -204,78 +147,61 @@ export function SeriesView({ seriesId }: { seriesId: string }) {
     );
   }
 
-  const members = getMembers(group.id);
+  const { series, group, viewerMember, viewerRole, members, assignments } =
+    bundle;
+
   const memberByUsername = new Map(
     members.map((member) => [member.username, member])
   );
 
-  const assignees: AssigneeRow[] = seriesState.assignments
-    .filter((entry) => entry.seriesId === series.id)
-    .map((assignment) => {
-      const member = memberByUsername.get(assignment.username);
-      return member ? { assignment, member } : null;
-    })
-    .filter((entry): entry is AssigneeRow => entry !== null)
-    .sort((a, b) =>
-      a.member.displayName.localeCompare(b.member.displayName)
-    );
+  const assignees: AssigneeRow[] = assignments
+    .map((assignment) => ({
+      assignment,
+      member: memberByUsername.get(assignment.username) ?? null,
+    }))
+    .sort((a, b) => {
+      const nameA = a.member?.displayName ?? a.assignment.username;
+      const nameB = b.member?.displayName ?? b.assignment.username;
+      return nameA.localeCompare(nameB);
+    });
 
-  const canManage = canManageSeries(viewerMember.role);
-  const createdBy =
-    findAccount(series.createdBy)?.displayName ?? `@${series.createdBy}`;
+  const canManage = canManageSeries(viewerRole);
+  const createdBy = bundle.creatorName || series.createdBy || "a teammate";
 
-  const handleSignOut = () => {
-    signOut();
-    router.replace("/login");
-  };
-
-  const chapters = chaptersState ? listChaptersForSeries(series.id) : [];
-
-  const handleCreateChapter = () => {
+  const handleCreateChapter = async () => {
     if (creating) return;
     setCreating(true);
-    try {
-      const chapter = createChapter({
-        seriesId: series.id,
-        actor: user.username,
-      });
-      router.push(`/chapters/${chapter.id}/workspace`);
-    } catch (error) {
+
+    const result = await createChapterAction(series.id);
+    if (!result.ok) {
       setCreating(false);
-      notify(
-        "error",
-        error instanceof ChapterError
-          ? error.message
-          : "Couldn't create that chapter."
-      );
+      notify("error", result.message);
+      return;
     }
+
+    router.push(`/chapters/${result.data.id}/workspace`);
   };
 
-  const handleDeleteChapter = () => {
+  const handleDeleteChapter = async () => {
     if (!deleteTarget) return;
-    try {
-      const panelIds = deleteChapter({
-        chapterId: deleteTarget.id,
-        actor: user.username,
-      });
-      void deleteChapterImages(panelIds);
-      notify("success", `Chapter ${deleteTarget.number} was deleted.`);
-    } catch (error) {
-      notify(
-        "error",
-        error instanceof ChapterError
-          ? error.message
-          : "Couldn't delete that chapter."
-      );
-    } finally {
-      setDeleteTarget(null);
+    const target = deleteTarget;
+
+    const result = await deleteChapterAction({ chapterId: target.id });
+    setDeleteTarget(null);
+
+    if (!result.ok) {
+      notify("error", result.message);
+      return;
     }
+
+    notify("success", `Chapter ${target.number} was deleted.`);
+    router.refresh();
   };
 
   return (
     <div className="dash-shell">
       <DashboardRail
-        user={user}
+        user={viewer}
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
         onSignOut={handleSignOut}
@@ -341,10 +267,19 @@ export function SeriesView({ seriesId }: { seriesId: string }) {
                 <h1 className="sr-title">{series.title}</h1>
 
                 <div className="sr-meta">
-                  <span className="chip chip-accent">
-                    <CalendarDays className="h-3 w-3" />
-                    {RELEASE_DAY_LABELS[series.releaseDay]}
-                  </span>
+                  {series.releaseDays.length === 0 ? (
+                    <span className="chip chip-accent">
+                      <CalendarDays className="h-3 w-3" />
+                      No release day
+                    </span>
+                  ) : (
+                    series.releaseDays.map((day) => (
+                      <span className="chip chip-accent" key={day}>
+                        <CalendarDays className="h-3 w-3" />
+                        {RELEASE_DAY_LABELS[day]}
+                      </span>
+                    ))
+                  )}
                   {series.genre ? (
                     <span className="chip">{series.genre}</span>
                   ) : null}
@@ -390,7 +325,7 @@ export function SeriesView({ seriesId }: { seriesId: string }) {
                   ) : (
                     <p className="sr-description sr-description--empty">
                       No description yet. The team can use the title, genre and
-                      release day for now.
+                      release days for now.
                     </p>
                   )}
                 </section>
@@ -398,7 +333,7 @@ export function SeriesView({ seriesId }: { seriesId: string }) {
                 <ChapterList
                   chapters={chapters}
                   canManage={canManage}
-                  canCreate={canManage || viewerMember?.role === "staff"}
+                  canCreate={canManage || viewerRole === "staff"}
                   creating={creating}
                   onCreate={handleCreateChapter}
                   onDelete={(chapter) => setDeleteTarget(chapter)}
@@ -424,8 +359,14 @@ export function SeriesView({ seriesId }: { seriesId: string }) {
                       </dd>
                     </div>
                     <div>
-                      <dt>Release day</dt>
-                      <dd>{RELEASE_DAY_LABELS[series.releaseDay]}</dd>
+                      <dt>Release days</dt>
+                      <dd>
+                        {series.releaseDays.length === 0
+                          ? "Not set"
+                          : series.releaseDays
+                              .map((day) => RELEASE_DAY_LABELS[day])
+                              .join(", ")}
+                      </dd>
                     </div>
                     <div>
                       <dt>Rate</dt>
@@ -480,26 +421,24 @@ export function SeriesView({ seriesId }: { seriesId: string }) {
                     <ul className="sr-assignees">
                       {assignees.map(({ assignment, member }) => {
                         const displayName =
-                          findAccount(member.username)?.displayName ??
-                          member.displayName;
+                          member?.displayName || assignment.username;
+                        const username =
+                          member?.username || assignment.username;
                         return (
-                          <li
-                            className="sr-assignee"
-                            key={assignment.id}
-                          >
+                          <li className="sr-assignee" key={assignment.id}>
                             <span className="sr-avatar" aria-hidden="true">
-                              {getInitials(displayName, member.username)}
+                              {getInitials(displayName, username)}
                             </span>
                             <span className="sr-assignee-main">
                               <span className="sr-assignee-name">
                                 {displayName}
                               </span>
                               <span className="sr-assignee-meta">
-                                @{member.username} · added{" "}
+                                @{username} · added{" "}
                                 {formatShortDate(assignment.createdAt)}
                               </span>
                             </span>
-                            <RoleBadge role={member.role} />
+                            {member ? <RoleBadge role={member.role} /> : null}
                           </li>
                         );
                       })}
@@ -510,9 +449,7 @@ export function SeriesView({ seriesId }: { seriesId: string }) {
             </div>
 
             <footer className="grp-footer">
-              <span>
-                Preview build — series and assignments stay in this browser.
-              </span>
+              <span>Series, assignments and members sync with your team.</span>
               <Link href={`/groups/${group.id}`} className="dash-link">
                 Back to {group.name}
                 <ArrowLeft className="h-3 w-3" />
@@ -527,11 +464,14 @@ export function SeriesView({ seriesId }: { seriesId: string }) {
           series={series}
           groupName={group.name}
           members={members}
-          actor={user.username}
+          initialAssigneeUsernames={assignments.map(
+            (assignment) => assignment.username
+          )}
           onClose={() => setManageOpen(false)}
           onSaved={() => {
             setManageOpen(false);
             notify("success", "Assignments updated.");
+            router.refresh();
           }}
         />
       ) : null}
@@ -540,11 +480,11 @@ export function SeriesView({ seriesId }: { seriesId: string }) {
         <EditSeriesDialog
           series={series}
           group={group}
-          actor={user.username}
           onClose={() => setEditOpen(false)}
           onSaved={() => {
             setEditOpen(false);
             notify("success", "Series updated.");
+            router.refresh();
           }}
         />
       ) : null}

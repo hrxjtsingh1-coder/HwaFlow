@@ -20,6 +20,11 @@ type GroupCardProps = {
   seriesCount: number;
   justCreated?: boolean;
   index?: number;
+  /**
+   * The admin detail route is deferred until the data layer is complete.
+   * Pass null to render a non-clickable card and hide "Open group".
+   */
+  detailHref?: string | null;
 };
 
 async function copyText(value: string): Promise<boolean> {
@@ -51,6 +56,7 @@ export function GroupCard({
   seriesCount,
   justCreated,
   index = 0,
+  detailHref = `/admin/groups/${group.id}`,
 }: GroupCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -108,45 +114,55 @@ export function GroupCard({
   const ownerName = owner?.displayName ?? "No Owner assigned";
   const ownerHandle = owner ? `@${owner.username}` : "—";
 
+  const cardBody = (
+    <>
+      <div className="admin-group-card-top">
+        <GroupAvatar name={group.name} iconDataUrl={group.iconDataUrl} />
+        <span className="chip admin-currency-chip">{group.currency}</span>
+      </div>
+
+      <h3 className="admin-group-name">{group.name}</h3>
+
+      <div className="admin-group-owner">
+        <span className="admin-avatar" aria-hidden="true">
+          {getInitials(owner?.displayName ?? "", owner?.username ?? "")}
+        </span>
+        <span className="admin-group-owner-meta">
+          <span className="admin-group-owner-name">{ownerName}</span>
+          <span className="admin-group-owner-handle">{ownerHandle}</span>
+        </span>
+      </div>
+
+      <div className="admin-group-counts">
+        <span className="chip">
+          <Users className="h-3 w-3" />
+          {memberCount} member{memberCount === 1 ? "" : "s"}
+        </span>
+        <span className="chip">
+          <Layers className="h-3 w-3" />
+          {seriesCount} series
+        </span>
+      </div>
+    </>
+  );
+
   return (
     <article
       className="admin-group-card"
       data-new={justCreated ? "true" : "false"}
       style={{ "--admin-card-delay": `${Math.min(index, 8) * 45}ms` } as CSSProperties}
     >
-      <Link
-        href={`/admin/groups/${group.id}`}
-        className="admin-group-card-link"
-        aria-label={`Open ${group.name}`}
-      >
-        <div className="admin-group-card-top">
-          <GroupAvatar name={group.name} iconDataUrl={group.iconDataUrl} />
-          <span className="chip admin-currency-chip">{group.currency}</span>
-        </div>
-
-        <h3 className="admin-group-name">{group.name}</h3>
-
-        <div className="admin-group-owner">
-          <span className="admin-avatar" aria-hidden="true">
-            {getInitials(owner?.displayName ?? "", owner?.username ?? "")}
-          </span>
-          <span className="admin-group-owner-meta">
-            <span className="admin-group-owner-name">{ownerName}</span>
-            <span className="admin-group-owner-handle">{ownerHandle}</span>
-          </span>
-        </div>
-
-        <div className="admin-group-counts">
-          <span className="chip">
-            <Users className="h-3 w-3" />
-            {memberCount} member{memberCount === 1 ? "" : "s"}
-          </span>
-          <span className="chip">
-            <Layers className="h-3 w-3" />
-            {seriesCount} series
-          </span>
-        </div>
-      </Link>
+      {detailHref ? (
+        <Link
+          href={detailHref}
+          className="admin-group-card-link"
+          aria-label={`Open ${group.name}`}
+        >
+          {cardBody}
+        </Link>
+      ) : (
+        <div className="admin-group-card-link">{cardBody}</div>
+      )}
 
       {justCreated ? (
         <span className="chip chip-mint admin-card-created">
@@ -180,16 +196,18 @@ export function GroupCard({
           aria-label={`${group.name} actions`}
           onKeyDown={onMenuKeyDown}
         >
-          <Link
-            href={`/admin/groups/${group.id}`}
-            className="admin-menu-item"
-            role="menuitem"
-            tabIndex={menuOpen ? 0 : -1}
-            onClick={() => setMenuOpen(false)}
-          >
-            <ArrowUpRight className="h-3.5 w-3.5" />
-            Open group
-          </Link>
+          {detailHref ? (
+            <Link
+              href={detailHref}
+              className="admin-menu-item"
+              role="menuitem"
+              tabIndex={menuOpen ? 0 : -1}
+              onClick={() => setMenuOpen(false)}
+            >
+              <ArrowUpRight className="h-3.5 w-3.5" />
+              Open group
+            </Link>
+          ) : null}
           <button
             type="button"
             className="admin-menu-item"

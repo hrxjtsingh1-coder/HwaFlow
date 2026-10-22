@@ -1,15 +1,16 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  addGlossaryTermAction,
+  setGlossaryStatusAction,
+  updateGlossaryTermAction,
+} from "@/lib/glossary-actions";
 import {
   GLOSSARY_CATEGORIES,
   GLOSSARY_CATEGORY_LABEL,
-  GlossaryError,
   MAX_TERM_LENGTH,
-  addManualTerm,
-  dismissTerm,
-  restoreTerm,
-  updateTerm,
   type GlossaryCategory,
   type GlossaryTerm,
 } from "@/lib/glossary";
@@ -19,10 +20,9 @@ type Filter = "all" | "auto" | "manual";
 
 type GlossaryPanelProps = {
   seriesId: string;
-  /** Active terms only — dismissed ones are filtered by the parent store read. */
+  /** Active terms only — dismissed ones are filtered by the server read. */
   terms: GlossaryTerm[];
   canEdit: boolean;
-  actor: string;
   onNotice: (tone: "success" | "error", text: string) => void;
 };
 
@@ -37,9 +37,9 @@ export function GlossaryPanel({
   seriesId,
   terms,
   canEdit,
-  actor,
   onNotice,
 }: GlossaryPanelProps) {
+  const router = useRouter();
   const [filter, setFilter] = useState<Filter>("all");
   const [adding, setAdding] = useState(false);
   const [source, setSource] = useState("");
@@ -69,69 +69,79 @@ export function GlossaryPanel({
     setAdding(false);
   };
 
-  const handleAdd = (event: FormEvent<HTMLFormElement>) => {
+  const handleAdd = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormError(null);
-    try {
-      const created = addManualTerm({
-        seriesId,
-        sourceTerm: source,
-        targetTerm: target,
-        category,
-        actor,
-      });
-      resetForm();
-      onNotice("success", `${created.sourceTerm} added to the glossary.`);
-    } catch (error) {
-      setFormError(
-        error instanceof GlossaryError
-          ? error.message
-          : "Something went wrong. Try again."
-      );
+
+    const result = await addGlossaryTermAction({
+      seriesId,
+      sourceTerm: source,
+      targetTerm: target,
+      category,
+    });
+
+    if (!result.ok) {
+      setFormError(result.message);
+      return;
     }
+
+    resetForm();
+    onNotice("success", `${result.data.sourceTerm} added to the glossary.`);
+    router.refresh();
   };
 
-  const commitEdit = (term: GlossaryTerm) => {
+  const commitEdit = async (term: GlossaryTerm) => {
     const next = editDraft.trim();
     setEditingId(null);
     if (!next || next === term.targetTerm) return;
-    try {
-      updateTerm({ termId: term.id, targetTerm: next, actor });
-      onNotice("success", "Term updated.");
-    } catch (error) {
-      onNotice(
-        "error",
-        error instanceof GlossaryError
-          ? error.message
-          : "Something went wrong. Try again."
-      );
+
+    const result = await updateGlossaryTermAction({
+      termId: term.id,
+      targetTerm: next,
+      category: term.category,
+    });
+
+    if (!result.ok) {
+      onNotice("error", result.message);
+      return;
     }
+
+    onNotice("success", "Term updated.");
+    router.refresh();
   };
 
-  const handleDismiss = (term: GlossaryTerm) => {
-    try {
-      dismissTerm(term.id, actor);
-      setUndo({ id: term.id, term: term.sourceTerm });
-      if (undoTimer.current) window.clearTimeout(undoTimer.current);
-      undoTimer.current = window.setTimeout(() => setUndo(null), 5000);
-    } catch (error) {
-      onNotice(
-        "error",
-        error instanceof GlossaryError
-          ? error.message
-          : "Something went wrong. Try again."
-      );
+  const handleDismiss = async (term: GlossaryTerm) => {
+    const result = await setGlossaryStatusAction({
+      termId: term.id,
+      status: "dismissed",
+    });
+
+    if (!result.ok) {
+      onNotice("error", result.message);
+      return;
     }
+
+    setUndo({ id: term.id, term: term.sourceTerm });
+    if (undoTimer.current) window.clearTimeout(undoTimer.current);
+    undoTimer.current = window.setTimeout(() => setUndo(null), 5000);
+    router.refresh();
   };
 
-  const handleUndo = () => {
+  const handleUndo = async () => {
     if (!undo) return;
-    try {
-      restoreTerm(undo.id, actor);
+
+    const result = await setGlossaryStatusAction({
+      termId: undo.id,
+      status: "active",
+    });
+
+    if (!result.ok) {
+      onNotice("error", result.message);
+    } else {
       onNotice("success", `${undo.term} restored.`);
-    } catch {
-      onNotice("error", "Couldn't restore that term.");
+      router.refresh();
     }
+
     setUndo(null);
     if (undoTimer.current) window.clearTimeout(undoTimer.current);
   };

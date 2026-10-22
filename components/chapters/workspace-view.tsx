@@ -11,33 +11,37 @@ import {
 } from "react";
 import { signOut } from "@/lib/auth";
 import {
-  addPanels,
-  ChapterError,
   canEditChapter,
-  deleteChapter,
-  setChapterStatus,
-  updateBlockText,
-  updateChapterDetails,
+  ChapterError,
   type Chapter,
   type ChapterStatus,
+  type IncomingBlock,
+  type TextBlock,
 } from "@/lib/chapters";
-import { activeGlossaryTerms, type GlossaryTerm } from "@/lib/glossary";
+import {
+  deleteChapterAction,
+  registerPanelsAction,
+  setChapterStatusAction,
+  setPanelBlocksAction,
+  updateBlockPipelineTextAction,
+  updateBlockTextAction,
+  updateChapterDetailsAction,
+} from "@/lib/chapter-actions";
+import { upsertAutoGlossaryTermsAction } from "@/lib/glossary-actions";
 import { compressPanel, PanelImageError } from "@/lib/panel-image";
-import { deleteChapterImages } from "@/lib/panel-store";
 import {
   activeRunChapterId,
   cancelRun,
   retryFailed,
   startRun,
+  type PipelineContext,
   type RunState,
 } from "@/lib/pipeline";
 import { canManageSeries } from "@/lib/series";
-import { useAuthSession } from "@/lib/use-auth-session";
-import { useChapters } from "@/lib/use-chapters";
-import { useGlossary } from "@/lib/use-glossary";
-import { useGroups } from "@/lib/use-groups";
+import type { WorkspaceBundle, WorkspacePanel } from "@/lib/server/chapters";
+import type { AuthUser } from "@/lib/identity";
+import { createClient } from "@/lib/supabase/client";
 import { usePipeline } from "@/lib/use-pipeline";
-import { useSeries } from "@/lib/use-series";
 import { DashboardRail } from "../dashboard/dashboard-rail";
 import { DashboardTopbar } from "../dashboard/dashboard-topbar";
 import { workspaceLinks } from "../dashboard/workspace-nav";
@@ -49,7 +53,6 @@ import {
   Play,
   Stamp,
 } from "../icons";
-import { Logo } from "../logo";
 import { BlockEditor } from "./block-editor";
 import { ChapterRail, type RailTab } from "./chapter-rail";
 import { ChapterStatusChip } from "./chapter-status-dot";
@@ -74,35 +77,33 @@ const IDLE_RUN: RunState = {
   error: null,
 };
 
-function WorkspaceLoading() {
-  return (
-    <div className="dash-loading">
-      <div className="dash-loading-inner">
-        <Logo href="/" />
-        <div className="dash-loading-card" role="status" aria-live="polite">
-          <span className="dash-spinner" aria-hidden="true" />
-          <p>Opening the chapter…</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /**
  * The chapter workspace.
  *
  * Three columns behind the collapsed main rail: chapters + glossary on the
  * left, the translated text in the middle, the raw art on the right. The
  * pipeline is client-driven; this component is the only place that starts it.
+ *
+ * The initial snapshot comes from the server; local state mirrors it so edits
+ * and a run's progressive text land without a full page refresh.
  */
-export function WorkspaceView({ chapterId }: { chapterId: string }) {
+type WorkspaceViewProps = {
+  viewer: AuthUser;
+  bundle: WorkspaceBundle | null;
+};
+
+export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
   const router = useRouter();
-  const { user, ready: authReady } = useAuthSession();
-  const { state: groupsState, ready: groupsReady } = useGroups();
-  const { state: seriesState, ready: seriesReady } = useSeries();
-  const { state: chapterState, ready: chaptersReady } = useChapters();
-  const { state: glossaryState, ready: glossaryReady } = useGlossary();
   const live = usePipeline();
+
+  const [chapter, setChapter] = useState<Chapter | null>(bundle?.chapter ?? null);
+  const [seriesChapters, setSeriesChapters] = useState<Chapter[]>(
+    bundle?.chapters ?? []
+  );
+  const [panels, setPanels] = useState<WorkspacePanel[]>(bundle?.panels ?? []);
+  const [allBlocks, setAllBlocks] = useState<TextBlock[]>(
+    bundle?.blocks ?? []
+  );
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [tab, setTab] = useState<RailTab>("chapters");
@@ -121,7 +122,6 @@ export function WorkspaceView({ chapterId }: { chapterId: string }) {
   const [uploadErrors, setUploadErrors] = useState<
     Array<{ file: File; message: string }>
   >([]);
-  const [storageFull, setStorageFull] = useState(false);
   const noticeTimer = useRef<number | null>(null);
 
   const notify = useCallback((tone: Notice["tone"], text: string) => {
@@ -137,8 +137,11 @@ export function WorkspaceView({ chapterId }: { chapterId: string }) {
   }, []);
 
   useEffect(() => {
-    if (authReady && !user) router.replace("/login");
-  }, [authReady, user, router]);
+    setChapter(bundle?.chapter ?? null);
+    setSeriesChapters(bundle?.chapters ?? []);
+    setPanels(bundle?.panels ?? []);
+    setAllBlocks(bundle?.blocks ?? []);
+  }, [bundle]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -165,59 +168,22 @@ export function WorkspaceView({ chapterId }: { chapterId: string }) {
     }
   }, []);
 
-  const chapter = chapterState?.chapters.find((entry) => entry.id === chapterId);
-  const series = chapter
-    ? seriesState?.series.find(
-        (entry) => entry.id === chapter.seriesId && !entry.archived
-      )
-    : undefined;
-  const group = series
-    ? groupsState?.groups.find((entry) => entry.id === series.groupId)
-    : undefined;
-  const member =
-    group && user
-      ? groupsState?.members.find(
-          (entry) =>
-            entry.groupId === group.id && entry.username === user.username
-        )
-      : undefined;
-  const assigned =
-    series && user
-      ? Boolean(
-          seriesState?.assignments.some(
-            (entry) =>
-              entry.seriesId === series.id && entry.username === user.username
-          )
-        )
-      : false;
-
-  const seriesChapters = useMemo(() => {
-    if (!chapterState || !series) return [];
-    return chapterState.chapters
-      .filter((entry) => entry.seriesId === series.id)
-      .sort((a, b) => a.number - b.number);
-  }, [chapterState, series]);
-
-  const panels = useMemo(() => {
-    if (!chapterState || !chapter) return [];
-    return chapterState.panels
-      .filter((entry) => entry.chapterId === chapter.id)
-      .sort((a, b) => a.index - b.index);
-  }, [chapterState, chapter]);
+  const user = viewer;
+  const series = bundle?.series ?? null;
+  const group = bundle?.group ?? null;
+  const member = bundle?.viewerMember ?? null;
+  const assigned = bundle?.viewerRole === "staff";
 
   const currentPanel = panels[panelIndex] ?? null;
 
   const blocks = useMemo(() => {
-    if (!chapterState || !currentPanel) return [];
-    return chapterState.blocks
+    if (!currentPanel) return [];
+    return allBlocks
       .filter((entry) => entry.panelId === currentPanel.id)
       .sort((a, b) => a.index - b.index);
-  }, [chapterState, currentPanel]);
+  }, [allBlocks, currentPanel]);
 
-  const terms = useMemo<GlossaryTerm[]>(() => {
-    if (!glossaryState || !series) return [];
-    return activeGlossaryTerms(series.id);
-  }, [glossaryState, series]);
+  const terms = bundle?.glossary ?? [];
 
   useEffect(() => {
     setPanelIndex((index) =>
@@ -229,7 +195,7 @@ export function WorkspaceView({ chapterId }: { chapterId: string }) {
     setPanelIndex(0);
     setPinnedBlockId(null);
     setTab("chapters");
-  }, [chapterId]);
+  }, [chapter?.id]);
 
   useEffect(() => {
     if (!chapter) return;
@@ -289,27 +255,7 @@ export function WorkspaceView({ chapterId }: { chapterId: string }) {
     return () => document.removeEventListener("keydown", onKey);
   }, [goPrevPanel, goNextPanel]);
 
-  const loading =
-    !authReady ||
-    !groupsReady ||
-    !seriesReady ||
-    !chaptersReady ||
-    !glossaryReady ||
-    !groupsState ||
-    !seriesState ||
-    !chapterState ||
-    !glossaryState ||
-    !user;
-
-  if (loading) return <WorkspaceLoading />;
-
-  const allowed =
-    Boolean(chapter && series && group && member) &&
-    (member?.role !== "staff" || assigned);
-
-  if (!allowed || !chapter || !series || !group || !member) {
-    const accessDenied = Boolean(chapter && series && group && member);
-
+  if (!bundle || !chapter || !series || !group || !member) {
     return (
       <div className="dash-shell">
         <DashboardRail
@@ -317,8 +263,7 @@ export function WorkspaceView({ chapterId }: { chapterId: string }) {
           open={menuOpen}
           onClose={() => setMenuOpen(false)}
           onSignOut={() => {
-            signOut();
-            router.replace("/login");
+            void signOut();
           }}
           links={workspaceLinks()}
           active="groups"
@@ -331,13 +276,10 @@ export function WorkspaceView({ chapterId }: { chapterId: string }) {
           <main className="dash-main" id="main">
             <div className="ch-notfound">
               <p className="eyebrow">Chapter</p>
-              <h1 className="ch-notfound-title">
-                {accessDenied ? "No access to this chapter" : "Chapter not found"}
-              </h1>
+              <h1 className="ch-notfound-title">Chapter not found</h1>
               <p className="ch-notfound-copy">
-                {accessDenied
-                  ? "You don't have access to this chapter. Ask a Manager or Owner to assign you to this series."
-                  : "This link may be stale, it was removed from this browser, or you don't have access to it."}
+                This link may be stale, or you don&apos;t have access to it. Ask
+                a Manager or Owner to assign you to the series.
               </p>
               <Link href="/groups" className="btn btn-ghost btn-sm">
                 <ArrowLeft className="h-4 w-4" />
@@ -363,7 +305,7 @@ export function WorkspaceView({ chapterId }: { chapterId: string }) {
     canEdit && status === "processing" && !run.running;
 
   const panelsWithText = panels.some((panel) =>
-    chapterState.blocks.some(
+    allBlocks.some(
       (block) =>
         block.panelId === panel.id && block.finalText.trim().length > 0
     )
@@ -398,35 +340,142 @@ export function WorkspaceView({ chapterId }: { chapterId: string }) {
   ];
 
   const handleSignOut = () => {
-    signOut();
-    router.replace("/login");
+    void signOut();
   };
 
-  const writeStatus = (next: ChapterStatus, note?: string) => {
-    try {
-      setChapterStatus({
+  const writeStatus = async (next: ChapterStatus, note?: string) => {
+    const result = await setChapterStatusAction({
+      chapterId: chapter.id,
+      next,
+      note: note ?? null,
+    });
+
+    if (!result.ok) {
+      notify("error", result.message);
+      return;
+    }
+
+    setChapter((current) =>
+      current
+        ? {
+            ...current,
+            status: next,
+            rejectionNote:
+              next === "rejected"
+                ? note ?? null
+                : next === "submitted"
+                  ? null
+                  : current.rejectionNote,
+          }
+        : current
+    );
+
+    if (next === "submitted") notify("success", "Chapter submitted for review.");
+    if (next === "approved") notify("success", "Chapter approved.");
+    if (next === "rejected") notify("success", "Chapter sent back.");
+    if (next === "ready") notify("success", "Chapter marked ready.");
+    router.refresh();
+  };
+
+  const pipelineContext = (): PipelineContext => ({
+    chapter,
+    panels,
+    blocks: allBlocks,
+    series: {
+      title: series.title,
+      description: null,
+      language: series.language,
+    },
+    glossary: terms.map((term) => ({
+      sourceTerm: term.sourceTerm,
+      targetTerm: term.targetTerm,
+      category: term.category,
+    })),
+    readPanelImage: async (panelId) => {
+      const panel = panels.find((entry) => entry.id === panelId);
+      if (!panel?.imageUrl) return null;
+      try {
+        const response = await fetch(panel.imageUrl);
+        return response.ok ? await response.blob() : null;
+      } catch {
+        return null;
+      }
+    },
+    setPanelBlocks: async (panelId, incoming) => {
+      const result = await setPanelBlocksAction({
+        chapterId: chapter.id,
+        panelId,
+        blocks: incoming,
+      });
+      if (!result.ok)
+        throw new ChapterError(
+          result.code === "signed-out" ? "forbidden" : result.code,
+          result.message
+        );
+      setAllBlocks((current) => [
+        ...current.filter((block) => block.panelId !== panelId),
+        ...result.data,
+      ]);
+      return result.data;
+    },
+    updateBlockPipelineText: async (updates) => {
+      const result = await updateBlockPipelineTextAction({
+        chapterId: chapter.id,
+        updates,
+      });
+      if (!result.ok)
+        throw new ChapterError(
+          result.code === "signed-out" ? "forbidden" : result.code,
+          result.message
+        );
+
+      const byId = new Map(updates.map((update) => [update.blockId, update]));
+      setAllBlocks((current) =>
+        current.map((block) => {
+          const update = byId.get(block.id);
+          if (!update) return block;
+          return {
+            ...block,
+            baseTranslation: update.baseTranslation ?? block.baseTranslation,
+            finalText: update.finalText ?? block.finalText,
+          };
+        })
+      );
+    },
+    setChapterStatus: async (next, note) => {
+      const result = await setChapterStatusAction({
         chapterId: chapter.id,
         next,
         note: note ?? null,
-        actor: user.username,
       });
-      if (next === "submitted") notify("success", "Chapter submitted for review.");
-      if (next === "approved") notify("success", "Chapter approved.");
-      if (next === "rejected") notify("success", "Chapter sent back.");
-      if (next === "ready") notify("success", "Chapter marked ready.");
-    } catch (error) {
-      notify(
-        "error",
-        error instanceof ChapterError
-          ? error.message
-          : "Something went wrong. Try again."
+      if (!result.ok)
+        throw new ChapterError(
+          result.code === "signed-out" ? "forbidden" : result.code,
+          result.message
+        );
+      setChapter((current) =>
+        current ? { ...current, status: next } : current
       );
-    }
-  };
+    },
+    upsertAutoTerms: async (detected) => {
+      await upsertAutoGlossaryTermsAction({
+        seriesId: series.id,
+        chapterId: chapter.id,
+        terms: detected,
+      });
+    },
+    onBlocks: (panelId, updated) => {
+      setAllBlocks((current) => [
+        ...current.filter((block) => block.panelId !== panelId),
+        ...updated,
+      ]);
+    },
+  });
 
   const handleRun = async () => {
     try {
-      await startRun(chapter.id, user.username);
+      await startRun(pipelineContext());
+      router.refresh();
     } catch (error) {
       notify(
         "error",
@@ -439,7 +488,8 @@ export function WorkspaceView({ chapterId }: { chapterId: string }) {
 
   const handleRetry = async () => {
     try {
-      await retryFailed(chapter.id, user.username);
+      await retryFailed(pipelineContext());
+      router.refresh();
     } catch (error) {
       notify(
         "error",
@@ -456,6 +506,7 @@ export function WorkspaceView({ chapterId }: { chapterId: string }) {
     setUploadErrors([]);
 
     const prepared: Array<{
+      file: File;
       blob: Blob;
       width: number;
       height: number;
@@ -466,7 +517,8 @@ export function WorkspaceView({ chapterId }: { chapterId: string }) {
     for (let index = 0; index < files.length; index += 1) {
       setUploadProgress({ current: index, total: files.length });
       try {
-        prepared.push(await compressPanel(files[index]));
+        const compressed = await compressPanel(files[index]);
+        prepared.push({ file: files[index], ...compressed });
       } catch (error) {
         failures.push({
           file: files[index],
@@ -480,19 +532,62 @@ export function WorkspaceView({ chapterId }: { chapterId: string }) {
     setUploadProgress(null);
 
     if (prepared.length > 0) {
-      try {
-        await addPreparedPanels(prepared);
-        setStorageFull(false);
-      } catch (error) {
-        if (error instanceof ChapterError && error.code === "storage") {
-          setStorageFull(true);
+      const supabase = createClient();
+      const uploadedPaths: string[] = [];
+      const registered: Array<{
+        id: string;
+        index: number;
+        path: string;
+        width: number;
+        height: number;
+        byteSize: number;
+      }> = [];
+
+      let nextIndex = panels.length;
+
+      for (const panel of prepared) {
+        const id = crypto.randomUUID();
+        const path = `${group.id}/${chapter.id}/${id}.webp`;
+        const { error } = await supabase.storage
+          .from("pages")
+          .upload(path, panel.blob, {
+            contentType: "image/webp",
+            upsert: false,
+          });
+
+        if (error) {
+          failures.push({ file: panel.file, message: error.message });
+          continue;
         }
-        notify(
-          "error",
-          error instanceof ChapterError
-            ? error.message
-            : "Couldn't save those panels."
-        );
+
+        uploadedPaths.push(path);
+        registered.push({
+          id,
+          index: nextIndex,
+          path,
+          width: panel.width,
+          height: panel.height,
+          byteSize: panel.byteSize,
+        });
+        nextIndex += 1;
+      }
+
+      if (registered.length > 0) {
+        const result = await registerPanelsAction({
+          chapterId: chapter.id,
+          panels: registered,
+        });
+
+        if (!result.ok) {
+          await supabase.storage.from("pages").remove(uploadedPaths);
+          notify("error", result.message);
+        } else {
+          notify(
+            "success",
+            `${registered.length} panel${registered.length === 1 ? "" : "s"} added.`
+          );
+          router.refresh();
+        }
       }
     }
 
@@ -500,111 +595,122 @@ export function WorkspaceView({ chapterId }: { chapterId: string }) {
     if (failures.length > 0) setUploadErrors(failures);
   };
 
-  const addPreparedPanels = async (
-    prepared: Array<{
-      blob: Blob;
-      width: number;
-      height: number;
-      byteSize: number;
-    }>
-  ) => {
-    await addPanels({
-      chapterId: chapter.id,
-      actor: user.username,
-      panels: prepared,
-    });
-  };
-
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
-    try {
-      const panelIds = deleteChapter({
-        chapterId: deleteTarget.id,
-        actor: user.username,
-      });
-      void deleteChapterImages(panelIds);
+    const target = deleteTarget;
+
+    const result = await deleteChapterAction({ chapterId: target.id });
+    setDeleteTarget(null);
+
+    if (!result.ok) {
+      notify("error", result.message);
+      return;
+    }
+
+    notify("success", `Chapter ${target.number} was deleted.`);
+
+    if (target.id === chapter.id) {
       const remaining = seriesChapters.filter(
-        (entry) => entry.id !== deleteTarget.id
+        (entry) => entry.id !== target.id
       );
-      notify("success", `Chapter ${deleteTarget.number} was deleted.`);
-      const wasOpen = deleteTarget.id === chapter.id;
-      setDeleteTarget(null);
-      if (wasOpen) {
-        const next =
-          remaining.find((entry) => entry.number > chapter.number) ??
-          remaining[remaining.length - 1];
-        router.replace(
-          next ? `/chapters/${next.id}/workspace` : `/series/${series.id}`
-        );
-      }
-    } catch (error) {
-      setDeleteTarget(null);
-      notify(
-        "error",
-        error instanceof ChapterError
-          ? error.message
-          : "Couldn't delete that chapter."
+      const next =
+        remaining.find((entry) => entry.number > chapter.number) ??
+        remaining[remaining.length - 1];
+      router.replace(
+        next ? `/chapters/${next.id}/workspace` : `/series/${series.id}`
+      );
+    } else {
+      setSeriesChapters((current) =>
+        current.filter((entry) => entry.id !== target.id)
       );
     }
   };
 
-  const commitNumber = () => {
+  const commitNumber = async () => {
     const parsed = Number(numberDraft);
     if (!Number.isFinite(parsed) || parsed === chapter.number) {
       setNumberDraft(String(chapter.number));
       setHeaderError(null);
       return;
     }
-    try {
-      updateChapterDetails({
-        chapterId: chapter.id,
-        number: parsed,
-        actor: user.username,
-      });
-      setHeaderError(null);
-    } catch (error) {
-      setHeaderError(
-        error instanceof ChapterError
-          ? error.message
-          : "Couldn't change the number."
-      );
+
+    const result = await updateChapterDetailsAction({
+      chapterId: chapter.id,
+      number: parsed,
+    });
+
+    if (!result.ok) {
+      setHeaderError(result.message);
       setNumberDraft(String(chapter.number));
+      return;
     }
+
+    setHeaderError(null);
+    setChapter((current) =>
+      current ? { ...current, number: result.data.number } : current
+    );
+    setSeriesChapters((current) =>
+      current
+        .map((entry) =>
+          entry.id === chapter.id
+            ? { ...entry, number: result.data.number }
+            : entry
+        )
+        .sort((a, b) => a.number - b.number)
+    );
+    setNumberDraft(String(result.data.number));
   };
 
-  const commitTitle = () => {
+  const commitTitle = async () => {
     const next = titleDraft.trim();
     if ((next || null) === chapter.title) return;
-    try {
-      updateChapterDetails({
-        chapterId: chapter.id,
-        title: next || null,
-        actor: user.username,
-      });
-      setHeaderError(null);
-    } catch (error) {
-      setHeaderError(
-        error instanceof ChapterError ? error.message : "Couldn't save the title."
-      );
+
+    const result = await updateChapterDetailsAction({
+      chapterId: chapter.id,
+      title: next || null,
+    });
+
+    if (!result.ok) {
+      setHeaderError(result.message);
       setTitleDraft(chapter.title ?? "");
+      return;
     }
+
+    setHeaderError(null);
+    setChapter((current) =>
+      current ? { ...current, title: result.data.title } : current
+    );
+    setSeriesChapters((current) =>
+      current.map((entry) =>
+        entry.id === chapter.id
+          ? { ...entry, title: result.data.title }
+          : entry
+      )
+    );
   };
 
-  const saveBlock = (blockId: string, text: string) => {
-    try {
-      updateBlockText({
-        blockId,
-        finalText: text,
-        actor: user.username,
-      });
-    } catch (error) {
-      notify(
-        "error",
-        error instanceof ChapterError
-          ? error.message
-          : "Couldn't save that line."
-      );
+  const saveBlock = async (blockId: string, text: string) => {
+    const result = await updateBlockTextAction({
+      blockId,
+      finalText: text,
+    });
+
+    if (!result.ok) {
+      notify("error", result.message);
+      return;
     }
+
+    setAllBlocks((current) =>
+      current.map((block) =>
+        block.id === blockId
+          ? {
+              ...block,
+              finalText: result.data.finalText,
+              isEdited: true,
+            }
+          : block
+      )
+    );
   };
 
   return (
@@ -655,7 +761,6 @@ export function WorkspaceView({ chapterId }: { chapterId: string }) {
                     seriesId={series.id}
                     terms={terms}
                     canEdit={canEdit}
-                    actor={user.username}
                     onNotice={notify}
                   />
                 }
@@ -663,14 +768,6 @@ export function WorkspaceView({ chapterId }: { chapterId: string }) {
             </aside>
 
             <section className="ws-center">
-              {storageFull ? (
-                <p className="ch-storage-banner" role="alert">
-                  <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />
-                  This browser is out of storage. Delete a chapter or clear old
-                  panels.
-                </p>
-              ) : null}
-
               <div className="ch-header">
                 <div className="ch-header-main">
                   <div className="ch-header-fields">

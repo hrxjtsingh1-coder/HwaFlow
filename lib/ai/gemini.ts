@@ -6,16 +6,18 @@
  * this module; nothing else does.
  *
  * Model choice is one line on purpose. `gemini-3.5-flash-lite` is the free tier
- * we measured (500 requests/day, 15 RPM, 250K TPM). `gemini-3.8-flash` is also
- * free but caps at 20 requests/day, which cannot run a chapter. Never use
+ * we measured (500 requests/day, 15 RPM, 250K TPM). There is deliberately no
+ * fallback: `gemini-3.8-flash` caps at 20 requests/day, so silently switching to
+ * it mid-chapter would fail later instead of failing now. Never use
  * `gemini-2.5-*` (restricted to existing users) or `gemini-2.0-flash` (shut
- * down).
+ * down). A retired model id surfaces as `bad-response`.
  */
 
 import {
   PipelineError,
   type ExtractedPanel,
   type ExtractResponse,
+  type GlossaryPromptTerm,
   type ProofreadResponse,
   type ReadingDirection,
   type SourceLanguage,
@@ -31,7 +33,6 @@ import {
 } from "./prompts";
 
 export const GEMINI_MODEL = "gemini-3.5-flash-lite";
-export const GEMINI_FALLBACK_MODEL = "gemini-3.8-flash";
 export const PANEL_BATCH_MAX = 10;
 export const BATCH_MAX_BYTES = 3_000_000;
 
@@ -46,6 +47,14 @@ const REQUEST_TIMEOUT_MS = 120_000;
 
 export function isMockPipeline(): boolean {
   return (process.env.MOCK_PIPELINE ?? "").trim() === "1";
+}
+
+// A mock run looks like a real one in the UI — same shapes, same persistence.
+// Warn once on the server so canned English is never mistaken for Gemini output.
+if (isMockPipeline()) {
+  console.warn(
+    "[pipeline] MOCK_PIPELINE=1 — extract, translate and proofread are returning canned data. Set MOCK_PIPELINE=0 to use Gemini."
+  );
 }
 
 export function hasGeminiKey(): boolean {
@@ -124,10 +133,8 @@ async function generateJson(input: {
     }
 
     if (response.status === 404) {
-      // Model renamed or retired: fall back once, then give up.
-      if (input.model !== GEMINI_FALLBACK_MODEL) {
-        return generateJson({ ...input, model: GEMINI_FALLBACK_MODEL });
-      }
+      // Model renamed or retired. There is no fallback by design: the only other
+      // free model allows 20 requests/day, which cannot finish a chapter.
       throw new PipelineError("bad-response");
     }
 
@@ -275,6 +282,7 @@ export async function translatePanels(input: {
     blocks: Array<{ index: number; sourceText: string }>;
   }>;
   language: SourceLanguage;
+  glossary: GlossaryPromptTerm[];
   context: { seriesTitle: string; synopsis: string | null; chapterNumber: number };
 }): Promise<TranslateResponse> {
   const prompt = [
@@ -283,6 +291,7 @@ export async function translatePanels(input: {
       seriesTitle: input.context.seriesTitle,
       synopsis: input.context.synopsis,
       chapterNumber: input.context.chapterNumber,
+      glossary: input.glossary,
     }),
     "",
     "Blocks to translate (JSON):",
@@ -293,7 +302,7 @@ export async function translatePanels(input: {
     model: GEMINI_MODEL,
     parts: [{ text: prompt }],
     schema: TRANSLATE_SCHEMA,
-    temperature: 0.3,
+    temperature: 0.2,
   })) as { translations?: unknown };
 
   const translations: TranslateResponse["translations"] = [];
@@ -327,11 +336,13 @@ export async function proofreadPanels(input: {
       baseTranslation: string;
     }>;
   }>;
+  language: SourceLanguage;
   glossary: Array<{ sourceTerm: string; targetTerm: string; category: string }>;
   context: { seriesTitle: string; synopsis: string | null; chapterNumber: number };
 }): Promise<ProofreadResponse> {
   const prompt = [
     buildProofreadPrompt({
+      language: input.language,
       glossary: input.glossary,
       seriesTitle: input.context.seriesTitle,
       synopsis: input.context.synopsis,
@@ -346,7 +357,7 @@ export async function proofreadPanels(input: {
     model: GEMINI_MODEL,
     parts: [{ text: prompt }],
     schema: PROOFREAD_SCHEMA,
-    temperature: 0.4,
+    temperature: 0.2,
   })) as { results?: unknown; terms?: unknown };
 
   const results: ProofreadResponse["results"] = [];

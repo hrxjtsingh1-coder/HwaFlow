@@ -3,46 +3,30 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+
+import { setActiveGroupId } from "@/lib/active-group";
 import { getInitials, signOut } from "@/lib/auth";
 import { formatShortDate } from "@/lib/format";
 import {
-  GroupError,
-  acceptInvite,
+  acceptInviteAction,
+  changeRoleAction,
+  declineInviteAction,
+  removeMemberAction,
+  revokeInviteAction,
+} from "@/lib/groups-actions";
+import {
   canManageMembers,
-  changeRole,
-  declineInvite,
-  getActiveGroupFor,
-  getGroup,
-  getMembers,
-  listInvitesForGroup,
-  listInvitesForUser,
-  removeMember,
-  revokeInvite,
   type Group,
   type GroupInvite,
   type GroupMember,
 } from "@/lib/groups";
-import {
-  countSeriesForMember,
-  removeMemberAssignments,
-} from "@/lib/series";
-import { useAuthSession } from "@/lib/use-auth-session";
+import type { AuthUser } from "@/lib/identity";
 import { useDialogA11y } from "@/lib/use-dialog";
-import { useGroups } from "@/lib/use-groups";
-import { useSeries } from "@/lib/use-series";
 import { DashboardRail } from "../dashboard/dashboard-rail";
 import { DashboardTopbar } from "../dashboard/dashboard-topbar";
 import { workspaceLinks } from "../dashboard/workspace-nav";
-import {
-  AlertCircle,
-  Check,
-  Plus,
-  Trash,
-  Users,
-  X,
-} from "../icons";
+import { AlertCircle, Check, Plus, Trash, Users, X } from "../icons";
 import { GroupAvatar } from "../group-avatar";
-import { Logo } from "../logo";
 import { RoleBadge } from "../role-badge";
 import { InviteDrawer } from "./invite-drawer";
 import { MemberTable } from "./member-table";
@@ -50,25 +34,21 @@ import { ReceivedInvites, type InviteItem } from "./received-invites";
 
 type Notice = { tone: "success" | "error"; text: string };
 
-function errorMessage(caught: unknown): string {
-  return caught instanceof GroupError
-    ? caught.message
-    : "Something went wrong. Try again.";
-}
+type ActiveGroup = {
+  group: Group;
+  viewerMember: GroupMember;
+  members: GroupMember[];
+  invites: GroupInvite[];
+  seriesCount: number;
+};
 
-function MembersLoading() {
-  return (
-    <div className="dash-loading">
-      <div className="dash-loading-inner">
-        <Logo href="/" />
-        <div className="dash-loading-card" role="status" aria-live="polite">
-          <span className="dash-spinner" aria-hidden="true" />
-          <p>Opening member settings…</p>
-        </div>
-      </div>
-    </div>
-  );
-}
+type MembersViewProps = {
+  viewer: AuthUser;
+  bundle: {
+    active: ActiveGroup | null;
+    received: InviteItem[];
+  };
+};
 
 function RemoveMemberDialog({
   member,
@@ -129,16 +109,14 @@ function RemoveMemberDialog({
   );
 }
 
-export function MembersView() {
+export function MembersView({ viewer, bundle }: MembersViewProps) {
   const router = useRouter();
-  const { user, ready: authReady } = useAuthSession();
-  const { ready: groupsReady } = useGroups();
-  const { ready: seriesReady } = useSeries();
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<GroupMember | null>(null);
   const [busyInviteId, setBusyInviteId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const noticeTimer = useRef<number | null>(null);
 
@@ -155,10 +133,6 @@ export function MembersView() {
   }, []);
 
   useEffect(() => {
-    if (authReady && !user) router.replace("/login");
-  }, [authReady, user, router]);
-
-  useEffect(() => {
     if (!menuOpen) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -172,124 +146,109 @@ export function MembersView() {
     };
   }, [menuOpen]);
 
-  if (!authReady || !groupsReady || !seriesReady || !user) {
-    return <MembersLoading />;
-  }
-
-  const active = getActiveGroupFor(user.username);
-  const activeGroup: Group | null = active?.group ?? null;
-  const viewerMember = active?.member ?? null;
+  const activeGroup: ActiveGroup | null = bundle.active;
+  const viewerMember = activeGroup?.viewerMember ?? null;
   const viewerRole = viewerMember?.role ?? null;
+  const members: GroupMember[] = activeGroup?.members ?? [];
+  const groupInvites: GroupInvite[] = activeGroup?.invites ?? [];
+  const receivedWithGroups = bundle.received;
 
-  const members: GroupMember[] = activeGroup ? getMembers(activeGroup.id) : [];
-
-  const seriesCounts: Record<string, number> = activeGroup
-    ? Object.fromEntries(
-        members.map((member) => [
-          member.id,
-          countSeriesForMember(activeGroup.id, member.username),
-        ])
-      )
-    : {};
-
-  // Invites can point at groups other than the active one, so resolve each.
-  const receivedWithGroups: InviteItem[] = listInvitesForUser(user.username)
-    .filter((invite) => invite.status === "pending")
-    .map((invite) => {
-      const group =
-        activeGroup?.id === invite.groupId
-          ? activeGroup
-          : getGroup(invite.groupId);
-      return group ? { invite, group } : null;
-    })
-    .filter((item): item is InviteItem => item !== null);
-
-  const groupInvites: GroupInvite[] = activeGroup
-    ? listInvitesForGroup(activeGroup.id).filter(
-        (invite) => invite.status === "pending"
-      )
-    : [];
+  // Series assignments arrive in Phase 2; every count starts at zero.
+  const seriesCounts: Record<string, number> = {};
 
   const canManage = viewerRole ? canManageMembers(viewerRole) : false;
   const owner = members.find((member) => member.role === "owner") ?? null;
 
   const handleSignOut = () => {
-    signOut();
-    router.replace("/login");
+    void signOut();
   };
 
-  const handleAccept = (inviteId: string) => {
-    if (!user) return;
+  const handleAccept = async (inviteId: string) => {
     setBusyInviteId(inviteId);
-    try {
-      acceptInvite(inviteId, user.username);
-      notify("success", "You joined the group. It's now your active group.");
-    } catch (caught) {
-      notify("error", errorMessage(caught));
-    } finally {
+    const result = await acceptInviteAction(inviteId);
+
+    if (!result.ok) {
+      notify("error", result.message);
       setBusyInviteId(null);
+      return;
     }
+
+    setActiveGroupId(viewer.username, result.data.groupId);
+    notify("success", "You joined the group. It's now your active group.");
+    setBusyInviteId(null);
+    router.refresh();
   };
 
-  const handleDecline = (inviteId: string) => {
-    if (!user) return;
+  const handleDecline = async (inviteId: string) => {
     setBusyInviteId(inviteId);
-    try {
-      declineInvite(inviteId, user.username);
+    const result = await declineInviteAction(inviteId);
+
+    if (!result.ok) notify("error", result.message);
+    else {
       notify("success", "Invite declined.");
-    } catch (caught) {
-      notify("error", errorMessage(caught));
-    } finally {
-      setBusyInviteId(null);
+      router.refresh();
     }
+    setBusyInviteId(null);
   };
 
-  const handleRoleChange = (
+  const handleRoleChange = async (
     member: GroupMember,
     role: "manager" | "staff"
   ) => {
-    if (!activeGroup || !user) return;
-    try {
-      changeRole({
-        groupId: activeGroup.id,
-        userId: member.userId,
-        role,
-        actor: user.username,
-      });
-      notify(
-        "success",
-        `${member.displayName} is now ${role === "manager" ? "a Manager" : "Staff"}.`
-      );
-    } catch (caught) {
-      notify("error", errorMessage(caught));
+    if (!activeGroup) return;
+
+    const result = await changeRoleAction({
+      groupId: activeGroup.group.id,
+      userId: member.userId,
+      role,
+    });
+
+    if (!result.ok) {
+      notify("error", result.message);
+      return;
     }
+
+    notify(
+      "success",
+      `${member.displayName} is now ${role === "manager" ? "a Manager" : "Staff"}.`
+    );
+    router.refresh();
   };
 
-  const handleRevoke = (invite: GroupInvite) => {
-    if (!user) return;
-    try {
-      revokeInvite(invite.id, user.username);
-      notify("success", `Invite for @${invite.username} revoked.`);
-    } catch (caught) {
-      notify("error", errorMessage(caught));
+  const handleRevoke = async (invite: GroupInvite) => {
+    const result = await revokeInviteAction(invite.id);
+
+    if (!result.ok) {
+      notify("error", result.message);
+      return;
     }
+
+    notify("success", `Invite for @${invite.username} revoked.`);
+    router.refresh();
   };
 
-  const handleConfirmRemove = () => {
-    if (!activeGroup || !user || !removeTarget) return;
-    try {
-      removeMember({
-        groupId: activeGroup.id,
-        userId: removeTarget.userId,
-        actor: user.username,
-      });
-      removeMemberAssignments(activeGroup.id, removeTarget.userId);
-      notify("success", `${removeTarget.displayName} was removed from the group.`);
+  const handleConfirmRemove = async () => {
+    if (!activeGroup || !removeTarget) return;
+
+    setBusy(true);
+    const result = await removeMemberAction({
+      groupId: activeGroup.group.id,
+      userId: removeTarget.userId,
+    });
+    setBusy(false);
+
+    if (!result.ok) {
+      notify("error", result.message);
       setRemoveTarget(null);
-    } catch (caught) {
-      notify("error", errorMessage(caught));
-      setRemoveTarget(null);
+      return;
     }
+
+    notify(
+      "success",
+      `${removeTarget.displayName} was removed from the group.`
+    );
+    setRemoveTarget(null);
+    router.refresh();
   };
 
   const roleForInvites = viewerRole ?? "staff";
@@ -298,7 +257,7 @@ export function MembersView() {
   return (
     <div className="dash-shell">
       <DashboardRail
-        user={user}
+        user={viewer}
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
         onSignOut={handleSignOut}
@@ -358,7 +317,7 @@ export function MembersView() {
                     ? "Accept an invite above, or ask an Owner to invite your username."
                     : "Ask an Owner to invite your username. Invites appear on this page — there's no email to wait for."}
                 </p>
-                <span className="mem-username-chip">@{user.username}</span>
+                <span className="mem-username-chip">@{viewer.username}</span>
                 <Link href="/dashboard" className="mem-back-link">
                   Back to your dashboard
                 </Link>
@@ -368,20 +327,22 @@ export function MembersView() {
                 <section className="mem-group-head dash-enter">
                   <div className="mem-group-head-main">
                     <GroupAvatar
-                      name={activeGroup.name}
-                      iconDataUrl={activeGroup.iconDataUrl}
+                      name={activeGroup.group.name}
+                      iconDataUrl={activeGroup.group.iconDataUrl}
                       size="lg"
                     />
                     <div className="mem-group-copy">
                       <p className="eyebrow">Members</p>
-                      <h1 className="mem-group-title">{activeGroup.name}</h1>
+                      <h1 className="mem-group-title">
+                        {activeGroup.group.name}
+                      </h1>
                       <div className="mem-group-meta">
                         <span className="chip chip-accent">
-                          {activeGroup.currency}
+                          {activeGroup.group.currency}
                         </span>
                         <RoleBadge role={viewerRole} />
                         <span className="mem-group-slug">
-                          @{activeGroup.slug}
+                          @{activeGroup.group.slug}
                         </span>
                       </div>
                     </div>
@@ -428,7 +389,7 @@ export function MembersView() {
                           {groupInvites.map((invite) => {
                             const canRevoke =
                               viewerRole === "owner" ||
-                              invite.invitedBy === user.username;
+                              invite.invitedBy === viewer.username;
                             return (
                               <li className="mem-pending-row" key={invite.id}>
                                 <span className="mem-pending-main">
@@ -445,7 +406,7 @@ export function MembersView() {
                                   <button
                                     type="button"
                                     className="mem-text-btn"
-                                    onClick={() => handleRevoke(invite)}
+                                    onClick={() => void handleRevoke(invite)}
                                   >
                                     Revoke
                                   </button>
@@ -479,9 +440,11 @@ export function MembersView() {
                       <MemberTable
                         members={members}
                         viewerRole={viewerRole}
-                        viewerUsername={user.username}
+                        viewerUsername={viewer.username}
                         seriesCounts={seriesCounts}
-                        onRoleChange={handleRoleChange}
+                        onRoleChange={(member, role) =>
+                          void handleRoleChange(member, role)
+                        }
                         onRemove={setRemoveTarget}
                       />
 
@@ -496,12 +459,12 @@ export function MembersView() {
                   <section className="mem-staff-card dash-enter">
                     <div className="mem-staff-head">
                       <span className="mem-avatar mem-avatar--lg" aria-hidden="true">
-                        {getInitials(user.displayName, user.username)}
+                        {getInitials(viewer.displayName, viewer.username)}
                       </span>
                       <div className="mem-staff-copy">
                         <p className="eyebrow">Your membership</p>
-                        <h2 className="mem-staff-name">{user.displayName}</h2>
-                        <p className="mem-staff-handle">@{user.username}</p>
+                        <h2 className="mem-staff-name">{viewer.displayName}</h2>
+                        <p className="mem-staff-handle">@{viewer.username}</p>
                       </div>
                       <RoleBadge role={viewerRole} />
                     </div>
@@ -532,12 +495,8 @@ export function MembersView() {
             )}
 
             <footer className="mem-footer">
-              <span>
-                Preview build — members and invites stay in this browser.
-              </span>
-              {owner ? (
-                <span>Owned by @{owner.username}</span>
-              ) : null}
+              <span>Members and invites sync with your team.</span>
+              {owner ? <span>Owned by @{owner.username}</span> : null}
             </footer>
           </div>
         </main>
@@ -546,20 +505,24 @@ export function MembersView() {
       {activeGroup && canManage ? (
         <InviteDrawer
           open={inviteOpen}
-          group={activeGroup}
-          actor={user.username}
+          group={activeGroup.group}
           viewerRole={roleForInvites}
           onClose={() => setInviteOpen(false)}
-          onInvited={(name) => notify("success", `${name} was invited.`)}
+          onInvited={(name) => {
+            notify("success", `${name} was invited.`);
+            router.refresh();
+          }}
         />
       ) : null}
 
       {removeTarget && activeGroup ? (
         <RemoveMemberDialog
           member={removeTarget}
-          groupName={activeGroup.name}
+          groupName={activeGroup.group.name}
           onClose={() => setRemoveTarget(null)}
-          onConfirm={handleConfirmRemove}
+          onConfirm={() => {
+            if (!busy) void handleConfirmRemove();
+          }}
         />
       ) : null}
     </div>

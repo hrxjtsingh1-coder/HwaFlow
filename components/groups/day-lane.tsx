@@ -6,14 +6,14 @@ import {
   type ReleaseDay,
   type Series,
 } from "@/lib/series";
-import { SeriesTile } from "./series-tile";
+import { SeriesTile, type SeriesAssignee } from "./series-tile";
 
 type DayLaneProps = {
   day: ReleaseDay;
   series: Series[];
   viewerRole: GroupRole;
   viewerUsername: string;
-  assigneesBySeries: Record<string, string[]>;
+  assigneesBySeries: Record<string, SeriesAssignee[]>;
 };
 
 export function DayLane({

@@ -3,7 +3,6 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { getInitials, signOut } from "@/lib/auth";
-import { isPlatformAdmin } from "@/lib/groups";
 import { useAuthSession } from "@/lib/use-auth-session";
 import { useGroups } from "@/lib/use-groups";
 import { ArrowLeft, LogOut, Menu, ShieldCheck, X } from "../icons";
@@ -31,7 +30,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const { state } = useGroups();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const admin = ready && user ? isPlatformAdmin(user.username) : false;
+  const admin = ready && user ? user.isPlatformAdmin : false;
 
   useEffect(() => {
     if (ready && !user) router.replace("/login");
@@ -79,8 +78,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
     : null;
 
   const handleSignOut = () => {
-    signOut();
-    router.replace("/login");
+    void signOut();
   };
 
   return (

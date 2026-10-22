@@ -2,14 +2,14 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import {
-  AuthError,
   getRememberedUsername,
   normalizeUsername,
   setRememberedUsername,
-  signIn,
   sleep,
+  withDeadline,
   type AuthUser,
 } from "@/lib/auth";
+import { login } from "@/lib/auth-actions";
 import { AlertCircle, ArrowRight, AtSign, Check, Lock } from "../icons";
 import { PasswordField, TextField } from "./field";
 
@@ -59,20 +59,25 @@ export function SignInForm({ onSuccess, onSwitchToSignUp }: SignInFormProps) {
     setLoading(true);
 
     try {
-      const [user] = await Promise.all([
-        signIn({ username, password }),
+      const [result] = await Promise.all([
+        withDeadline(login({ username, password })),
         sleep(620),
       ]);
 
+      if (!result.ok) {
+        setFormError(result.message);
+        document.getElementById("signin-password")?.focus();
+        return;
+      }
+
       setRememberedUsername(remember ? normalizeUsername(username) : null);
-      onSuccess(user);
-    } catch (error) {
-      const message =
-        error instanceof AuthError
-          ? error.message
-          : "Something went wrong. Give it another try.";
-      setFormError(message);
-      document.getElementById("signin-password")?.focus();
+      onSuccess(result.user);
+    } catch {
+      // A rejected/thrown action must never leave the button spinning forever.
+      setFormError(
+        "We couldn't reach the sign-in service. Check your connection and try again."
+      );
+    } finally {
       setLoading(false);
     }
   }

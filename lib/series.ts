@@ -16,8 +16,9 @@
  * `removeMemberAssignments` from the component layer instead.
  */
 
-import { findAccount, normalizeUsername } from "./auth";
+import { normalizeUsername } from "./auth";
 import {
+  displayNameFor,
   getGroup,
   getMemberByUsername,
   getMembers,
@@ -28,7 +29,7 @@ import {
   MAX_SERIES_COVER_BYTES,
   seriesCoverByteSize,
 } from "./series-cover";
-import { pushNotification } from "./notifications";
+import { isSourceLanguage, type SourceLanguage } from "./ai/types";
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -65,7 +66,10 @@ export type Series = {
   genre: string | null;
   description: string | null;
   coverDataUrl: string | null;
-  releaseDay: ReleaseDay;
+  /** One or more weekdays, sorted ascending. A series can release more than once a week. */
+  releaseDays: ReleaseDay[];
+  /** Source language of the raws. Drives reading direction and prompt profile. */
+  language: SourceLanguage;
   /** Money paid to the submitter when a chapter is approved. 0 is valid. */
   rateAmount: number;
   createdBy: string;
@@ -100,6 +104,7 @@ export type SeriesFailure =
   | "invalid-description"
   | "invalid-cover"
   | "invalid-rate"
+  | "invalid-language"
   | "storage"
   | "unknown";
 
@@ -133,6 +138,32 @@ export function isReleaseDay(value: number): value is ReleaseDay {
   return Number.isInteger(value) && value >= 0 && value <= 6;
 }
 
+/**
+ * Release days are a set: order never matters, duplicates collapse, and at
+ * least one day is required. Multi-day series render in every matching lane.
+ */
+export function normalizeReleaseDays(
+  days: number[] | null | undefined
+): ReleaseDay[] {
+  if (!days || days.length === 0) {
+    throw new SeriesError("invalid-day", "Pick at least one release day.");
+  }
+
+  const unique = new Set<ReleaseDay>();
+  for (const day of days) {
+    if (!isReleaseDay(day)) {
+      throw new SeriesError("invalid-day", "Pick a valid release day.");
+    }
+    unique.add(day);
+  }
+
+  if (unique.size > 7) {
+    throw new SeriesError("invalid-day", "A series releases on at most seven days.");
+  }
+
+  return Array.from(unique).sort((a, b) => a - b);
+}
+
 /* ------------------------------------------------------------------ */
 /* Storage                                                             */
 /* ------------------------------------------------------------------ */
@@ -162,11 +193,26 @@ export function getSeriesState(): SeriesState {
     if (!parsed || typeof parsed !== "object") return emptyState();
     return {
       version: 1,
-      // `rateAmount` arrived with the chapter module; older rows default to 0
-      // rather than rendering `NaN`.
+      // `rateAmount` arrived with the chapter module and `language` after it;
+      // older rows default to 0 and Korean rather than rendering `NaN` or
+      // extracting Japanese raws right-to-left with left-to-right rules.
       series: Array.isArray(parsed.series)
         ? parsed.series.map((entry) => ({
             ...entry,
+            // Rows written before multi-day releases carry `releaseDay`.
+            releaseDays: Array.isArray(entry.releaseDays)
+              ? entry.releaseDays.filter(isReleaseDay)
+              : isReleaseDay(
+                    (entry as unknown as { releaseDay?: number }).releaseDay ?? -1
+                  )
+                ? [
+                    (entry as unknown as { releaseDay: ReleaseDay })
+                      .releaseDay,
+                  ]
+                : [],
+            language: isSourceLanguage(entry.language)
+              ? entry.language
+              : "ko",
             rateAmount:
               typeof entry.rateAmount === "number" ? entry.rateAmount : 0,
           }))
@@ -272,6 +318,21 @@ export function normalizeRateAmount(value: number | null | undefined): number {
   return Math.round(value * 100) / 100;
 }
 
+/**
+ * `language` postdates older rows, so an absent value is Korean rather than an
+ * error. An unknown value is an error: silently defaulting would extract manga
+ * with Korean rules and in the wrong direction.
+ */
+export function normalizeSourceLanguage(
+  value: SourceLanguage | null | undefined
+): SourceLanguage {
+  if (value === undefined || value === null) return "ko";
+  if (!isSourceLanguage(value)) {
+    throw new SeriesError("invalid-language", "Pick a source language.");
+  }
+  return value;
+}
+
 function normalizeOptionalText(
   value: string | null | undefined,
   max: number,
@@ -343,36 +404,18 @@ function normalizeAssignees(
   return result;
 }
 
-function notifyAssignees(
-  groupName: string,
-  series: Series,
-  assignees: NormalizedAssignee[],
-  actor: string
-): void {
-  const actorUsername = normalizeUsername(actor);
-  for (const assignee of assignees) {
-    if (assignee.username === actorUsername) continue;
-    try {
-      pushNotification({
-        username: assignee.username,
-        kind: "series-assigned",
-        title: `Added to ${series.title}`,
-        body: `${groupName} · releases ${RELEASE_DAY_LABELS[series.releaseDay]}`,
-        href: `/series/${series.id}`,
-        tone: "lavender",
-      });
-    } catch {
-      // A notification must never undo a successful assignment.
-    }
-  }
-}
-
 /* ------------------------------------------------------------------ */
 /* Reads                                                               */
 /* ------------------------------------------------------------------ */
 
+function firstReleaseDay(series: Series): number {
+  return series.releaseDays.length > 0 ? series.releaseDays[0] : 7;
+}
+
 function sortSeries(a: Series, b: Series): number {
-  if (a.releaseDay !== b.releaseDay) return a.releaseDay - b.releaseDay;
+  const dayA = firstReleaseDay(a);
+  const dayB = firstReleaseDay(b);
+  if (dayA !== dayB) return dayA - dayB;
   return a.title.localeCompare(b.title);
 }
 
@@ -473,7 +516,7 @@ export function canViewSeries(
 }
 
 export function assigneeDisplayName(username: string): string {
-  return findAccount(username)?.displayName ?? username;
+  return displayNameFor(username) ?? username;
 }
 
 /* ------------------------------------------------------------------ */
@@ -486,7 +529,8 @@ export type CreateSeriesInput = {
   genre?: string | null;
   description?: string | null;
   coverDataUrl?: string | null;
-  releaseDay: number;
+  releaseDays: number[];
+  language?: SourceLanguage;
   rateAmount?: number;
   assigneeUsernames?: string[];
   actor: string;
@@ -504,9 +548,7 @@ export function createSeries(input: CreateSeriesInput): Series {
   if (titleError) throw new SeriesError("invalid-title", titleError);
   const title = cleanSeriesTitle(input.title);
 
-  if (!isReleaseDay(input.releaseDay)) {
-    throw new SeriesError("invalid-day", "Pick a release day.");
-  }
+  const releaseDays = normalizeReleaseDays(input.releaseDays);
 
   const genre = normalizeOptionalText(
     input.genre,
@@ -543,6 +585,7 @@ export function createSeries(input: CreateSeriesInput): Series {
   );
 
   const rateAmount = normalizeRateAmount(input.rateAmount);
+  const language = normalizeSourceLanguage(input.language);
 
   const state = getSeriesState();
   const now = new Date().toISOString();
@@ -553,7 +596,8 @@ export function createSeries(input: CreateSeriesInput): Series {
     genre,
     description,
     coverDataUrl,
-    releaseDay: input.releaseDay,
+    releaseDays,
+    language,
     rateAmount,
     createdBy: normalizeUsername(input.actor),
     createdAt: now,
@@ -575,8 +619,6 @@ export function createSeries(input: CreateSeriesInput): Series {
     series: [series, ...state.series],
     assignments: [...assignments, ...state.assignments],
   });
-
-  notifyAssignees(group.name, series, assignees, input.actor);
 
   return series;
 }
@@ -649,9 +691,9 @@ export function setSeriesAssignments(input: SetSeriesAssignmentsInput): void {
     ],
   });
 
-  if (added.length > 0) {
-    notifyAssignees(group.name, series, added, input.actor);
-  }
+  // Assignment rows are also written by the server RPC in the Supabase path;
+  // the notification trigger lives there.
+  void added;
 }
 
 export type UpdateSeriesInput = {
@@ -660,7 +702,8 @@ export type UpdateSeriesInput = {
   genre?: string | null;
   description?: string | null;
   coverDataUrl?: string | null;
-  releaseDay: number;
+  releaseDays: number[];
+  language?: SourceLanguage;
   rateAmount?: number;
   actor: string;
 };
@@ -684,9 +727,7 @@ export function updateSeries(input: UpdateSeriesInput): Series {
   const titleError = validateSeriesTitle(input.title);
   if (titleError) throw new SeriesError("invalid-title", titleError);
 
-  if (!isReleaseDay(input.releaseDay)) {
-    throw new SeriesError("invalid-day", "Pick a release day.");
-  }
+  const releaseDays = normalizeReleaseDays(input.releaseDays);
 
   const genre = normalizeOptionalText(
     input.genre,
@@ -715,6 +756,7 @@ export function updateSeries(input: UpdateSeriesInput): Series {
   }
 
   const rateAmount = normalizeRateAmount(input.rateAmount);
+  const language = normalizeSourceLanguage(input.language ?? existing.language);
 
   const next: Series = {
     ...existing,
@@ -722,7 +764,8 @@ export function updateSeries(input: UpdateSeriesInput): Series {
     genre,
     description,
     coverDataUrl,
-    releaseDay: input.releaseDay,
+    releaseDays,
+    language,
     rateAmount,
   };
 

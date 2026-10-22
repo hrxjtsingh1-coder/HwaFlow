@@ -1,13 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { findAccount, normalizeUsername } from "@/lib/auth";
-import {
-  GroupError,
-  inviteMember,
-  type Group,
-  type GroupRole,
-} from "@/lib/groups";
+import { normalizeUsername } from "@/lib/auth";
+import { lookupProfile } from "@/lib/auth-actions";
+import { inviteMemberAction } from "@/lib/groups-actions";
+import { type Group, type GroupRole } from "@/lib/groups";
 import { useDialogA11y } from "@/lib/use-dialog";
 import { X } from "../icons";
 
@@ -20,16 +17,15 @@ type LookupState =
 type InviteDrawerProps = {
   open: boolean;
   group: Group;
-  actor: string;
   viewerRole: GroupRole;
   onClose: () => void;
-  onInvited: (username: string) => void;
+  /** Receives the invitee's display name for the success notice. */
+  onInvited: (displayName: string) => void;
 };
 
 export function InviteDrawer({
   open,
   group,
-  actor,
   viewerRole,
   onClose,
   onInvited,
@@ -62,71 +58,79 @@ export function InviteDrawer({
       setLookup({ status: "idle" });
       return;
     }
+    let cancelled = false;
     setLookup({ status: "checking" });
-    const timer = window.setTimeout(() => {
-      const account = findAccount(normalized);
+    const timer = window.setTimeout(async () => {
+      const profile = await lookupProfile(normalized);
+      if (cancelled) return;
       setLookup(
-        account
+        profile
           ? {
               status: "found",
-              displayName: account.displayName,
-              username: account.username,
+              displayName: profile.displayName,
+              username: profile.username,
             }
           : { status: "missing" }
       );
     }, 340);
-    return () => window.clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, [username, open]);
 
   if (!open) return null;
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (submitting) return;
 
     const normalized = normalizeUsername(username);
-    const account = normalized ? findAccount(normalized) : null;
-    const nextError = !normalized
-      ? "Enter the username to invite."
-      : !account
-        ? "No account with that username. They need to register first."
-        : null;
-
-    setUsernameError(nextError);
+    setUsernameError(!normalized ? "Enter the username to invite." : null);
     setFormError(null);
 
-    if (nextError) {
+    if (!normalized) {
       usernameRef.current?.focus();
       return;
     }
 
     setSubmitting(true);
-    try {
-      inviteMember({
-        groupId: group.id,
-        username: normalized,
-        role: isOwner ? role : "staff",
-        actor,
-      });
-      onInvited(account?.displayName ?? normalized);
-      onClose();
-    } catch (caught) {
-      if (caught instanceof GroupError) {
-        if (
-          caught.code === "invitee-not-found" ||
-          caught.code === "already-member" ||
-          caught.code === "already-invited"
-        ) {
-          setUsernameError(caught.message);
-          usernameRef.current?.focus();
-        } else {
-          setFormError(caught.message);
-        }
+
+    // Resolve before writing: the debounced hint above can be stale, and
+    // inviteMember no longer owns a directory lookup.
+    const invitee = await lookupProfile(normalized);
+    if (!invitee) {
+      setUsernameError(
+        "No account with that username. They need to register first."
+      );
+      usernameRef.current?.focus();
+      setSubmitting(false);
+      return;
+    }
+
+    const result = await inviteMemberAction({
+      groupId: group.id,
+      userId: invitee.id,
+      role: isOwner ? role : "staff",
+    });
+
+    if (!result.ok) {
+      if (
+        result.code === "invitee-not-found" ||
+        result.code === "already-member" ||
+        result.code === "already-invited"
+      ) {
+        setUsernameError(result.message);
+        usernameRef.current?.focus();
       } else {
-        setFormError("We couldn't send that invite. Try again.");
+        setFormError(result.message);
       }
       setSubmitting(false);
+      return;
     }
+
+    onInvited(invitee.displayName);
+    onClose();
   };
 
   return (

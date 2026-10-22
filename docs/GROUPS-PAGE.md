@@ -29,9 +29,9 @@ Two navigation shells:
   The admin-only account gets an extra "Admin console" nav entry here, otherwise
   `/admin/groups` would be unreachable by navigation.
 
-**Group data is real and persisted** in `localStorage` (the auth store has no Supabase
-keys yet). The store **starts empty** — no demo groups. Creating a group requires an
-Owner account that actually exists in this browser.
+**Group data is real and persisted** in `localStorage`. Auth (accounts and profiles) now
+runs on Supabase, so an Owner is resolved through the `profile_lookup` RPC and must have a
+registered account — not merely an account in this browser.
 
 ---
 
@@ -473,8 +473,9 @@ docs/ARCHITECTURE.md                         decision log + page status
 
 - There is no group switcher yet. A multi-group user manages whichever group they most
   recently accepted; this is intentional for v1 and belongs in the backlog.
-- `/settings/members` shows series-assigned counts as a read-only placeholder (`0`)
-  until series assignment exists.
+- `/settings/members` originally showed series-assigned counts as a placeholder (`0`)
+  until series assignment existed. Series is now real and the counts come from
+  `series_assignments`; the placeholder is historical.
 - Admin cannot see series, chapters, or translation text — metadata counts only, per
   `docs/ARCHITECTURE.md` section 3, item 9.
 
@@ -513,9 +514,38 @@ Deviations from the spec above, all deliberate:
 - **The stacked member row reserves a 2.35rem actions slot**, so "Joined" lines up on
   owner and non-owner rows even though the owner has no menu button.
 
+### 16.1 Supabase swap (2026-10-22)
+
+Sections 4 and 11 describe the original browser-local implementation. That
+implementation is now historical. The delivered groups surfaces read Supabase and
+write through server actions:
+
+- **Reads** — `lib/server/groups.ts` (`listGroupsForViewer`, `getGroupBundle`,
+  `listMembers`, `listReceivedInvites`) runs in server components. `/groups`,
+  `/groups/[id]` and `/settings/members` receive typed props; nothing hydrates
+  `hwaflow.groups.v1`.
+- **Writes** — `lib/group-actions.ts` calls the RPCs (`create_group`, `invite_member`,
+  `accept_invite`, `change_member_role`, `remove_group_member`, `revoke_invite`,
+  `transfer_ownership`, `set_group_icon`) and returns `{ ok, code, message }`.
+  RLS has no direct member-write policies, so the RPC role checks are the boundary.
+- **Icons** — `group-icons` is a private bucket. The browser uploads
+  `<group>/<uuid>.webp` after the group row exists; reads use signed URLs. A failed
+  upload leaves a group without an icon rather than failing the create.
+- **Active group** — stays in `localStorage` (`hwaflow.active-group.v1`) because it is
+  a per-device UI preference, not shared content.
+- **Refresh after save** — mutating actions return a result and the route calls
+  `router.refresh()`; no action calls `revalidatePath` on a route that redirects.
+- **Deferred** — `/admin/groups/[id]` and `change-owner-dialog` still use
+  `lib/groups.ts` and its local store. Platform admins can read group metadata and
+  membership under RLS but not series content, so this page needs a dedicated admin
+  bundle before the local stores can be removed. Everything else in this document is
+  Supabase-backed.
+
 Verification actually run: `npx tsc --noEmit`, `npm run build`, all routes returning
-200 with `noindex, nofollow`, a 54-assertion harness against `lib/groups.ts` covering
-every guard in §3 (it is not committed; there is no test runner), and layout probes at
+200 with `noindex, nofollow`, a 54-assertion harness against the original `lib/groups.ts`
+guards in §3 (not committed; there is no test runner), and layout probes at
 320 / 360 / 390 / 561 / 600 px confirming `scrollWidth === innerWidth` and unclipped
-row menus.
+row menus. The Supabase swap was verified with `npx tsc --noEmit` and a production
+build; live behavior depends on `npx supabase db push` applying every pending
+migration.
 

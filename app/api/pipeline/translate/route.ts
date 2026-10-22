@@ -21,9 +21,11 @@ import {
   isPipelineError,
   toPipelineFailure,
   type ChapterContext,
+  type GlossaryPromptTerm,
   type SourceLanguage,
   type TranslateResponse,
 } from "@/lib/ai/types";
+import { requirePipelineViewer } from "@/lib/pipeline-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,11 +38,13 @@ const LANGUAGES: SourceLanguage[] = ["ko", "ja", "zh"];
 function parseBody(raw: unknown): {
   panels: PanelInput[];
   language: SourceLanguage;
+  glossary: GlossaryPromptTerm[];
   context: ChapterContext;
 } {
   const body = raw as {
     panels?: unknown;
     language?: unknown;
+    glossary?: unknown;
     context?: unknown;
   };
 
@@ -82,9 +86,19 @@ function parseBody(raw: unknown): {
     return { panelId: panel.panelId, blocks };
   });
 
+  const glossary: GlossaryPromptTerm[] = Array.isArray(body.glossary)
+    ? (body.glossary as GlossaryPromptTerm[]).filter(
+        (term) =>
+          term &&
+          typeof term.sourceTerm === "string" &&
+          typeof term.targetTerm === "string"
+      )
+    : [];
+
   return {
     panels,
     language: body.language as SourceLanguage,
+    glossary,
     context: {
       seriesTitle: context.seriesTitle,
       synopsis: context.synopsis ?? null,
@@ -96,6 +110,7 @@ function parseBody(raw: unknown): {
 async function translateWithValve(input: {
   panels: PanelInput[];
   language: SourceLanguage;
+  glossary: GlossaryPromptTerm[];
   context: ChapterContext;
 }): Promise<TranslateResponse> {
   try {
@@ -126,6 +141,9 @@ async function translateWithValve(input: {
 
 export async function POST(request: Request) {
   try {
+    const auth = await requirePipelineViewer();
+    if (!auth.ok) return auth.response;
+
     if (!isMockPipeline() && !hasGeminiKey()) {
       throw new PipelineError("missing-key");
     }
@@ -148,4 +166,19 @@ export async function POST(request: Request) {
     const { status, body } = toPipelineFailure(error);
     return Response.json(body, { status });
   }
+}
+
+/**
+ * The workspace posts here. A GET is almost always someone opening the URL in
+ * a browser, so say that instead of returning an empty 405.
+ */
+export function GET() {
+  return Response.json(
+    {
+      error: "method-not-allowed",
+      message:
+        "This endpoint only accepts POST. Run translation from the chapter workspace.",
+    },
+    { status: 405, headers: { Allow: "POST" } }
+  );
 }

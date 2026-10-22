@@ -83,7 +83,7 @@ processing, public reading audience, reader accounts, comments/community.
 | Layer | Choice |
 |---|---|
 | Frontend | Next.js (App Router), TypeScript, React |
-| Backend (AI/image) | Python, FastAPI |
+| Backend (AI/image) | Next.js route handlers under `app/api/pipeline/`. Python/FastAPI remains the long-term plan for heavy image work but is deferred; no second deploy or CORS in this build. |
 | Database | Supabase Postgres (free tier) |
 | Auth | Supabase Auth, username→synthetic-email mapping |
 | File storage | Supabase Storage |
@@ -97,11 +97,13 @@ processing, public reading audience, reader accounts, comments/community.
 | Components | shadcn/ui as a base, restyled to the pastel system | Avoids building dialogs/menus/tables from scratch |
 | Client data | TanStack Query | Server-state caching, polling for job progress |
 | Forms | react-hook-form + zod | Consistent validation |
-| Backend packaging | FastAPI + Pydantic + httpx + Pillow | Minimal, free-tier friendly |
+| Backend packaging | Deferred: current build is Next route handlers; FastAPI + Pydantic + Pillow only if heavy image work arrives | Minimal, free-tier friendly |
 | Job execution | DB-backed job table polled by an in-process async worker | Avoids paid Redis/queue services |
 
 ### Provider strategy (important)
-OCR and translation are **interfaces**, not hard-coded services:
+OCR and translation are **interfaces**, not hard-coded services. The shapes below are
+language-neutral; the reference implementation is TypeScript in `lib/ai/types.ts`
+(`OCRProvider`, `Translator`), and the Gemini implementation sits behind them.
 
 ```python
 class OCRProvider(Protocol):
@@ -200,20 +202,17 @@ group_invites                       -- existing users only; pending until accept
 series
   id uuid pk
   group_id uuid -> groups.id
-  title text not null
-  alt_titles text[]
-  slug text
-  synopsis text
-  cover_path text
+  title text not null check (1..80 chars)
+  genre text                                -- free-form, replaces doc-era tags
+  description text                          -- replaces `synopsis`
+  cover_path text                           -- Storage key, signed URL on read
   source_language text check (source_language in ('ko','ja','zh'))
   reading_direction text check (reading_direction in ('ttb','rtl','ltr')) default 'ttb'
-  status text check (status in ('ongoing','completed','hiatus','cancelled'))
   rate_amount numeric(10,2) default 0        -- per approved chapter
   archived bool default false
   created_by uuid
   created_at / updated_at timestamptz
 
-series_tags (series_id, tag text)             -- free-form tags, lowercase
 series_release_days (series_id, weekday smallint 0..6)   -- multiple per series
 series_assignments (series_id, user_id, assigned_by, created_at)
 
@@ -223,6 +222,7 @@ chapters
   number numeric(10,2)                       -- supports 12.5 side chapters
   title text
   status text check (status in ('draft','processing','ready','submitted','approved','rejected'))
+  rate_snapshot numeric(10,2)                -- frozen at submit, drives earnings
   submitted_by uuid / submitted_at timestamptz
   approved_by uuid / approved_at timestamptz
   rejection_note text
@@ -231,14 +231,14 @@ chapters
   unique (series_id, number)
 
 chapter_pages
-  id uuid pk
+  id uuid pk                                 -- client-generated for direct uploads
   chapter_id uuid -> chapters.id
   page_index int
-  original_path text
-  thumb_path text
-  width int / height int
+  original_path text                         -- {group_id}/{chapter_id}/{panel_id}.webp
+  width int / height int / byte_size int
   storage_state text check (storage_state in ('stored','purged'))
   unique (chapter_id, page_index)
+  -- no thumb_path in v1: a WebP panel is ~400 KB, thumbs are a later optimization
 
 chapter_status_events        -- audit trail for reversible approval
   id uuid pk
@@ -254,6 +254,7 @@ chapter_status_events        -- audit trail for reversible approval
 text_blocks
   id uuid pk
   page_id uuid -> chapter_pages.id
+  chapter_id uuid -> chapters.id              -- denormalized so RLS needs no join
   block_index int                            -- reading order
   bbox jsonb                                 -- {x,y,w,h} normalized 0..1
   source_text text
@@ -270,38 +271,38 @@ glossary_terms
   source_term text
   target_term text
   category text check (category in ('character','place','honorific','item','term'))
+  origins text[] default '{}'                -- 'auto' | 'manual'
+  status text check (status in ('active','dismissed')) default 'active'
   notes text
   created_by uuid
-  unique (series_id, source_term)
+  created_at / updated_at timestamptz
+  unique (series_id, source_term)            -- plus a lower(source_term) unique index
 
-term_suggestions                   -- produced by the term-detection pass
+notifications
   id uuid pk
-  series_id uuid
-  source_term text
-  proposed_target text
-  chapter_id uuid
-  status text check (status in ('pending','accepted','dismissed'))
+  user_id uuid -> profiles.id                -- recipient
+  kind text                                  -- 'series-assigned'
+  title text / body text
+  href text
+  tone text check (tone in ('mint','lavender','peach','sky'))
+  read bool default false
   created_at timestamptz
-
-processing_jobs
-  id uuid pk
-  chapter_id uuid -> chapters.id
-  status text check (status in ('queued','running','done','failed','cancelled'))
-  current_step text                          -- 'ocr' | 'translate' | 'localize'
-  progress_current int / progress_total int
-  provider_ocr text / provider_translate text
-  error text
-  started_at / finished_at / created_at timestamptz
 ```
 
-**Built (preview):** the chapter module ships against browser-local stores instead
-of these tables. `lib/chapters.ts` keeps chapters, panels and blocks in one
-localStorage key (`hwaflow.chapters.v1`); panel *images* live in IndexedDB
-(`hwaflow-media` / `panels`) because a chapter of data URLs exhausts the ~5 MB
-localStorage quota. `lib/glossary.ts` keeps terms in their own key. `processing_jobs`
-does not exist yet: the run is client-driven (see §8), so there is no queue row to
-write. The shapes above stay the target — the local stores mirror them field for
-field, so the swap to Supabase is a store swap, not a schema change.
+Not built yet: `series_tags`, `term_suggestions` and `processing_jobs`. Tags are a
+later feature; auto-detected terms land directly in `glossary_terms` with `auto`
+origin (a human edit promotes them to `manual`); the pipeline is client-driven
+(see §8), so there is no queue row to write.
+
+**Built:** every content surface above is Supabase-backed. Browser-local stores
+(`hwaflow.chapters.v1`, `hwaflow.glossary.v1`, `hwaflow.notifications.v1`,
+`hwaflow-media`/IndexedDB) are retired; nothing reads or writes them except the
+deferred `/admin/groups/[id]` surface noted in §10. Reads happen in server
+components (`lib/server/*.ts`), writes in `"use server"` actions (`lib/*-actions.ts`),
+and panel images upload directly from the browser to the private `pages` bucket at
+`{group}/{chapter}/{panel}.webp` before `register_panels` writes the metadata row.
+Images are read back as short-lived signed URLs, never public URLs. All content
+buckets (`group-icons`, `series-covers`, `pages`) are private.
 
 ---
 
@@ -333,11 +334,22 @@ field, so the swap to Supabase is a store swap, not a schema change.
 ### RLS implementation notes
 - Use `SECURITY DEFINER` helper functions to avoid recursive policy evaluation:
   - `is_platform_admin()` → reads `profiles.is_platform_admin` for `auth.uid()`
-  - `has_group_role(group_id, roles text[])`
-  - `can_view_series(series_id)` → manager/owner in group OR assigned staff
-  - `can_edit_series(series_id)`
-- Every table gets RLS **enabled**. No table is left open.
-- Storage policies mirror `chapter_pages` access for the `pages` bucket.
+  - `is_group_member(group_id)` / `has_group_role(group_id, roles text[])`
+  - `can_view_series(series_id)` → Owner/Manager in group OR assigned Staff
+  - `can_work_on_series(series_id)` → same predicate today, named for writes
+  - `can_edit_series(series_id)` → Owner/Manager only
+  - `can_view_chapter(chapter_id)` → delegates to `can_work_on_series`
+  - `can_edit_chapter(chapter_id)` / `can_manage_chapter(chapter_id)` (approve/reject)
+  - `can_view_series_path(group, series)` and `can_view_chapter_path(group, chapter)`
+    for Storage policies — they compare folder names as text, never cast to uuid
+- Every table has RLS **enabled**. Reads are policies; content writes are RPC-only
+  (no INSERT/UPDATE/DELETE policies on series, chapters, pages, blocks, glossary or
+  notifications). RPCs are `SECURITY DEFINER`, `search_path = ''`, and re-check the
+  role themselves; a hidden button is never the boundary.
+- Storage buckets `group-icons`, `series-covers` and `pages` are **private**. Upload
+  policies check the group/chapter path, and reads return signed URLs with a short TTL.
+- Notification rows are created only by the `series_assignments` `AFTER INSERT`
+  trigger; recipients can select and update only their own rows.
 - An RLS test suite is mandatory: for each role, assert allowed and denied reads.
 
 ---
@@ -379,9 +391,10 @@ field, so the swap to Supabase is a store swap, not a schema change.
 | Gemini free | per-model RPM/RPD caps | 40 pages × 2 passes needs pacing |
 | Supabase | 1 GB storage | Purge-on-approval default |
 
-### Built (preview) — the shipped pipeline
+### Built — the shipped pipeline
 
-The flow above is the target. What exists today is a browser-driven version of it:
+The flow above is the target. What exists today keeps the orchestration in the
+browser (no worker) but reads from and writes to Supabase:
 
 - **Provider** — Gemini only, behind the `OCRProvider` / `Translator` interfaces in
   `lib/ai/types.ts`. Primary model `gemini-3.5-flash-lite` (500 RPD, 15 RPM, 250K TPM
@@ -392,7 +405,8 @@ The flow above is the target. What exists today is a browser-driven version of i
   image plus a `meta` manifest), `POST /api/pipeline/translate` and
   `POST /api/pipeline/proofread` (JSON, no images). Images ride as binary precisely
   because base64 in a JSON body would exceed the request limit before the byte valve
-  could halve the batch.
+  could halve the batch. All three call `requirePipelineViewer` first and answer
+  `401` JSON with `no-store` when there is no session.
 - **Batching** — `splitIntoBatches` splits panels into even batches of at most 10
   (11 → 6+5, 25 → 9+8+8, 41 → 9+8+8+8+8). A ten-panel batch plus a one-panel stub
   wastes a request from a 500/day budget, and the stub's output drifts.
@@ -403,10 +417,13 @@ The flow above is the target. What exists today is a browser-driven version of i
   fake bubbles, boxes and terms. No network call, no quota spent. This is how the
   workspace is developed and tested.
 - **Client-driven, not a queue** — `lib/pipeline.ts` runs the three stages in the
-  browser. There is no worker, no `processing_jobs` row, and no resume: closing the
-  tab stops the run, and the chapter stays `processing` with the text it already has.
-  A `Mark as ready` escape hatch exists for exactly that case. This is the one place
-  the preview build deliberately diverges from §8's flow.
+  browser against an explicit `PipelineContext` (signed panel URLs, blocks, glossary,
+  and server-action callbacks). There is no worker, no `processing_jobs` row, and no
+  resume: closing the tab stops the run, and the chapter stays `processing` with the
+  text it already has. A `Mark as ready` escape hatch exists for exactly that case.
+  Every write goes through a server action, so RLS and role checks still apply even
+  though the loop is client-side. This is the one place the build deliberately
+  diverges from §8's flow.
 - **Chapter-wide text passes** — translation and proofreading each run once for the
   whole chapter rather than per panel, so pronouns, forms of address and callbacks
   stay consistent. The proofread pass also returns the new glossary terms, so
@@ -445,8 +462,8 @@ Build order is the user's call. This is the full surface area, with dependencies
 | 1 | `/login` | Username + password sign-in, error states | Supabase auth |
 | 2 | `/register` | Create account (username, password, display name) | Supabase auth, profiles |
 
-**Built (preview):** `/`, `/login`, `/register`, `/dashboard` — against the
-browser-local localStorage stores, not Supabase yet.
+**Built:** `/`, `/login`, `/register`, `/dashboard`. Accounts, sessions and profiles run
+on Supabase, and so do groups, series, chapters, glossary and notifications.
 
 ### Platform admin
 | # | Route | Purpose | Depends on |
@@ -457,11 +474,14 @@ browser-local localStorage stores, not Supabase yet.
 | 6 | `/admin/groups/[id]` | Group detail: change Owner, member list (metadata only) | group_members |
 | 7 | `/admin/users` | All users, group memberships, deactivate/reactivate | profiles |
 
-**Built (preview):** `/admin/groups` (grid, search, sort, create drawer) and
-`/admin/groups/[id]` (stats with real series counts, Owner card, Change Owner dialog,
-read-only roster). Create is a drawer on the grid — there is no separate
-`/admin/groups/new` route. `/admin` redirects to `/admin/groups`; the overview and
-`/admin/users` are deferred. Admin never sees series titles or covers.
+**Built:** `/admin/groups` (grid, search, sort, create drawer) reads and writes
+Supabase through server components and actions. `/admin/groups/[id]` still renders
+the pre-Supabase local-store surface (stats, Owner card, Change Owner dialog,
+read-only roster) and is the one deferred page: platform admins see group metadata
+and membership but not series content, so it needs a dedicated admin bundle before
+the local stores can be deleted. Create is a drawer on the grid — there is no
+separate `/admin/groups/new` route. `/admin` redirects to `/admin/groups`; the
+overview and `/admin/users` are deferred. Admin never sees series titles or covers.
 
 ### Core app (group-scoped)
 
@@ -478,15 +498,19 @@ read-only roster). Create is a drawer on the grid — there is no separate
 | 16 | `/chapters/[id]/workspace` | Upload zone → processing progress → side-by-side editor + bubble list + export | pages, jobs, text_blocks |
 | 17 | `/approvals` | Manager/Owner review queue (submitted chapters, grouped by series) | chapters |
 
-**Built (preview):** `/groups` (every membership, active group marked), `/groups/[id]`
+**Built:** `/groups` (every membership, active group marked), `/groups/[id]`
 (role-scoped Member/Series/Money stats, Owner/Manager create-series popup, and
 Monday–Sunday horizontally scrollable series lanes), `/series/[id]` (banner,
 description, assignees, Manage assignments, Edit dialog, real chapters panel with
 `New chapter` and hover-delete), and `/chapters/[id]/workspace` (the three-column
 translation workspace: chapters + glossary rail on the left, edited English in the
-middle, raw panels on the right).
+middle, raw panels on the right). All of it is server-rendered from Supabase with
+typed props and `"use server"` mutations; saving refreshes the route instead of
+mirroring a local store.
 There is no `/series` index, `/series/new`, or edit/delete UI yet — series are created
-from the group detail popup. The dashboard weekly calendar still uses preview data.
+from the group detail popup. The dashboard weekly calendar reads real
+`series_release_days` and the latest visible chapter per series, and dashboard money /
+approved counts come from `chapters.rate_snapshot`.
 
 ### Settings
 | # | Route | Purpose | Depends on |
@@ -495,10 +519,10 @@ from the group detail popup. The dashboard weekly calendar still uses preview da
 | 19 | `/settings/group` | Owner: group name, currency, retention policy | groups |
 | 20 | `/settings/members` | Invite by username, pending invites, change roles, remove | group_members, group_invites |
 
-**Built (preview):** `/settings/members` — received invites, Staff self-card, and the
-Owner/Manager roster with the invite drawer and remove confirmation. Series-assigned
-counts are real and react to series writes; removing a member also unassigns their
-series. `/settings/profile` and `/settings/group` are deferred.
+**Built:** `/settings/members` — received invites, Staff self-card, and the
+Owner/Manager roster with the invite drawer and remove confirmation. Roster and
+counts read Supabase and refresh after a write; removing a member also unassigns
+their series. `/settings/profile` and `/settings/group` are deferred.
 
 ### Shared states (not routes)
 Signed-out redirect, no-group-yet screen (signed in but uninvited), 403 for
@@ -542,6 +566,7 @@ quota-exhausted pipeline banner.
 | 2026-10-21 | Group permissions are enforced inside `lib/groups.ts`, not only by hiding controls | A rendered control is not an authorization boundary; the same guards become RLS policies when Supabase lands |
 | 2026-10-21 | `/admin` redirects to `/admin/groups`; the admin overview and `/admin/users` are deferred | The console is limited to groups + users, and the group grid is the only surface with real data today — a fabricated overview would violate "no stubs" |
 | 2026-10-21 | Series/chapter counts return a real `0` until the series module exists | Muted honest zeros beat invented numbers, and the helper signatures stay stable when series lands |
+| 2026-10-22 | Auth cut over to Supabase Auth: username maps to `<username>@users.internal`, Confirm email is OFF, `profiles.is_platform_admin` replaces the hardcoded `noddy` check, username lookup goes through `SECURITY DEFINER` RPCs (`username_available`, `profile_lookup`) | No mailbox exists for the synthetic address; `profiles` stays self-read-only, and a scoped RPC is narrower than a global "read every profile" policy |
 | 2026-10-21 | Member-facing series live in `lib/series.ts` (one localStorage key for series + assignments); covers are data URLs behind a swappable adapter; release day is a single weekday `0 = Monday` | Mirrors the future `series` / `series_assignments` tables and keeps create + assignment atomic. A single weekday and optional cover match the confirmed page brief |
 | 2026-10-21 | Staff only see assigned series; Managers/Owners see every series in the group | The access boundary for `/groups/[id]` and `/series/[id]`; assignments also decide whose calendar and notifications include the series |
 | 2026-10-21 | Creating a series is a centered popup on group detail, not the admin drawer | The user asked for a member-facing popup; the admin surface never edits series content |
@@ -558,6 +583,20 @@ quota-exhausted pipeline banner.
 | 2026-10-22 | The series rate is snapshotted onto the chapter at submit time | Editing the rate must never rewrite approved earnings; the snapshot makes that automatic and keeps approval reversible |
 | 2026-10-22 | Glossary terms carry provenance — `auto` or `manual` — and the pipeline may never overwrite a manual term | A human decision outranks a model suggestion, and the workspace has to show which is which |
 | 2026-10-22 | The main nav rail collapses to icons only on the chapter workspace | Three columns plus a 17rem rail does not fit at 1024px. The rail keeps its accessible names, and every other page keeps the full rail |
+| 2026-10-22 | Content data moved from browser stores to Supabase table by table: groups → series → chapters/pages/blocks → glossary → notifications | localStorage could not power multi-device groups or private images. One module per phase kept each surface shippable |
+| 2026-10-22 | Start empty — no importer for existing browser data | The stores were preview data, not production records. An importer would add a migration path nobody needs |
+| 2026-10-22 | Series have a `series_release_days` table, not one weekday column | A series can release several days a week; the group lanes and dashboard calendar both read the same rows |
+| 2026-10-22 | Series, chapters, glossary and assignment writes are RPC-only; reads are RLS policies | The browser never gets INSERT/UPDATE policies, so role enforcement lives in one place and cannot be bypassed by calling the table directly |
+| 2026-10-22 | All content Storage buckets are private; images are read through short-lived signed URLs | Panels are licensed source material. Public buckets would make every page URL guessable and permanent |
+| 2026-10-22 | Panel images upload directly from the browser to `pages/{group}/{chapter}/{panel}.webp`, then `register_panels` writes metadata | Vercel functions are stateless and request bodies are size-limited; direct-to-Storage is the only shape that scales. A failed upload leaves the row untouched |
+| 2026-10-22 | Saving refreshes the route instead of mirroring server data in a second store | One source of truth. `activeByUser` stays device-local because the active group is a UI preference, not content |
+| 2026-10-22 | Chapter status changes go through a fixed matrix; submit requires at least one page and one non-empty final text; approval snapshots `rate_snapshot` | Prevents empty submissions and makes approved earnings immune to later rate edits |
+| 2026-10-22 | Managers may approve chapters they submitted | Groups are small and review is a workflow, not a separation-of-duties control; the alternative stalled work |
+| 2026-10-22 | Glossary terms carry `origins[]` + `status`; editing an auto term promotes it to `manual`; auto upserts never overwrite manual or revive dismissed terms | Preserves the existing provenance contract now that multiple contributors share the series |
+| 2026-10-22 | Assignment notifications are written by an `AFTER INSERT` trigger on `series_assignments` | `create_series` and `set_series_assignments` both insert there, so one trigger covers every path and self-assignment is skipped |
+| 2026-10-22 | `/admin/groups/[id]` remains on the pre-Supabase local stores for now | Platform admins can see group metadata but not series/chapter content under RLS, so the page needs its own admin bundle before it can be converted honestly. Every other surface is Supabase-backed |
+| 2026-10-22 | Pipeline routes require a session (`requirePipelineViewer`) | They spend paid/free-tier provider quota; an unauthenticated endpoint would be an open proxy |
+| 2026-10-22 | Dashboard money and approved counts are computed server-side from approved chapters' `rate_snapshot`; `lib/earnings.ts` and the chapter/glossary/notification browser stores are retired | One query shape for one number, and no second copy of chapter state to drift. The deferred admin detail keeps the remaining local helpers alive until it is converted |
 
 ---
 

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { findAccount } from "@/lib/auth";
+import { displayNameFor } from "@/lib/groups";
 import type { Chapter } from "@/lib/chapters";
 import { formatRelativeTime } from "@/lib/format";
 import { Plus, Trash } from "../icons";
@@ -16,9 +16,12 @@ type ChapterListProps = {
   onDelete: (chapter: Chapter) => void;
 };
 
-function submitterLabel(username: string | null): string {
+function submitterLabel(
+  username: string | null,
+  displayName?: string | null
+): string {
   if (!username) return "—";
-  return findAccount(username)?.displayName ?? `@${username}`;
+  return displayName || displayNameFor(username) || `@${username}`;
 }
 
 /**
@@ -101,7 +104,7 @@ export function ChapterList({
                   <ChapterStatusChip status={chapter.status} />
                 </span>
                 <span className="ch-series-meta">
-                  {submitterLabel(chapter.submittedBy)}
+                  {submitterLabel(chapter.submittedBy, chapter.submittedByName)}
                 </span>
                 <span className="ch-series-date">
                   {formatRelativeTime(chapter.updatedAt)}

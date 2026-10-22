@@ -49,6 +49,8 @@ export type Chapter = {
   status: ChapterStatus;
   rateSnapshot: number | null;
   submittedBy: string | null;
+  /** Display name from the profile embed; the list falls back to @username. */
+  submittedByName?: string | null;
   submittedAt: string | null;
   approvedBy: string | null;
   approvedAt: string | null;
@@ -67,6 +69,8 @@ export type Panel = {
   byteSize: number;
   storageState: "stored" | "purged";
   createdAt: string;
+  /** Short-lived signed URL when the panel still has an object. */
+  imageUrl?: string | null;
 };
 
 export type TextBlock = {

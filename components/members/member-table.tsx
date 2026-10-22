@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
-import { findAccount, getInitials } from "@/lib/auth";
+import { getInitials } from "@/lib/auth";
 import { formatShortDate } from "@/lib/format";
 import type { GroupMember, GroupRole } from "@/lib/groups";
 import { Crown, MoreHorizontal, Trash } from "../icons";
@@ -153,8 +153,7 @@ export function MemberTable({
         </thead>
         <tbody>
           {members.map((member) => {
-            const displayName =
-              findAccount(member.username)?.displayName ?? member.displayName;
+            const displayName = member.displayName;
             const isViewer = member.username === viewerUsername;
             return (
               <tr key={member.id}>

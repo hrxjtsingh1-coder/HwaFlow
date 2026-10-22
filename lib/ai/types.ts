@@ -10,6 +10,19 @@
 
 export type SourceLanguage = "ko" | "ja" | "zh";
 
+export const SOURCE_LANGUAGES: SourceLanguage[] = ["ko", "ja", "zh"];
+
+/** Display names. The prompt profiles own the translation rules, not this map. */
+export const SOURCE_LANGUAGE_LABELS: Record<SourceLanguage, string> = {
+  ko: "Korean",
+  ja: "Japanese",
+  zh: "Chinese",
+};
+
+export function isSourceLanguage(value: unknown): value is SourceLanguage {
+  return value === "ko" || value === "ja" || value === "zh";
+}
+
 /** Top-to-bottom column order; `rtl` flips the within-row order for Japanese. */
 export type ReadingDirection = "ttb" | "rtl" | "ltr";
 
@@ -55,6 +68,7 @@ export type TranslateRequest = {
     blocks: Array<{ index: number; sourceText: string }>;
   }>;
   language: SourceLanguage;
+  glossary: GlossaryPromptTerm[];
   context: ChapterContext;
 };
 
@@ -79,6 +93,7 @@ export type ProofreadRequest = {
     panelId: string;
     blocks: Array<{ index: number; sourceText: string; baseTranslation: string }>;
   }>;
+  language: SourceLanguage;
   glossary: GlossaryPromptTerm[];
   context: ChapterContext;
 };

@@ -2,7 +2,6 @@
 
 import type { ComponentType, SVGProps } from "react";
 import { getInitials, type AuthUser } from "@/lib/auth";
-import { isPlatformAdmin } from "@/lib/groups";
 import { Building, LayoutGrid, LogOut, X } from "../icons";
 import { Logo } from "../logo";
 
@@ -43,7 +42,7 @@ export function DashboardRail({
   sectionLabel = "Workspace",
   collapsed = false,
 }: DashboardRailProps) {
-  const admin = isPlatformAdmin(user.username);
+  const admin = user.isPlatformAdmin;
 
   return (
     <>

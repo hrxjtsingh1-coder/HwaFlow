@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { findAccount, getInitials } from "@/lib/auth";
+import { getInitials } from "@/lib/auth";
 import { countChaptersForSeries } from "@/lib/chapters";
 import { formatShortDate } from "@/lib/format";
 import { type GroupMember } from "@/lib/groups";
@@ -82,8 +82,7 @@ export function GroupDetail({ groupId }: { groupId: string }) {
     0
   );
 
-  const displayNameFor = (member: GroupMember) =>
-    findAccount(member.username)?.displayName ?? member.displayName;
+  const displayNameFor = (member: GroupMember) => member.displayName;
 
   const sorted = [...members].sort((a, b) => {
     const rank = { owner: 3, manager: 2, staff: 1 };
@@ -268,6 +267,7 @@ export function GroupDetail({ groupId }: { groupId: string }) {
         group={group}
         members={members}
         actor={user.username}
+        actorIsPlatformAdmin={user.isPlatformAdmin}
         onClose={() => setOwnerDialogOpen(false)}
       />
     </div>

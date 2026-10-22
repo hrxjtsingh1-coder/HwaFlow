@@ -2,16 +2,16 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
-  AuthError,
   checkUsernameAvailability,
-  createAccount,
   normalizeUsername,
   sleep,
   validateDisplayName,
   validatePassword,
   validateUsername,
+  withDeadline,
   type AuthUser,
 } from "@/lib/auth";
+import { register } from "@/lib/auth-actions";
 import {
   AlertCircle,
   ArrowRight,
@@ -131,26 +131,32 @@ export function SignUpForm({ onSuccess, onSwitchToSignIn }: SignUpFormProps) {
     setLoading(true);
 
     try {
-      const [user] = await Promise.all([
-        createAccount({ displayName, username, password }),
+      const [result] = await Promise.all([
+        withDeadline(register({ displayName, username, password })),
         sleep(760),
       ]);
-      onSuccess(user);
-    } catch (error) {
-      if (error instanceof AuthError && error.code === "username-taken") {
-        setErrors((current) => ({
-          ...current,
-          username: "That username is already taken.",
-        }));
-        setAvailability("taken");
-        document.getElementById("signup-username")?.focus();
-      } else {
-        setFormError(
-          error instanceof AuthError
-            ? error.message
-            : "Something went wrong. Give it another try."
-        );
+
+      if (!result.ok) {
+        if (result.code === "username-taken") {
+          setErrors((current) => ({
+            ...current,
+            username: "That username is already taken.",
+          }));
+          setAvailability("taken");
+          document.getElementById("signup-username")?.focus();
+        } else {
+          setFormError(result.message);
+        }
+        return;
       }
+
+      onSuccess(result.user);
+    } catch {
+      // A rejected/thrown action must never leave the button spinning forever.
+      setFormError(
+        "We couldn't reach the sign-up service. Check your connection and try again."
+      );
+    } finally {
       setLoading(false);
     }
   }

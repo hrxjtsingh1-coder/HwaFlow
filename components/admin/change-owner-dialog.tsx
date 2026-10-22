@@ -17,6 +17,8 @@ type ChangeOwnerDialogProps = {
   group: Group;
   members: GroupMember[];
   actor: string;
+  /** Comes from the viewer's profiles.is_platform_admin. */
+  actorIsPlatformAdmin: boolean;
   onClose: () => void;
 };
 
@@ -25,6 +27,7 @@ export function ChangeOwnerDialog({
   group,
   members,
   actor,
+  actorIsPlatformAdmin,
   onClose,
 }: ChangeOwnerDialogProps) {
   const panelRef = useDialogA11y(open, onClose);
@@ -62,6 +65,7 @@ export function ChangeOwnerDialog({
         newOwnerId: selected.userId,
         outgoingRole,
         actor,
+        actorIsPlatformAdmin,
       });
       onClose();
     } catch (caught) {

@@ -2,12 +2,8 @@
 
 import { useState } from "react";
 import type { GroupMember } from "@/lib/groups";
-import {
-  SeriesError,
-  getAssignedUsernames,
-  setSeriesAssignments,
-  type Series,
-} from "@/lib/series";
+import { setSeriesAssignmentsAction } from "@/lib/series-actions";
+import type { Series } from "@/lib/series";
 import { useDialogA11y } from "@/lib/use-dialog";
 import { AlertCircle, Users, X } from "../icons";
 import { AssigneePicker } from "./assignee-picker";
@@ -16,7 +12,7 @@ type ManageAssignmentsDialogProps = {
   series: Series;
   groupName: string;
   members: GroupMember[];
-  actor: string;
+  initialAssigneeUsernames: string[];
   onClose: () => void;
   onSaved: () => void;
 };
@@ -25,34 +21,43 @@ export function ManageAssignmentsDialog({
   series,
   groupName,
   members,
-  actor,
+  initialAssigneeUsernames,
   onClose,
   onSaved,
 }: ManageAssignmentsDialogProps) {
   const panelRef = useDialogA11y(true, onClose);
-  const [assignees, setAssignees] = useState<string[]>(() =>
-    getAssignedUsernames(series.id)
+  const [assignees, setAssignees] = useState<string[]>(
+    initialAssigneeUsernames
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (busy) return;
     setError(null);
     setBusy(true);
+
+    const memberByUsername = new Map(
+      members.map((member) => [member.username, member])
+    );
+    const userIds = assignees
+      .map((username) => memberByUsername.get(username)?.userId)
+      .filter((id): id is string => Boolean(id));
+
     try {
-      setSeriesAssignments({
+      const result = await setSeriesAssignmentsAction({
         seriesId: series.id,
-        assigneeUsernames: assignees,
-        actor,
+        userIds,
       });
+
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+
       onSaved();
-    } catch (caught) {
-      setError(
-        caught instanceof SeriesError
-          ? caught.message
-          : "Something went wrong. Try again."
-      );
+    } catch {
+      setError("Something went wrong. Try again.");
     } finally {
       setBusy(false);
     }

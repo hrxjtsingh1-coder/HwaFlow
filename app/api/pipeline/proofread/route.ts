@@ -21,7 +21,9 @@ import {
   type ChapterContext,
   type GlossaryPromptTerm,
   type ProofreadResponse,
+  type SourceLanguage,
 } from "@/lib/ai/types";
+import { requirePipelineViewer } from "@/lib/pipeline-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,19 +35,26 @@ type BlockInput = {
 };
 type PanelInput = { panelId: string; blocks: BlockInput[] };
 
+const LANGUAGES: SourceLanguage[] = ["ko", "ja", "zh"];
+
 function parseBody(raw: unknown): {
   panels: PanelInput[];
+  language: SourceLanguage;
   glossary: GlossaryPromptTerm[];
   context: ChapterContext;
 } {
   const body = raw as {
     panels?: unknown;
+    language?: unknown;
     glossary?: unknown;
     context?: unknown;
   };
 
   if (!Array.isArray(body.panels) || body.panels.length === 0) {
     throw new PipelineError("invalid-request", "No panels were sent.");
+  }
+  if (!LANGUAGES.includes(body.language as SourceLanguage)) {
+    throw new PipelineError("invalid-request", "Unsupported source language.");
   }
 
   const context = body.context as Partial<ChapterContext> | null | undefined;
@@ -99,6 +108,7 @@ function parseBody(raw: unknown): {
 
   return {
     panels,
+    language: body.language as SourceLanguage,
     glossary,
     context: {
       seriesTitle: context.seriesTitle,
@@ -110,6 +120,7 @@ function parseBody(raw: unknown): {
 
 async function proofreadWithValve(input: {
   panels: PanelInput[];
+  language: SourceLanguage;
   glossary: GlossaryPromptTerm[];
   context: ChapterContext;
 }): Promise<ProofreadResponse> {
@@ -141,6 +152,9 @@ async function proofreadWithValve(input: {
 
 export async function POST(request: Request) {
   try {
+    const auth = await requirePipelineViewer();
+    if (!auth.ok) return auth.response;
+
     if (!isMockPipeline() && !hasGeminiKey()) {
       throw new PipelineError("missing-key");
     }
@@ -163,4 +177,19 @@ export async function POST(request: Request) {
     const { status, body } = toPipelineFailure(error);
     return Response.json(body, { status });
   }
+}
+
+/**
+ * The workspace posts here. A GET is almost always someone opening the URL in
+ * a browser, so say that instead of returning an empty 405.
+ */
+export function GET() {
+  return Response.json(
+    {
+      error: "method-not-allowed",
+      message:
+        "This endpoint only accepts POST. Run translation from the chapter workspace.",
+    },
+    { status: 405, headers: { Allow: "POST" } }
+  );
 }

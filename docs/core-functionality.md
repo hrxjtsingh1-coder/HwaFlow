@@ -50,6 +50,7 @@ The chapter module, end to end:
 | Key | `GEMINI_API_KEY` in `.env.local`. Server-only. **Never** `NEXT_PUBLIC_*`, never in a client bundle, never committed. |
 | Upload unit | **One uploaded image = one panel.** Multiple files accepted per upload. |
 | Ordering | Panels keep upload order. `Panel.index` is 0-based; the UI displays `Panel 1`, `Panel 2`. |
+| Language | Per series (`series.language`), chosen on create and editable later; default Korean. Drives the prompt profile and the reading direction, so Japanese raws extract right to left. Chinese is selectable but its profile is still generic. |
 | Processing | **Three stages per run, batched.** Extract packs up to **10 panels into one request**; translate and proofread each run **once for the whole chapter**. Batches run sequentially, never in parallel. |
 | Batch order | `b = ceil(n / 10)` batches, split so sizes differ by at most one, panels in upload order, no runt tail: 7 → `7`; 11 → `6 + 5`; 25 → `9 + 8 + 8`; 40 → `10 + 10 + 10 + 10`; 41 → `9 + 8 + 8 + 8 + 8`. Helper: `lib/ai/batch.ts`. |
 | Transport | Panels travel as **`multipart/form-data`**, not JSON data URLs — base64 inflates by a third, and ten panels would blow past common 4.5 MB function-body limits. Responses stay JSON. |
@@ -112,8 +113,12 @@ The chapter module, end to end:
 
 Built and working, do not rebuild:
 
-- `lib/auth.ts` — accounts in localStorage, `useAuthSession`, `getInitials`, `findAccount`,
-  `normalizeUsername`, `signOut`, `isPlatformAdmin` bridge.
+- `lib/identity.ts` + `lib/auth.ts` — pure identity helpers (`validateUsername`,
+  `validatePassword`, `normalizeUsername`, `getInitials`) and the client auth surface
+  (`signOut`, username availability, remembered username). Accounts and sessions live in
+  Supabase Auth; `useAuthSession` reads `/api/auth/viewer`.
+- `lib/session.ts` — `getViewer()`, the server-side viewer read (`profiles` row plus flags).
+- `lib/auth-actions.ts` — server actions: `register`, `login`, `logout`, `lookupProfile`.
 - `lib/groups.ts` — `Group`, `GroupMember`, `GroupRole`, `getMembers`,
   `getMemberByUsername`, `getOwner`, `canManageMembers`, `roleRank`, `listGroupsForUser`,
   `getActiveGroupFor`, invite/role/removal flows, `GroupError`.
@@ -449,8 +454,10 @@ busy day. `gemini-3.5-flash-lite` gets **500/day at 15 RPM**, which makes an unb
 worst case (~120 requests) still survivable and the batched case effectively unlimited.
 
 The cost of that choice is vision quality: Lite reads stylized lettering less reliably than
-flagship Flash. **Do not scatter model ids** — both constants live here, so the whole app
-moves by editing one line. If extraction proves poor in §15 step 20, the correct response is
+flagship Flash. **Do not scatter model ids** — one constant lives here, so the whole app moves
+by editing one line. There is deliberately **no runtime fallback model**: 3.8 Flash's 20/day
+cap would fail mid-chapter instead of failing immediately, so a retired id surfaces as
+`bad-response`. If extraction proves poor in §15 step 20, the correct response is
 `PANEL_BATCH_MAX = 5` at 2000 px (§5.5), and only then swapping `GEMINI_MODEL`. **Never use
 `gemini-2.5-*`** (restricted to accounts that already used it) **or `gemini-2.0-flash`**
 (shut down); both appeared in an earlier draft of this spec and were wrong.
@@ -466,7 +473,13 @@ moves by editing one line. If extraction proves poor in §15 step 20, the correc
 - Image input: one `parts` entry per panel, `{ inline_data: { mime_type, data } }`, each
   followed by its `panelId` as a short text part so the model can key its output. The prompt
   itself is the final text part.
-- `temperature`: extract `0`, translate `0.3`, proofread `0.4`.
+- `temperature`: extract `0`, translate `0.2`, proofread `0.2`. The editor pass runs as cool
+  as the base pass on purpose: it is editing, not writing, and a hotter pass invents changes.
+- Style is split into `CORE_STYLE` (language-neutral register, faithfulness, name order) and
+  `LANGUAGE_PROFILES` (`ko`, `ja`, `zh`) carrying honorifics, register, transcription rules and
+  few-shot examples. Translate and proofread compose the same two blocks, so they cannot
+  drift apart. The profile also owns reading direction, so `ja` can never be extracted
+  left-to-right.
 - Size valve: before sending, if the encoded multipart body exceeds `BATCH_MAX_BYTES`, split
   the batch in half recursively and send twice. A 10-panel batch of denser scans then still
   completes instead of failing on a body limit.
@@ -509,11 +522,15 @@ All `POST`, all `runtime = "nodejs"`, all `dynamic = "force-dynamic"`.
 
 Prompt intent: "You are given N comic panels in order. For **each** panel, return every
 speech bubble, thought bubble, caption box and narration line in reading order, under that
-panel's `panelId`. Preserve the original characters exactly, including honorifics. Do not
-translate. Do not describe artwork. Never merge bubbles across panels, and never renumber a
-panel. Skip sound effects baked into the art unless they carry dialogue." Reading order:
-top→bottom; within a row, left→right for `ttb`/`ltr`, right→left for `rtl`. `bbox` is
-normalized 0..1 **within its own panel**, `null` when the model is unsure.
+panel's `panelId`. **Group connected bubbles before transcribing**: balloons that share one
+tail, connect as one balloon, or carry one split sentence become a single block with one
+`bbox` covering the union. Preserve the original characters exactly, including honorifics.
+Do not translate. Do not describe artwork. Never merge bubbles across panels, and never
+renumber a panel. Skip sound effects baked into the art unless they carry dialogue." Reading
+order: top→bottom; within a row, left→right for `ttb`/`ltr`, right→left for `rtl`. `bbox` is
+normalized 0..1 **within its own panel**, `null` when the model is unsure. Per-language
+transcription rules (Japanese ruby, vertical columns, half-width katakana) live in the
+language profile, not in the route.
 
 **`/api/pipeline/translate`** — the whole chapter, one call.
 
@@ -522,15 +539,20 @@ normalized 0..1 **within its own panel**, `null` when the model is unsure.
 { panels: Array<{ panelId: string;
                   blocks: Array<{ index: number; sourceText: string }> }>;
   language: "ko" | "ja" | "zh";
+  glossary: Array<{ sourceTerm: string; targetTerm: string; category: string }>;
   context: { seriesTitle: string; synopsis: string | null; chapterNumber: number; }; }
 // out
 { translations: Array<{ panelId: string; index: number; baseTranslation: string }> }
 ```
 
-Prompt intent: literal, faithful base translation into English, with the whole chapter
-visible at once so pronouns, forms of address and callbacks stay consistent across panels.
-Preserve sentence breaks and honorific intent. No added content, no censorship, no
-localization yet. One entry per input block, keyed by `panelId` + `index`.
+Prompt intent: faithful base translation into English, with the whole chapter visible at once
+so pronouns, forms of address and callbacks stay consistent across panels. The style block is
+shared with proofread: modern webtoon register, ≤45 characters per line and ≤3 lines, source
+sentence breaks preserved, no added content or censorship. Honorifics follow the language
+profile (Korean relationship-English; Japanese `-san/-sama/-sensei` translated and
+`-senpai/-chan/-kun` romanised; names surname-first). The glossary is enforced in this pass,
+not only in proofread, so the base text cannot invent a second rendering. One entry per input
+block, keyed by `panelId` + `index`.
 
 **`/api/pipeline/proofread`** — the whole chapter, one call.
 
@@ -539,6 +561,7 @@ localization yet. One entry per input block, keyed by `panelId` + `index`.
 { panels: Array<{ panelId: string;
                   blocks: Array<{ index: number; sourceText: string;
                                   baseTranslation: string }> }>;
+  language: "ko" | "ja" | "zh";
   glossary: Array<{ sourceTerm: string; targetTerm: string; category: string }>;
   context: { seriesTitle: string; synopsis: string | null; chapterNumber: number; }; }
 // out
@@ -546,9 +569,12 @@ localization yet. One entry per input block, keyed by `panelId` + `index`.
   terms: Array<{ sourceTerm: string; targetTerm: string; category: string }>; }
 ```
 
-Prompt intent: natural English in comic register, consistent voice across the chapter,
-enforce every glossary `targetTerm` exactly where its `sourceTerm` appears, preserve speaker
-intent and tone, no added content. Then separately return any **new** recurring proper nouns
+Prompt intent: **editing, not retranslating.** Keep a base translation that is already
+accurate and natural, character for character; fix only inaccuracy, Korean/Japanese-isms,
+word order, dropped honorifics and lines that cannot fit the bubble. No added content, no
+merging or splitting. Enforce every glossary `targetTerm` exactly where its `sourceTerm`
+appears, and never expand, re-romanise or "improve" romanised address forms (`-senpai` is not
+"senior"). Then separately return any **new** recurring proper nouns
 the chapter introduced (character names, places, honorifics, items, terms) with a proposed
 English target and category — **excluding anything already in the glossary**, and
 **deduplicated across panels** (this is why the pass is chapter-wide: one `terms` array, not
@@ -944,11 +970,15 @@ only.
 
 Opened from the series page (`Edit` button, Owner/Manager only). Fields in order: title,
 cover (reuse `SeriesCoverField`), genre (`<datalist>` suggestions as today), description,
-release day (Mon–Sun segmented control), **rate** (number input prefixed with the group
-currency symbol, step `0.01`, min `0`, max `9999.99`). Footer `Cancel` / `Save changes`.
+**source language** (select: Korean / Japanese / Chinese, default Korean), release day
+(Mon–Sun segmented control), **rate** (number input prefixed with the group currency symbol,
+step `0.01`, min `0`, max `9999.99`). Footer `Cancel` / `Save changes`.
 On save `updateSeries`, success toast `Series updated.`, page reflects the new values.
 
-The same rate field is added to the create-series dialog, positioned after release day.
+The same language and rate fields are added to the create-series dialog. The language drives
+the prompt profile and the extract reading direction (`ja` = right to left); changing it
+applies to the next pipeline run, never to text already translated. Chinese is selectable
+but its profile is generic — the UI says so rather than pretending it is tuned.
 
 ### 10.4 Reject
 

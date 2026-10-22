@@ -2,14 +2,19 @@
 
 import Link from "next/link";
 import type { CSSProperties } from "react";
-import { findAccount, getInitials } from "@/lib/auth";
+import { getInitials } from "@/lib/auth";
 import type { GroupRole } from "@/lib/groups";
 import type { Series } from "@/lib/series";
 import { SeriesCover } from "./series-cover";
 
+export type SeriesAssignee = {
+  username: string;
+  displayName: string;
+};
+
 type SeriesTileProps = {
   series: Series;
-  assignees: string[];
+  assignees: SeriesAssignee[];
   viewerRole: GroupRole;
   viewerUsername: string;
   index?: number;
@@ -23,10 +28,10 @@ export function SeriesTile({
   index = 0,
 }: SeriesTileProps) {
   const staffView = viewerRole === "staff";
-  const assignedToViewer = assignees.includes(viewerUsername);
-  const names = assignees.map(
-    (username) => findAccount(username)?.displayName ?? username
+  const assignedToViewer = assignees.some(
+    (assignee) => assignee.username === viewerUsername
   );
+  const names = assignees.map((assignee) => assignee.displayName);
 
   return (
     <Link
@@ -68,15 +73,15 @@ export function SeriesTile({
             aria-label={`Assigned to ${names.join(", ")}`}
             title={names.join(", ")}
           >
-            {assignees.slice(0, 3).map((username) => {
-              const displayName =
-                findAccount(username)?.displayName ?? username;
-              return (
-                <span className="grp-tile-avatar" key={username} aria-hidden="true">
-                  {getInitials(displayName, username)}
-                </span>
-              );
-            })}
+            {assignees.slice(0, 3).map((assignee) => (
+              <span
+                className="grp-tile-avatar"
+                key={assignee.username}
+                aria-hidden="true"
+              >
+                {getInitials(assignee.displayName, assignee.username)}
+              </span>
+            ))}
             {assignees.length > 3 ? (
               <span className="grp-tile-avatar grp-tile-avatar--more">
                 +{assignees.length - 3}
