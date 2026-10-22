@@ -1,6 +1,5 @@
 import { SiteHeader } from "@/components/site-header";
 import { Hero } from "@/components/hero";
-import { CapabilityMarquee } from "@/components/capability-marquee";
 import { Features } from "@/components/features";
 import { Pipeline } from "@/components/pipeline";
 import { Team } from "@/components/team";
@@ -13,7 +12,6 @@ export default function Home() {
       <SiteHeader />
       <main id="main">
         <Hero />
-        <CapabilityMarquee />
         <Features />
         <Pipeline />
         <Team />

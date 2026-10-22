@@ -66,6 +66,8 @@ export type Series = {
   description: string | null;
   coverDataUrl: string | null;
   releaseDay: ReleaseDay;
+  /** Money paid to the submitter when a chapter is approved. 0 is valid. */
+  rateAmount: number;
   createdBy: string;
   createdAt: string;
   archived: boolean;
@@ -97,6 +99,7 @@ export type SeriesFailure =
   | "invalid-genre"
   | "invalid-description"
   | "invalid-cover"
+  | "invalid-rate"
   | "storage"
   | "unknown";
 
@@ -120,6 +123,7 @@ const SERIES_EVENT = "hwaflow:series";
 export const MAX_SERIES_TITLE = 80;
 export const MAX_SERIES_GENRE = 32;
 export const MAX_SERIES_DESCRIPTION = 600;
+export const MAX_SERIES_RATE = 9999.99;
 
 export function canManageSeries(role: GroupRole): boolean {
   return role === "owner" || role === "manager";
@@ -158,7 +162,15 @@ export function getSeriesState(): SeriesState {
     if (!parsed || typeof parsed !== "object") return emptyState();
     return {
       version: 1,
-      series: Array.isArray(parsed.series) ? parsed.series : [],
+      // `rateAmount` arrived with the chapter module; older rows default to 0
+      // rather than rendering `NaN`.
+      series: Array.isArray(parsed.series)
+        ? parsed.series.map((entry) => ({
+            ...entry,
+            rateAmount:
+              typeof entry.rateAmount === "number" ? entry.rateAmount : 0,
+          }))
+        : [],
       assignments: Array.isArray(parsed.assignments)
         ? parsed.assignments
         : [],
@@ -237,6 +249,27 @@ export function validateSeriesTitle(value: string): string | null {
     return `Keep it to ${MAX_SERIES_TITLE} characters or fewer.`;
   }
   return null;
+}
+
+/**
+ * Rates are money: validated here, rounded to 2 decimals on write so floating
+ * point never leaks into a dashboard total. `0` is a valid rate.
+ */
+export function normalizeRateAmount(value: number | null | undefined): number {
+  if (value === undefined || value === null) return 0;
+  if (!Number.isFinite(value)) {
+    throw new SeriesError("invalid-rate", "Enter the rate as a number.");
+  }
+  if (value < 0) {
+    throw new SeriesError("invalid-rate", "A rate can't be negative.");
+  }
+  if (value > MAX_SERIES_RATE) {
+    throw new SeriesError(
+      "invalid-rate",
+      `Keep the rate at ${MAX_SERIES_RATE} or less.`
+    );
+  }
+  return Math.round(value * 100) / 100;
 }
 
 function normalizeOptionalText(
@@ -454,6 +487,7 @@ export type CreateSeriesInput = {
   description?: string | null;
   coverDataUrl?: string | null;
   releaseDay: number;
+  rateAmount?: number;
   assigneeUsernames?: string[];
   actor: string;
 };
@@ -508,6 +542,8 @@ export function createSeries(input: CreateSeriesInput): Series {
     input.assigneeUsernames
   );
 
+  const rateAmount = normalizeRateAmount(input.rateAmount);
+
   const state = getSeriesState();
   const now = new Date().toISOString();
   const series: Series = {
@@ -518,6 +554,7 @@ export function createSeries(input: CreateSeriesInput): Series {
     description,
     coverDataUrl,
     releaseDay: input.releaseDay,
+    rateAmount,
     createdBy: normalizeUsername(input.actor),
     createdAt: now,
     archived: false,
@@ -615,6 +652,88 @@ export function setSeriesAssignments(input: SetSeriesAssignmentsInput): void {
   if (added.length > 0) {
     notifyAssignees(group.name, series, added, input.actor);
   }
+}
+
+export type UpdateSeriesInput = {
+  seriesId: string;
+  title: string;
+  genre?: string | null;
+  description?: string | null;
+  coverDataUrl?: string | null;
+  releaseDay: number;
+  rateAmount?: number;
+  actor: string;
+};
+
+/**
+ * Whole-record replace of the editable fields. Same validation pipeline as
+ * `createSeries`, same Owner/Manager guard. Assignments are deliberately not
+ * touched here — they have their own dialog and their own notifications.
+ */
+export function updateSeries(input: UpdateSeriesInput): Series {
+  const state = getSeriesState();
+  const existing = state.series.find(
+    (entry) => entry.id === input.seriesId && !entry.archived
+  );
+  if (!existing) {
+    throw new SeriesError("not-found", "That series no longer exists.");
+  }
+
+  requireManageRights(existing.groupId, input.actor);
+
+  const titleError = validateSeriesTitle(input.title);
+  if (titleError) throw new SeriesError("invalid-title", titleError);
+
+  if (!isReleaseDay(input.releaseDay)) {
+    throw new SeriesError("invalid-day", "Pick a release day.");
+  }
+
+  const genre = normalizeOptionalText(
+    input.genre,
+    MAX_SERIES_GENRE,
+    "invalid-genre",
+    "genre"
+  );
+  const description = normalizeOptionalText(
+    input.description,
+    MAX_SERIES_DESCRIPTION,
+    "invalid-description",
+    "description"
+  );
+
+  const coverDataUrl = input.coverDataUrl ?? null;
+  if (coverDataUrl) {
+    if (!coverDataUrl.startsWith("data:image/")) {
+      throw new SeriesError("invalid-cover", "That cover could not be read.");
+    }
+    if (seriesCoverByteSize(coverDataUrl) > MAX_SERIES_COVER_BYTES) {
+      throw new SeriesError(
+        "invalid-cover",
+        "That cover is over 120 KB after compression. Try a smaller image."
+      );
+    }
+  }
+
+  const rateAmount = normalizeRateAmount(input.rateAmount);
+
+  const next: Series = {
+    ...existing,
+    title: cleanSeriesTitle(input.title),
+    genre,
+    description,
+    coverDataUrl,
+    releaseDay: input.releaseDay,
+    rateAmount,
+  };
+
+  writeState({
+    ...state,
+    series: state.series.map((entry) =>
+      entry.id === existing.id ? next : entry
+    ),
+  });
+
+  return next;
 }
 
 export function removeMemberAssignments(

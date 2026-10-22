@@ -3,13 +3,12 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { findAccount, getInitials } from "@/lib/auth";
+import { countChaptersForSeries } from "@/lib/chapters";
 import { formatShortDate } from "@/lib/format";
-import {
-  chapterCountFor,
-  type GroupMember,
-} from "@/lib/groups";
-import { countSeriesInGroup } from "@/lib/series";
+import { type GroupMember } from "@/lib/groups";
+import { countSeriesInGroup, listSeriesForGroup } from "@/lib/series";
 import { useAuthSession } from "@/lib/use-auth-session";
+import { useChapters } from "@/lib/use-chapters";
 import { useGroups } from "@/lib/use-groups";
 import { useSeries } from "@/lib/use-series";
 import {
@@ -39,13 +38,14 @@ export function GroupDetail({ groupId }: { groupId: string }) {
   const { user, ready: authReady } = useAuthSession();
   const { state, ready } = useGroups();
   const { ready: seriesReady } = useSeries();
+  const { ready: chaptersReady } = useChapters();
   const [ownerDialogOpen, setOwnerDialogOpen] = useState(false);
 
   useEffect(() => {
     setOwnerDialogOpen(false);
   }, [groupId]);
 
-  if (!authReady || !ready || !seriesReady || !state || !user) {
+  if (!authReady || !ready || !seriesReady || !chaptersReady || !state || !user) {
     return <DetailSkeleton />;
   }
 
@@ -75,7 +75,12 @@ export function GroupDetail({ groupId }: { groupId: string }) {
   const owner = members.find((member) => member.role === "owner") ?? null;
   const managers = members.filter((member) => member.role === "manager").length;
   const series = countSeriesInGroup(group.id);
-  const chapters = chapterCountFor(group.id);
+  // Chapters live in their own store and never flow back into groups.ts, so the
+  // count is summed here from the group's series.
+  const chapters = listSeriesForGroup(group.id).reduce(
+    (total, entry) => total + countChaptersForSeries(entry.id),
+    0
+  );
 
   const displayNameFor = (member: GroupMember) =>
     findAccount(member.username)?.displayName ?? member.displayName;
@@ -150,7 +155,9 @@ export function GroupDetail({ groupId }: { groupId: string }) {
             Chapters
           </span>
           <span className="admin-stat-value">{chapters}</span>
-          <span className="admin-stat-note">Available with the series module</span>
+          <span className="admin-stat-note">
+            {chapters === 0 ? "No chapters yet" : "Across this group's series"}
+          </span>
         </div>
       </div>
 

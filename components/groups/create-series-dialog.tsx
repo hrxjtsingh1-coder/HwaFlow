@@ -5,6 +5,7 @@ import type { Group, GroupMember } from "@/lib/groups";
 import {
   MAX_SERIES_DESCRIPTION,
   MAX_SERIES_GENRE,
+  MAX_SERIES_RATE,
   MAX_SERIES_TITLE,
   RELEASE_DAY_SHORT,
   SeriesError,
@@ -56,6 +57,7 @@ export function CreateSeriesDialog({
   const [genre, setGenre] = useState("");
   const [description, setDescription] = useState("");
   const [releaseDay, setReleaseDay] = useState<number | null>(null);
+  const [rate, setRate] = useState("");
   const [assignees, setAssignees] = useState<string[]>([]);
   const [coverBusy, setCoverBusy] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -87,6 +89,7 @@ export function CreateSeriesDialog({
         description,
         coverDataUrl,
         releaseDay,
+        rateAmount: rate.trim() === "" ? 0 : Number(rate),
         assigneeUsernames: assignees,
         actor,
       });
@@ -226,6 +229,34 @@ export function CreateSeriesDialog({
                 ))}
               </div>
             </div>
+
+            <label className="grp-field">
+              <span className="grp-field-label">
+                Rate per approved chapter{" "}
+                <span className="grp-field-optional">optional</span>
+              </span>
+              <span className="ch-rate-field">
+                <span className="ch-rate-currency" aria-hidden="true">
+                  {group.currency}
+                </span>
+                <input
+                  className="grp-input ch-rate-input"
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  max={MAX_SERIES_RATE}
+                  step="0.01"
+                  value={rate}
+                  onChange={(event) => setRate(event.target.value)}
+                  placeholder="0.00"
+                  disabled={busy}
+                />
+              </span>
+              <span className="grp-field-count">
+                Snapshotted when a chapter is submitted, so changing it later
+                never rewrites approved earnings.
+              </span>
+            </label>
 
             <AssigneePicker
               members={members}

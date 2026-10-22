@@ -4,8 +4,16 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { findAccount, getInitials, signOut } from "@/lib/auth";
-import { formatShortDate } from "@/lib/format";
+import {
+  ChapterError,
+  createChapter,
+  deleteChapter,
+  listChaptersForSeries,
+  type Chapter,
+} from "@/lib/chapters";
+import { formatMoney, formatShortDate } from "@/lib/format";
 import { getMembers, type GroupMember } from "@/lib/groups";
+import { deleteChapterImages } from "@/lib/panel-store";
 import {
   RELEASE_DAY_LABELS,
   canManageSeries,
@@ -13,6 +21,7 @@ import {
   type SeriesAssignment,
 } from "@/lib/series";
 import { useAuthSession } from "@/lib/use-auth-session";
+import { useChapters } from "@/lib/use-chapters";
 import { useGroups } from "@/lib/use-groups";
 import { useSeries } from "@/lib/use-series";
 import { DashboardRail } from "../dashboard/dashboard-rail";
@@ -21,7 +30,6 @@ import { workspaceLinks } from "../dashboard/workspace-nav";
 import {
   AlertCircle,
   ArrowLeft,
-  BookOpen,
   CalendarDays,
   Check,
   Settings,
@@ -30,8 +38,11 @@ import {
 } from "../icons";
 import { Logo } from "../logo";
 import { RoleBadge } from "../role-badge";
+import { ChapterList } from "../chapters/chapter-list";
+import { DeleteChapterDialog } from "../chapters/delete-chapter-dialog";
 import { ManageAssignmentsDialog } from "../groups/manage-assignments-dialog";
 import { SeriesCover } from "../groups/series-cover";
+import { EditSeriesDialog } from "./edit-series-dialog";
 
 type Notice = { tone: "success" | "error"; text: string };
 
@@ -79,9 +90,13 @@ export function SeriesView({ seriesId }: { seriesId: string }) {
   const { user, ready: authReady } = useAuthSession();
   const { state: groupsState, ready: groupsReady } = useGroups();
   const { state: seriesState, ready: seriesReady } = useSeries();
+  const { state: chaptersState, ready: chaptersReady } = useChapters();
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Chapter | null>(null);
+  const [creating, setCreating] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const noticeTimer = useRef<number | null>(null);
 
@@ -119,6 +134,7 @@ export function SeriesView({ seriesId }: { seriesId: string }) {
     !authReady ||
     !groupsReady ||
     !seriesReady ||
+    !chaptersReady ||
     !groupsState ||
     !seriesState ||
     !user
@@ -213,6 +229,49 @@ export function SeriesView({ seriesId }: { seriesId: string }) {
     router.replace("/login");
   };
 
+  const chapters = chaptersState ? listChaptersForSeries(series.id) : [];
+
+  const handleCreateChapter = () => {
+    if (creating) return;
+    setCreating(true);
+    try {
+      const chapter = createChapter({
+        seriesId: series.id,
+        actor: user.username,
+      });
+      router.push(`/chapters/${chapter.id}/workspace`);
+    } catch (error) {
+      setCreating(false);
+      notify(
+        "error",
+        error instanceof ChapterError
+          ? error.message
+          : "Couldn't create that chapter."
+      );
+    }
+  };
+
+  const handleDeleteChapter = () => {
+    if (!deleteTarget) return;
+    try {
+      const panelIds = deleteChapter({
+        chapterId: deleteTarget.id,
+        actor: user.username,
+      });
+      void deleteChapterImages(panelIds);
+      notify("success", `Chapter ${deleteTarget.number} was deleted.`);
+    } catch (error) {
+      notify(
+        "error",
+        error instanceof ChapterError
+          ? error.message
+          : "Couldn't delete that chapter."
+      );
+    } finally {
+      setDeleteTarget(null);
+    }
+  };
+
   return (
     <div className="dash-shell">
       <DashboardRail
@@ -298,6 +357,19 @@ export function SeriesView({ seriesId }: { seriesId: string }) {
                   </Link>
                 </div>
 
+                {canManage ? (
+                  <div className="ch-series-edit">
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => setEditOpen(true)}
+                    >
+                      <Settings className="h-3.5 w-3.5" />
+                      Edit
+                    </button>
+                  </div>
+                ) : null}
+
                 <p className="sr-hero-note">
                   Created {formatShortDate(series.createdAt)} by {createdBy}
                 </p>
@@ -323,29 +395,14 @@ export function SeriesView({ seriesId }: { seriesId: string }) {
                   )}
                 </section>
 
-                <section className="sr-panel dash-enter" data-delay="100">
-                  <div className="sr-panel-head">
-                    <div>
-                      <p className="eyebrow">Production</p>
-                      <h2 className="sr-panel-title">Chapters</h2>
-                    </div>
-                    <span className="chip">Coming soon</span>
-                  </div>
-
-                  <div className="sr-chapters-empty">
-                    <span className="sr-chapters-icon" aria-hidden="true">
-                      <BookOpen className="h-5 w-5" />
-                    </span>
-                    <div>
-                      <p className="sr-chapters-title">No chapters yet</p>
-                      <p className="sr-chapters-copy">
-                        Chapters arrive with the production milestone. Approved
-                        chapters will feed earnings and the dashboard calendar
-                        from here.
-                      </p>
-                    </div>
-                  </div>
-                </section>
+                <ChapterList
+                  chapters={chapters}
+                  canManage={canManage}
+                  canCreate={canManage || viewerMember?.role === "staff"}
+                  creating={creating}
+                  onCreate={handleCreateChapter}
+                  onDelete={(chapter) => setDeleteTarget(chapter)}
+                />
               </div>
 
               <aside className="sr-side">
@@ -369,6 +426,16 @@ export function SeriesView({ seriesId }: { seriesId: string }) {
                     <div>
                       <dt>Release day</dt>
                       <dd>{RELEASE_DAY_LABELS[series.releaseDay]}</dd>
+                    </div>
+                    <div>
+                      <dt>Rate</dt>
+                      <dd>
+                        {formatMoney(series.rateAmount, group.currency)}
+                        <span className="ch-rate-note">
+                          {" "}
+                          per approved chapter
+                        </span>
+                      </dd>
                     </div>
                     <div>
                       <dt>Genre</dt>
@@ -466,6 +533,27 @@ export function SeriesView({ seriesId }: { seriesId: string }) {
             setManageOpen(false);
             notify("success", "Assignments updated.");
           }}
+        />
+      ) : null}
+
+      {editOpen ? (
+        <EditSeriesDialog
+          series={series}
+          group={group}
+          actor={user.username}
+          onClose={() => setEditOpen(false)}
+          onSaved={() => {
+            setEditOpen(false);
+            notify("success", "Series updated.");
+          }}
+        />
+      ) : null}
+
+      {deleteTarget ? (
+        <DeleteChapterDialog
+          chapter={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={handleDeleteChapter}
         />
       ) : null}
     </div>

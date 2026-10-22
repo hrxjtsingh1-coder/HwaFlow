@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import "../dashboard/dashboard.css";
 import "../groups/groups.css";
 import "./series.css";
+import "../chapters/chapters.css";
 
 export const metadata: Metadata = {
   title: {

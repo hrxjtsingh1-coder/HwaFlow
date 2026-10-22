@@ -16,7 +16,7 @@ export function SiteFooter() {
   return (
     <footer className="border-t border-border">
       <div className="shell py-14">
-        <div className="grid gap-10 sm:grid-cols-2 md:grid-cols-[1.5fr_1fr_1fr_1fr]">
+        <div className="grid gap-10 sm:grid-cols-2 md:grid-cols-[1.6fr_1fr_1fr]">
           <div>
             <Logo />
             <p className="mt-4 max-w-[17rem] text-[13px] leading-relaxed text-muted">
@@ -62,22 +62,12 @@ export function SiteFooter() {
               ))}
             </ul>
           </div>
-
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-faint">
-              Good to know
-            </p>
-            <ul className="mt-4 space-y-2.5 text-[13px] text-muted">
-              <li>Built for teams</li>
-              <li>Free to start</li>
-              <li>No credit card</li>
-            </ul>
-          </div>
         </div>
 
-        <div className="mt-12 flex flex-col gap-3 border-t border-border pt-6 text-[11px] text-faint sm:flex-row sm:items-center sm:justify-between">
-          <p>© 2026 HwaFlow. Built for scanlation groups.</p>
-          <p>No credit card. No fuss. No noise.</p>
+        <div className="mt-12 border-t border-border pt-6">
+          <p className="text-[11px] text-faint">
+            © 2026 HwaFlow. Built for scanlation groups.
+          </p>
         </div>
       </div>
     </footer>

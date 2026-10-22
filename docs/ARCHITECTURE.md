@@ -294,6 +294,15 @@ processing_jobs
   started_at / finished_at / created_at timestamptz
 ```
 
+**Built (preview):** the chapter module ships against browser-local stores instead
+of these tables. `lib/chapters.ts` keeps chapters, panels and blocks in one
+localStorage key (`hwaflow.chapters.v1`); panel *images* live in IndexedDB
+(`hwaflow-media` / `panels`) because a chapter of data URLs exhausts the ~5 MB
+localStorage quota. `lib/glossary.ts` keeps terms in their own key. `processing_jobs`
+does not exist yet: the run is client-driven (see §8), so there is no queue row to
+write. The shapes above stay the target — the local stores mirror them field for
+field, so the swap to Supabase is a store swap, not a schema change.
+
 ---
 
 ## 7. RBAC and RLS rules
@@ -370,6 +379,39 @@ processing_jobs
 | Gemini free | per-model RPM/RPD caps | 40 pages × 2 passes needs pacing |
 | Supabase | 1 GB storage | Purge-on-approval default |
 
+### Built (preview) — the shipped pipeline
+
+The flow above is the target. What exists today is a browser-driven version of it:
+
+- **Provider** — Gemini only, behind the `OCRProvider` / `Translator` interfaces in
+  `lib/ai/types.ts`. Primary model `gemini-3.5-flash-lite` (500 RPD, 15 RPM, 250K TPM
+  on the free tier), with `gemini-3.8-flash` as a fallback that is only tried when the
+  primary answers 404 model-not-found. The key is read from `process.env` inside the
+  route handlers, never at module scope.
+- **Three routes** — `POST /api/pipeline/extract` (multipart, one `panel-{n}` part per
+  image plus a `meta` manifest), `POST /api/pipeline/translate` and
+  `POST /api/pipeline/proofread` (JSON, no images). Images ride as binary precisely
+  because base64 in a JSON body would exceed the request limit before the byte valve
+  could halve the batch.
+- **Batching** — `splitIntoBatches` splits panels into even batches of at most 10
+  (11 → 6+5, 25 → 9+8+8, 41 → 9+8+8+8+8). A ten-panel batch plus a one-panel stub
+  wastes a request from a 500/day budget, and the stub's output drifts.
+- **Two valves** — an oversized extract batch is halved recursively
+  (`BATCH_MAX_BYTES`); a text stage that returns an unreadable body for a chapter of
+  more than 20 panels is halved once and retried.
+- **Mock mode** — `MOCK_PIPELINE=1` short-circuits all three routes with deterministic
+  fake bubbles, boxes and terms. No network call, no quota spent. This is how the
+  workspace is developed and tested.
+- **Client-driven, not a queue** — `lib/pipeline.ts` runs the three stages in the
+  browser. There is no worker, no `processing_jobs` row, and no resume: closing the
+  tab stops the run, and the chapter stays `processing` with the text it already has.
+  A `Mark as ready` escape hatch exists for exactly that case. This is the one place
+  the preview build deliberately diverges from §8's flow.
+- **Chapter-wide text passes** — translation and proofreading each run once for the
+  whole chapter rather than per panel, so pronouns, forms of address and callbacks
+  stay consistent. The proofread pass also returns the new glossary terms, so
+  deduplication happens once per chapter instead of once per panel.
+
 ---
 
 ## 9. Design system
@@ -438,8 +480,11 @@ read-only roster). Create is a drawer on the grid — there is no separate
 
 **Built (preview):** `/groups` (every membership, active group marked), `/groups/[id]`
 (role-scoped Member/Series/Money stats, Owner/Manager create-series popup, and
-Monday–Sunday horizontally scrollable series lanes), and `/series/[id]` (banner,
-description, assignees, Manage assignments, honest chapters empty state).
+Monday–Sunday horizontally scrollable series lanes), `/series/[id]` (banner,
+description, assignees, Manage assignments, Edit dialog, real chapters panel with
+`New chapter` and hover-delete), and `/chapters/[id]/workspace` (the three-column
+translation workspace: chapters + glossary rail on the left, edited English in the
+middle, raw panels on the right).
 There is no `/series` index, `/series/new`, or edit/delete UI yet — series are created
 from the group detail popup. The dashboard weekly calendar still uses preview data.
 
@@ -505,6 +550,14 @@ quota-exhausted pipeline banner.
 | 2026-10-21 | Dashboard money and approved-chapter count derive from `lib/earnings.ts` and are `0` until chapters exist; the weekly calendar stays preview data | Honest zeros are preferable to fabricated totals, and the calendar is explicitly labeled preview until real release days are wired |
 | 2026-10-21 | Removing a member also removes their series assignments; member and admin counts read from the series store | The remove dialog already promised unassignment — cleanup makes it true and keeps visible counts coherent |
 | 2026-10-21 | Member and admin rosters are tables on desktop and stacked cards below 560px | Five columns plus row actions cannot fit a phone, and horizontal scrolling hid the actions; the table semantics stay in the markup |
+| 2026-10-22 | The chapter module owns its own store (`lib/chapters.ts`, `lib/glossary.ts`); it may import groups and series, and groups/series never import it | Keeps the dependency arrow one-way. The one exception is `lib/earnings.ts`, which reads chapters to derive money — earnings are a view of approved work, not a second source of truth |
+| 2026-10-22 | The pipeline runs in the browser, not a worker queue; `processing_jobs` is deferred | There is no backend yet. The run keeps its text if the tab closes, the chapter stays `processing`, and a `Mark as ready` escape hatch covers the interrupted case |
+| 2026-10-22 | Gemini `gemini-3.5-flash-lite` is the only provider, behind the `OCRProvider` / `Translator` interfaces | Free tier, no card, 500 RPD. Keeping the interface means a local Paddle OCR or another host is a new implementation, not a rewrite |
+| 2026-10-22 | `MOCK_PIPELINE=1` short-circuits all three pipeline routes with deterministic fake data | The workspace can be built and demoed without a key and without spending quota. A hard requirement, not a convenience |
+| 2026-10-22 | Extraction batches panels into even groups of at most 10; the text stages run once for the whole chapter | A ten-panel batch plus a one-panel stub wastes a request and drifts. Chapter-wide text passes keep pronouns and callbacks consistent across panels |
+| 2026-10-22 | The series rate is snapshotted onto the chapter at submit time | Editing the rate must never rewrite approved earnings; the snapshot makes that automatic and keeps approval reversible |
+| 2026-10-22 | Glossary terms carry provenance — `auto` or `manual` — and the pipeline may never overwrite a manual term | A human decision outranks a model suggestion, and the workspace has to show which is which |
+| 2026-10-22 | The main nav rail collapses to icons only on the chapter workspace | Three columns plus a 17rem rail does not fit at 1024px. The rail keeps its accessible names, and every other page keeps the full rail |
 
 ---
 

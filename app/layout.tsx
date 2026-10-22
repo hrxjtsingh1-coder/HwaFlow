@@ -19,7 +19,7 @@ const instrument = Instrument_Serif({
 
 const title = "HwaFlow — Manhwa translation, made simple";
 const description =
-  "HwaFlow turns raw manhwa panels into natural English. Your team reviews the words, approves the chapter, and gets credit for the work — without the busywork.";
+  "HwaFlow turns raw manhwa panels into natural English. Your team reviews the words, approves the chapter, and gets credit for the work, without the busywork.";
 
 export const metadata: Metadata = {
   title: {

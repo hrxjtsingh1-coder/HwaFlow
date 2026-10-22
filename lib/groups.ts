@@ -466,13 +466,10 @@ export function listInvitesForUser(username: string): GroupInvite[] {
 }
 
 /**
- * Chapters live in a later module. Until then every group honestly reports
- * zero rather than carrying invented numbers.
+ * Chapters live in their own store (`lib/chapters.ts`) and that module imports
+ * groups — never the other way round. Group chapter counts are therefore summed
+ * by the caller from `countChaptersForSeries`, not read from here.
  */
-export function chapterCountFor(groupId: string): number {
-  void groupId;
-  return 0;
-}
 
 /* ------------------------------------------------------------------ */
 /* Writes                                                              */

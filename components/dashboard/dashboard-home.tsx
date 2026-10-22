@@ -17,6 +17,8 @@ import {
 } from "@/lib/earnings";
 import { formatMoney } from "@/lib/format";
 import { useAuthSession } from "@/lib/use-auth-session";
+import { useChapters } from "@/lib/use-chapters";
+import { useGroups } from "@/lib/use-groups";
 import {
   ArrowUpRight,
   CalendarDays,
@@ -209,6 +211,10 @@ function DashboardLoading() {
 export function DashboardHome() {
   const router = useRouter();
   const { user, ready } = useAuthSession();
+  const { state: groupsState } = useGroups();
+  // Subscribing is the point: a chapter approved in another tab must move the
+  // money on this one. The value itself is derived, never stored.
+  useChapters();
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [openDay, setOpenDay] = useState<CalendarDay | null>(null);
@@ -339,13 +345,20 @@ export function DashboardHome() {
   }).format(new Date());
 
   const earnings = totalEarningsThisMonth(user.username);
-  const approved = approvedChaptersThisMonth();
+  const approved = approvedChaptersThisMonth(user.username);
+  const currency =
+    groupsState?.groups.find((group) =>
+      groupsState.members.some(
+        (member) =>
+          member.groupId === group.id && member.username === user.username
+      )
+    )?.currency ?? "USD";
   const shippedLine =
     approved > 0
-      ? `Your group has shipped ${approved} chapter${
+      ? `You've shipped ${approved} chapter${
           approved === 1 ? "" : "s"
         } this month.`
-      : "Your group hasn't shipped any chapters this month yet.";
+      : "You haven't shipped any chapters this month yet.";
   const monthLabel = new Intl.DateTimeFormat("en-US", {
     month: "long",
   }).format(new Date());
@@ -425,7 +438,7 @@ export function DashboardHome() {
                     <CountUp
                       value={earnings}
                       delay={70}
-                      format={(amount) => formatMoney(amount, "USD")}
+                      format={(amount) => formatMoney(amount, currency)}
                     />
                   </p>
                   <p className="dash-earnings-sub">

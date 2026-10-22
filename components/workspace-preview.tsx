@@ -44,39 +44,6 @@ export function WorkspacePreview() {
       className="relative mx-auto mt-14 max-w-5xl sm:mt-16"
       aria-hidden="true"
     >
-      {/* floating status cards */}
-      <div className="preview-chip -left-10 -top-5 hidden xl:flex">
-        <span className="grid h-7 w-7 place-items-center rounded-lg bg-[var(--mint)] text-[var(--mint-ink)]">
-          <ScanText className="h-3.5 w-3.5" />
-        </span>
-        <span>
-          <span className="block text-[10px] font-semibold leading-tight text-ink">
-            Pages read
-          </span>
-          <span className="block text-[9px] leading-tight text-faint">
-            38 pages · 2m 14s
-          </span>
-        </span>
-      </div>
-
-      <div
-        className="preview-chip -right-4 bottom-24 hidden xl:flex"
-        style={{ animationDelay: "-3.2s" }}
-      >
-        <span className="grid h-7 w-7 place-items-center rounded-lg bg-[var(--lavender)] text-[var(--accent-ink)]">
-          <Glossary className="h-3.5 w-3.5" />
-        </span>
-        <span>
-          <span className="block text-[10px] font-semibold leading-tight text-ink">
-            언니 <span className="text-faint">→</span> sis
-          </span>
-          <span className="block text-[9px] leading-tight text-faint">
-            name kept the same
-          </span>
-        </span>
-        <span className="chip chip-mint">14</span>
-      </div>
-
       <div className="relative overflow-hidden rounded-[1.55rem] border border-border bg-surface shadow-[var(--shadow-float)]">
         {/* window chrome */}
         <div className="flex h-11 items-center gap-3 border-b border-border bg-surface-2/70 px-4">

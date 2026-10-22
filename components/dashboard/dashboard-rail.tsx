@@ -24,6 +24,11 @@ type DashboardRailProps = {
   active?: string;
   /** Small heading above the links. */
   sectionLabel?: string;
+  /**
+   * Icon-only rail, used only on the chapter workspace. Labels stay in the DOM
+   * (visually hidden) so screen readers and keyboard users keep the names.
+   */
+  collapsed?: boolean;
 };
 
 export function DashboardRail({
@@ -36,6 +41,7 @@ export function DashboardRail({
   ],
   active = "overview",
   sectionLabel = "Workspace",
+  collapsed = false,
 }: DashboardRailProps) {
   const admin = isPlatformAdmin(user.username);
 
@@ -54,6 +60,7 @@ export function DashboardRail({
         className="dash-rail"
         id="dashboard-rail"
         data-open={open ? "true" : "false"}
+        data-collapsed={collapsed ? "true" : "false"}
         aria-label="Workspace navigation"
       >
         <div className="dash-rail-head">
@@ -78,6 +85,8 @@ export function DashboardRail({
                 className="dash-nav-link"
                 data-active={link.key === active ? "true" : "false"}
                 aria-current={link.key === active ? "page" : undefined}
+                aria-label={collapsed ? link.label : undefined}
+                title={collapsed ? link.label : undefined}
                 onClick={onClose}
               >
                 <link.icon className="h-4 w-4 shrink-0" />
@@ -96,6 +105,8 @@ export function DashboardRail({
                   href="/admin/groups"
                   className="dash-nav-link"
                   data-active="false"
+                  aria-label={collapsed ? "Admin console" : undefined}
+                  title={collapsed ? "Admin console" : undefined}
                   onClick={onClose}
                 >
                   <Building className="h-4 w-4 shrink-0" />
