@@ -49,12 +49,21 @@ export async function markNotificationReadAction(
   if (!auth.ok) return auth.result;
 
   const supabase = await createClient();
-  const { error } = await supabase
+  // `.select()` makes PostgREST return the rows it touched. Without it an
+  // update that matched nothing (deleted, or someone else's id) looks exactly
+  // like a success, and the caller clears a badge that is still there.
+  const { data, error } = await supabase
     .from("notifications")
     .update({ read: true })
-    .eq("id", id);
+    .eq("id", id)
+    .select("id");
 
   if (error) return { ok: false, message: "Couldn't mark that as read." };
+
+  if (!data || data.length === 0) {
+    return { ok: false, message: "That notification is already gone." };
+  }
+
   return { ok: true, data: null };
 }
 
