@@ -124,6 +124,15 @@ function emptyRun(): RunState {
 let runState: RunState = emptyRun();
 let activeChapterId: string | null = null;
 let cancelRequested = false;
+/**
+ * Aborts the in-flight provider request when the user cancels.
+ *
+ * `cancelRequested` alone only stops the *next* stage: the request already on
+ * the wire keeps running (and keeps spending quota) until Gemini answers. The
+ * signal is forwarded by the route to the provider fetch, so a cancel closes
+ * the connection immediately.
+ */
+let runController: AbortController | null = null;
 let workingBlocks: TextBlock[] = [];
 
 const listeners = new Set<() => void>();
@@ -169,6 +178,7 @@ function setPanelStates(
 
 export function cancelRun(): void {
   cancelRequested = true;
+  runController?.abort();
 }
 
 /* ------------------------------------------------------------------ */
@@ -289,8 +299,13 @@ async function extractBatch(
     response = await fetch("/api/pipeline/extract", {
       method: "POST",
       body: form,
+      signal: runController?.signal,
     });
   } catch {
+    // A cancelled run aborts the request; that is not a network failure.
+    if (runController?.signal.aborted) {
+      return { extractedPanelIds: [], failure: null };
+    }
     return {
       extractedPanelIds: [],
       failure: { code: "network", message: pipelineErrorMessage("network") },
@@ -429,6 +444,7 @@ async function runTextStages(ctx: PipelineContext): Promise<boolean> {
         glossary,
         context,
       }),
+      signal: runController?.signal,
     });
     if (!response.ok) {
       patch({ error: await readFailure(response) });
@@ -436,6 +452,7 @@ async function runTextStages(ctx: PipelineContext): Promise<boolean> {
     }
     translations = ((await response.json()) as TranslateResponse).translations;
   } catch {
+    if (runController?.signal.aborted) return false;
     patch({
       error: { code: "network", message: pipelineErrorMessage("network") },
     });
@@ -500,6 +517,7 @@ async function runTextStages(ctx: PipelineContext): Promise<boolean> {
         glossary,
         context,
       }),
+      signal: runController?.signal,
     });
     if (!response.ok) {
       patch({ error: await readFailure(response) });
@@ -507,6 +525,7 @@ async function runTextStages(ctx: PipelineContext): Promise<boolean> {
     }
     proof = (await response.json()) as ProofreadResponse;
   } catch {
+    if (runController?.signal.aborted) return false;
     patch({
       error: { code: "network", message: pipelineErrorMessage("network") },
     });
@@ -564,16 +583,19 @@ async function finish(ctx: PipelineContext, ready: boolean): Promise<void> {
       return;
     } catch (error) {
       patch({ running: false, error: toFailure(error) });
+      runController = null;
       return;
     }
   }
 
   patch({ running: false });
+  runController = null;
 }
 
 function beginRun(chapterId: string, panels: Panel[]): void {
   activeChapterId = chapterId;
   cancelRequested = false;
+  runController = new AbortController();
   runState = {
     ...emptyRun(),
     running: true,

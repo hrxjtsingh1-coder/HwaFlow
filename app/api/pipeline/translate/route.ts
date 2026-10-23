@@ -16,6 +16,7 @@ import {
   mockTranslate,
   translatePanels,
 } from "@/lib/ai/gemini";
+import { assertTextPayloadSize } from "@/lib/ai/batch";
 import {
   PipelineError,
   isPipelineError,
@@ -114,6 +115,7 @@ async function translateWithValve(input: {
   language: SourceLanguage;
   glossary: GlossaryPromptTerm[];
   context: ChapterContext;
+  signal?: AbortSignal;
 }): Promise<TranslateResponse> {
   try {
     return await translatePanels(input);
@@ -159,11 +161,21 @@ export async function POST(request: Request) {
 
     const input = parseBody(raw);
 
+    // Bound the prompt before the provider sees it: the free tier is metered by
+    // tokens, and one malformed body must not consume the day's budget.
+    assertTextPayloadSize(
+      input.panels.map((panel) => ({
+        blocks: panel.blocks.map((block) => ({ text: block.sourceText })),
+      }))
+    );
+
     if (isMockPipeline()) {
       return Response.json(mockTranslate(input.panels));
     }
 
-    return Response.json(await translateWithValve(input));
+    return Response.json(
+      await translateWithValve({ ...input, signal: request.signal })
+    );
   } catch (error) {
     const { status, body } = toPipelineFailure(error);
     return Response.json(body, { status });

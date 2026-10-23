@@ -122,6 +122,8 @@ async function generateJson(input: {
   parts: GeminiPart[];
   schema: Record<string, unknown>;
   temperature: number;
+  /** The caller's request signal: aborting it must stop the run, not retry it. */
+  signal?: AbortSignal;
 }): Promise<unknown> {
   const body = JSON.stringify({
     contents: [{ role: "user", parts: input.parts }],
@@ -136,6 +138,12 @@ async function generateJson(input: {
   });
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+    // A closed tab is not a transient failure: retrying would keep spending
+    // quota on a result nobody will read.
+    if (input.signal?.aborted) {
+      throw new PipelineError("network", "The run was cancelled.");
+    }
+
     let response: Response;
     try {
       response = await fetch(
@@ -144,10 +152,18 @@ async function generateJson(input: {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body,
-          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+          signal: input.signal
+            ? AbortSignal.any([
+                input.signal,
+                AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+              ])
+            : AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         }
       );
     } catch {
+      if (input.signal?.aborted) {
+        throw new PipelineError("network", "The run was cancelled.");
+      }
       if (attempt < 1) {
         await sleep(1000);
         continue;
@@ -266,6 +282,7 @@ export async function extractPanels(input: {
   images: ImageInput[];
   language: SourceLanguage;
   readingDirection: ReadingDirection;
+  signal?: AbortSignal;
 }): Promise<ExtractResponse> {
   const parts: GeminiPart[] = [];
   for (const image of input.images) {
@@ -287,6 +304,7 @@ export async function extractPanels(input: {
     parts,
     schema: EXTRACT_SCHEMA,
     temperature: 0,
+    signal: input.signal,
   })) as { panels?: unknown };
 
   const returned = Array.isArray(payload.panels) ? payload.panels : [];
@@ -315,6 +333,7 @@ export async function translatePanels(input: {
   language: SourceLanguage;
   glossary: GlossaryPromptTerm[];
   context: { seriesTitle: string; synopsis: string | null; chapterNumber: number };
+  signal?: AbortSignal;
 }): Promise<TranslateResponse> {
   const prompt = [
     buildTranslatePrompt({
@@ -334,6 +353,7 @@ export async function translatePanels(input: {
     parts: [{ text: prompt }],
     schema: TRANSLATE_SCHEMA,
     temperature: 0.2,
+    signal: input.signal,
   })) as { translations?: unknown };
 
   const translations: TranslateResponse["translations"] = [];
@@ -370,6 +390,7 @@ export async function proofreadPanels(input: {
   language: SourceLanguage;
   glossary: Array<{ sourceTerm: string; targetTerm: string; category: string }>;
   context: { seriesTitle: string; synopsis: string | null; chapterNumber: number };
+  signal?: AbortSignal;
 }): Promise<ProofreadResponse> {
   const prompt = [
     buildProofreadPrompt({
@@ -389,6 +410,7 @@ export async function proofreadPanels(input: {
     parts: [{ text: prompt }],
     schema: PROOFREAD_SCHEMA,
     temperature: 0.2,
+    signal: input.signal,
   })) as { results?: unknown; terms?: unknown };
 
   const results: ProofreadResponse["results"] = [];

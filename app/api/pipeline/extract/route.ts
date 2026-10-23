@@ -114,7 +114,8 @@ async function parseMeta(raw: FormDataEntryValue | null): Promise<{
 async function extractChunk(
   images: ImageInput[],
   language: SourceLanguage,
-  readingDirection: ReadingDirection
+  readingDirection: ReadingDirection,
+  signal?: AbortSignal
 ): Promise<ExtractedPanel[]> {
   if (images.length === 0) return [];
 
@@ -124,17 +125,24 @@ async function extractChunk(
     const head = await extractChunk(
       images.slice(0, midpoint),
       language,
-      readingDirection
+      readingDirection,
+      signal
     );
     const tail = await extractChunk(
       images.slice(midpoint),
       language,
-      readingDirection
+      readingDirection,
+      signal
     );
     return [...head, ...tail];
   }
 
-  const response = await extractPanels({ images, language, readingDirection });
+  const response = await extractPanels({
+    images,
+    language,
+    readingDirection,
+    signal,
+  });
   return response.panels;
 }
 
@@ -195,7 +203,8 @@ export async function POST(request: Request) {
     const panels = await extractChunk(
       images,
       meta.language,
-      meta.readingDirection
+      meta.readingDirection,
+      request.signal
     );
 
     return Response.json({ panels });

@@ -18,7 +18,51 @@
  * browser or an API key.
  */
 
+import { PipelineError } from "./types";
+
 export const PANEL_BATCH_MAX = 10;
+
+/**
+ * Ceiling for the text stages (translate/proofread). The body is JSON, so the
+ * only thing that can grow without bound is the block text itself. These are
+ * deliberately generous — a 200-panel chapter is already unusual — but they
+ * stop a malformed client (or a runaway retry loop) from building a prompt that
+ * costs a whole day's quota in one request.
+ */
+export const MAX_PANELS_PER_TEXT_REQUEST = 200;
+export const MAX_BLOCK_CHARS = 4000;
+export const MAX_TEXT_BODY_CHARS = 400_000;
+
+export function assertTextPayloadSize(
+  panels: Array<{ blocks: Array<{ text: string }> }>
+): void {
+  if (panels.length > MAX_PANELS_PER_TEXT_REQUEST) {
+    throw new PipelineError(
+      "too-large",
+      `That chapter is too large: more than ${MAX_PANELS_PER_TEXT_REQUEST} panels. Run it in smaller parts.`
+    );
+  }
+
+  let total = 0;
+  for (const panel of panels) {
+    for (const block of panel.blocks) {
+      if (block.text.length > MAX_BLOCK_CHARS) {
+        throw new PipelineError(
+          "too-large",
+          `One bubble is longer than ${MAX_BLOCK_CHARS} characters; that is too large to translate.`
+        );
+      }
+      total += block.text.length;
+    }
+  }
+
+  if (total > MAX_TEXT_BODY_CHARS) {
+    throw new PipelineError(
+      "too-large",
+      "This chapter's text is too large for one request."
+    );
+  }
+}
 
 /**
  * Hard cap for one `/api/pipeline/extract` multipart body. Vercel rejects

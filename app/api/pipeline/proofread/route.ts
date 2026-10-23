@@ -24,6 +24,7 @@ import {
   type SourceLanguage,
 } from "@/lib/ai/types";
 import { requirePipelineViewer } from "@/lib/pipeline-auth";
+import { assertTextPayloadSize } from "@/lib/ai/batch";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -125,6 +126,7 @@ async function proofreadWithValve(input: {
   language: SourceLanguage;
   glossary: GlossaryPromptTerm[];
   context: ChapterContext;
+  signal?: AbortSignal;
 }): Promise<ProofreadResponse> {
   try {
     return await proofreadPanels(input);
@@ -170,11 +172,21 @@ export async function POST(request: Request) {
 
     const input = parseBody(raw);
 
+    assertTextPayloadSize(
+      input.panels.map((panel) => ({
+        blocks: panel.blocks.map((block) => ({
+          text: block.sourceText + block.baseTranslation,
+        })),
+      }))
+    );
+
     if (isMockPipeline()) {
       return Response.json(mockProofread(input.panels));
     }
 
-    return Response.json(await proofreadWithValve(input));
+    return Response.json(
+      await proofreadWithValve({ ...input, signal: request.signal })
+    );
   } catch (error) {
     const { status, body } = toPipelineFailure(error);
     return Response.json(body, { status });

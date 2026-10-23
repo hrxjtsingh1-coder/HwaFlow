@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { chunkWithinByteBudget, splitIntoBatches } from "./batch";
+import {
+  assertTextPayloadSize,
+  chunkWithinByteBudget,
+  MAX_BLOCK_CHARS,
+  splitIntoBatches,
+} from "./batch";
 
 describe("splitIntoBatches", () => {
   it("keeps a small batch whole", () => {
@@ -29,5 +34,29 @@ describe("chunkWithinByteBudget", () => {
     const items = [{ n: 5 }, { n: 1 }];
     const chunks = chunkWithinByteBudget(items, (item) => item.n, 2);
     expect(chunks.map((chunk) => chunk.length)).toEqual([1, 1]);
+  });
+});
+
+describe("assertTextPayloadSize", () => {
+  it("rejects a bubble over the per-block ceiling", () => {
+    expect(() =>
+      assertTextPayloadSize([{ blocks: [{ text: "x".repeat(MAX_BLOCK_CHARS + 1) }] }])
+    ).toThrow(/too large/i);
+  });
+
+  it("rejects a chapter with too many panels", () => {
+    const panels = Array.from({ length: 201 }, () => ({
+      blocks: [{ text: "ok" }],
+    }));
+
+    expect(() => assertTextPayloadSize(panels)).toThrow(/too large/i);
+  });
+
+  it("accepts a normal chapter", () => {
+    expect(() =>
+      assertTextPayloadSize([
+        { blocks: [{ text: "hello" }, { text: "world" }] },
+      ])
+    ).not.toThrow();
   });
 });
