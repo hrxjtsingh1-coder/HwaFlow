@@ -45,6 +45,7 @@ import { usePipeline } from "@/lib/use-pipeline";
 import { DashboardRail } from "../dashboard/dashboard-rail";
 import { DashboardTopbar } from "../dashboard/dashboard-topbar";
 import { workspaceLinks } from "../dashboard/workspace-nav";
+import { NotFoundState } from "../not-found-state";
 import {
   AlertCircle,
   ArrowLeft,
@@ -274,18 +275,14 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
             trail={[{ label: "Workspace" }, { label: "Chapter" }]}
           />
           <main className="dash-main" id="main">
-            <div className="ch-notfound">
-              <p className="eyebrow">Chapter</p>
-              <h1 className="ch-notfound-title">Chapter not found</h1>
-              <p className="ch-notfound-copy">
-                This link may be stale, or you don&apos;t have access to it. Ask
-                a Manager or Owner to assign you to the series.
-              </p>
-              <Link href="/groups" className="btn btn-ghost btn-sm">
-                <ArrowLeft className="h-4 w-4" />
-                Back to your groups
-              </Link>
-            </div>
+            <NotFoundState
+              title="Chapter not found"
+              copy="This link may be stale, or you don't have access to it. Ask a Manager or Owner to assign you to the series."
+              href="/groups"
+              action="Back to your groups"
+              secondaryHref="/dashboard"
+              secondaryAction="Dashboard"
+            />
           </main>
         </div>
       </div>
@@ -697,7 +694,7 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
 
     if (!result.ok) {
       notify("error", result.message);
-      return;
+      return false;
     }
 
     setAllBlocks((current) =>
@@ -711,6 +708,8 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
           : block
       )
     );
+
+    return true;
   };
 
   return (

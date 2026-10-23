@@ -12,7 +12,12 @@ type BubbleRowProps = {
   onActivate: () => void;
   onDeactivate: () => void;
   onPin: () => void;
-  onSave: (text: string) => void;
+  /**
+   * Resolves `true` only when the text was persisted. The chip must not say
+   * "Saved" for a write that failed — a translator who sees it will navigate
+   * away believing the line is stored.
+   */
+  onSave: (text: string) => Promise<boolean>;
 };
 
 /**
@@ -60,11 +65,17 @@ export function BubbleRow({
     savedTimer.current = window.setTimeout(() => setSaved(false), 1500);
   };
 
-  const commit = () => {
+  const commit = async () => {
     const next = draft.trim();
     if (next === block.finalText) return;
-    onSave(next);
-    flashSaved();
+    const stored = await onSave(next);
+    if (stored) {
+      flashSaved();
+    } else {
+      // The write failed; put the editor back on the value the server holds so
+      // the textarea cannot disagree with the database.
+      setDraft(block.finalText);
+    }
   };
 
   const lowConfidence =
@@ -127,7 +138,7 @@ export function BubbleRow({
           onFocus={onActivate}
           onChange={(event) => setDraft(event.target.value)}
           onBlur={() => {
-            commit();
+            void commit();
             onDeactivate();
           }}
           onKeyDown={(event) => {
@@ -139,7 +150,7 @@ export function BubbleRow({
             }
             if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
               event.preventDefault();
-              commit();
+              void commit();
             }
           }}
         />

@@ -14,7 +14,7 @@ type BlockEditorProps = {
   activeBlockId: string | null;
   onActiveBlock: (id: string | null) => void;
   onPinBlock: (id: string) => void;
-  onSaveBlock: (blockId: string, text: string) => void;
+  onSaveBlock: (blockId: string, text: string) => Promise<boolean>;
   onPrev: () => void;
   onNext: () => void;
   running: boolean;
