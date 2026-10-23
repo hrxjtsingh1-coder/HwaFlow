@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { signOut } from "@/lib/auth";
+import { titlePayload } from "@/lib/chapters-format";
 import {
   canEditChapter,
   ChapterError,
@@ -659,12 +660,13 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
   };
 
   const commitTitle = async () => {
-    const next = titleDraft.trim();
-    if ((next || null) === chapter.title) return;
+    const next = titlePayload(titleDraft);
+    if (next === (chapter.title ?? "")) return;
 
     const result = await updateChapterDetailsAction({
       chapterId: chapter.id,
-      title: next || null,
+      // Empty string clears the title; null would mean "leave unchanged".
+      title: next,
     });
 
     if (!result.ok) {
