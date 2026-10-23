@@ -34,6 +34,7 @@ import {
   type TextBlockRow,
 } from "./server/chapters";
 import { createClient } from "./supabase/server";
+import { createAdminClient } from "./supabase/admin";
 
 /* ------------------------------------------------------------------ */
 /* Result shape                                                        */
@@ -203,10 +204,14 @@ export async function deleteChapterAction(input: {
 
   const supabase = await createClient();
 
-  const { data: pageData } = await supabase
+  const { data: pageData, error: pageError } = await supabase
     .from("chapter_pages")
     .select("original_path")
     .eq("chapter_id", input.chapterId);
+
+  if (pageError) {
+    return fromDbError(pageError, "We couldn't delete that chapter.");
+  }
 
   const paths = ((pageData ?? []) as Array<{ original_path: string }>).map(
     (page) => page.original_path
@@ -220,12 +225,37 @@ export async function deleteChapterAction(input: {
     return fromDbError(error, "We couldn't delete that chapter.");
   }
 
+  // The `pages` delete policy resolves the chapter from the object path, so it
+  // stops matching the instant `delete_chapter` removes the row. A normal
+  // client remove after this point no-ops and every panel image is orphaned.
+  // The cleanup is maintenance, not a user action, so it goes through the
+  // privileged client; there is no row left for RLS to authorize against.
+  let removedObjects = 0;
+
   if (paths.length > 0) {
-    // Best effort: rows are already gone, an orphan object is harmless.
-    await supabase.storage.from("pages").remove(paths);
+    try {
+      const { data: removed, error: removeError } = await createAdminClient()
+        .storage.from("pages")
+        .remove(paths);
+
+      if (removeError) {
+        console.warn(
+          `[chapters] chapter ${input.chapterId} deleted with orphaned images: ${removeError.message}`
+        );
+      } else {
+        removedObjects = removed?.length ?? 0;
+      }
+    } catch (cause) {
+      // A missing secret key must not turn a completed deletion into an error.
+      console.warn(
+        `[chapters] storage cleanup skipped for ${input.chapterId}: ${
+          cause instanceof Error ? cause.message : "unknown error"
+        }`
+      );
+    }
   }
 
-  return { ok: true, data: { removedObjects: paths.length } };
+  return { ok: true, data: { removedObjects } };
 }
 
 /* ------------------------------------------------------------------ */
