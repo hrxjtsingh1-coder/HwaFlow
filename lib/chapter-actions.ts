@@ -25,6 +25,7 @@ import {
   MAX_CHAPTER_TITLE,
   validateChapterNumber,
 } from "./chapters";
+import { classifyDbError, messageForDbError } from "./errors";
 import { getViewer } from "./session";
 import {
   mapChapterRow,
@@ -46,22 +47,6 @@ export type ChapterActionResult<T> =
 
 type DbError = { code?: string; message?: string } | null;
 
-const SQLSTATE: Record<string, ChapterFailure> = {
-  HF001: "forbidden",
-  HF002: "not-found",
-  HF020: "invalid-number",
-  HF021: "duplicate-number",
-  HF022: "invalid-title",
-  HF023: "no-content",
-  HF024: "bad-transition",
-  HF025: "unknown",
-  HF026: "unknown",
-  "23505": "duplicate-number",
-  "23503": "not-found",
-  "23514": "invalid-number",
-  "42501": "forbidden",
-};
-
 function failure(
   code: ChapterActionFailure,
   message: string
@@ -73,11 +58,8 @@ function fromDbError(
   error: DbError,
   fallback = "Something went wrong. Try again."
 ): ChapterActionResult<never> {
-  if (!error) return failure("unknown", fallback);
-  return failure(
-    (error.code ? SQLSTATE[error.code] : undefined) ?? "unknown",
-    error.message || fallback
-  );
+  const code = classifyDbError(error);
+  return failure(code, messageForDbError(code, error, fallback));
 }
 
 async function requireViewer() {

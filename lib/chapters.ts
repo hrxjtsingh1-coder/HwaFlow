@@ -122,6 +122,7 @@ export type ChapterFailure =
   | "forbidden"
   | "invalid-number"
   | "duplicate-number"
+  | "duplicate-panel"
   | "invalid-title"
   | "no-content"
   | "bad-transition"
