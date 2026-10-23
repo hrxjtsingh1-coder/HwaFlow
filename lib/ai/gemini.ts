@@ -74,6 +74,36 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * `Retry-After` in milliseconds, or `null` when the header is absent or junk.
+ *
+ * Google sends this on 429s and it is the only honest answer to "when may I try
+ * again" — ignoring it and sleeping a fixed second just burns another request
+ * from a 500/day budget. Both the delta-seconds and HTTP-date forms are legal,
+ * and an over-eager value is clamped so a run cannot stall for minutes.
+ */
+export function retryAfterMs(response: Response): number | null {
+  const header = response.headers.get("retry-after");
+  if (!header) return null;
+
+  const seconds = Number(header);
+  let ms: number;
+
+  if (Number.isFinite(seconds)) {
+    ms = seconds * 1000;
+  } else {
+    const at = Date.parse(header);
+    if (Number.isNaN(at)) return null;
+    ms = at - Date.now();
+  }
+
+  if (!Number.isFinite(ms)) return null;
+  return Math.min(30_000, Math.max(0, Math.round(ms)));
+}
+
+/** The request plus three retries. */
+const MAX_ATTEMPTS = 4;
+
 type GeminiPart =
   | { text: string }
   | { inline_data: { mime_type: string; data: string } };
@@ -99,10 +129,13 @@ async function generateJson(input: {
       responseMimeType: "application/json",
       responseSchema: input.schema,
       temperature: input.temperature,
+      // Without a cap the model can ramble past the point of usefulness and
+      // burn the per-minute token budget. One panel set fits comfortably.
+      maxOutputTokens: 8192,
     },
   });
 
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
     let response: Response;
     try {
       response = await fetch(
@@ -123,8 +156,8 @@ async function generateJson(input: {
     }
 
     if (response.status === 429) {
-      if (attempt < 2) {
-        await sleep(1000 * 2 ** attempt);
+      if (attempt < MAX_ATTEMPTS - 1) {
+        await sleep(retryAfterMs(response) ?? 1000 * 2 ** attempt);
         continue;
       }
       throw new PipelineError("quota");
