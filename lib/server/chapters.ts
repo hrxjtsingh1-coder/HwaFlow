@@ -28,6 +28,7 @@ import {
   type GroupMemberRow,
 } from "./groups";
 import { mapGlossaryRow } from "./glossary";
+import { selectAllPages } from "./pagination";
 import { signedUrlMap } from "./storage";
 
 /* ------------------------------------------------------------------ */
@@ -285,7 +286,6 @@ export async function getWorkspaceBundle(
   const [
     { data: seriesData, error: seriesError },
     { data: pageData, error: pageError },
-    { data: blockData, error: blockError },
     { data: eventData, error: eventError },
     { data: siblingData, error: siblingError },
     { data: glossaryData, error: glossaryError },
@@ -302,13 +302,6 @@ export async function getWorkspaceBundle(
       )
       .eq("chapter_id", chapterId)
       .order("page_index", { ascending: true }),
-    supabase
-      .from("text_blocks")
-      .select(
-        "id, page_id, chapter_id, block_index, bbox, source_text, base_translation, final_text, confidence, is_edited, edited_by, edited_at"
-      )
-      .eq("chapter_id", chapterId)
-      .order("block_index", { ascending: true }),
     supabase
       .from("chapter_status_events")
       .select("id, chapter_id, from_status, to_status, actor_id, note, created_at")
@@ -331,11 +324,28 @@ export async function getWorkspaceBundle(
 
   if (seriesError) fail("workspace.series", seriesError.message);
   if (pageError) fail("workspace.pages", pageError.message);
-  if (blockError) fail("workspace.blocks", blockError.message);
   if (eventError) fail("workspace.events", eventError.message);
   if (siblingError) fail("workspace.siblings", siblingError.message);
   if (glossaryError) fail("workspace.glossary", glossaryError.message);
   if (!seriesData) return null;
+
+  // A dense chapter can exceed PostgREST's 1000-row cap, which truncates
+  // silently — the workspace would drop its last panels with no error.
+  const blockData = await selectAllPages<BlockRow>(async (from, to) => {
+    const { data, error } = await supabase
+      .from("text_blocks")
+      .select(
+        "id, page_id, chapter_id, block_index, bbox, source_text, base_translation, final_text, confidence, is_edited, edited_by, edited_at"
+      )
+      .eq("chapter_id", chapterId)
+      // Stable across pages: (page_id, block_index) is unique.
+      .order("page_id", { ascending: true })
+      .order("block_index", { ascending: true })
+      .range(from, to);
+
+    if (error) fail("workspace.blocks", error.message);
+    return (data ?? []) as unknown as BlockRow[];
+  });
 
   const seriesRow = seriesData as unknown as SeriesRow;
 

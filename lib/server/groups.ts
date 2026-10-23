@@ -25,6 +25,7 @@ import type {
 } from "../groups";
 import type { AuthUser } from "../identity";
 import { createClient } from "../supabase/server";
+import { selectAllPages } from "./pagination";
 import { signedUrlMap } from "./storage";
 
 /* ------------------------------------------------------------------ */
@@ -393,23 +394,29 @@ export async function getMembersBundle(
 export async function listGroupsForAdmin(): Promise<AdminGroupCard[]> {
   const supabase = await createClient();
 
-  const [groupsResult, membersResult] = await Promise.all([
-    supabase
-      .from("groups")
-      .select("id, name, slug, currency, icon_path, created_by, created_at")
-      .order("created_at", { ascending: false }),
-    supabase
+  const groupsResult = await supabase
+    .from("groups")
+    .select("id, name, slug, currency, icon_path, created_by, created_at")
+    .order("created_at", { ascending: false });
+
+  if (groupsResult.error) fail("listGroupsForAdmin.groups", groupsResult.error.message);
+
+  const groupRows = (groupsResult.data ?? []) as unknown as GroupRow[];
+
+  // Paginated: past 1000 memberships an unpaged select silently drops groups,
+  // which showed up as cards with no owner and undercounted members.
+  const memberRows = await selectAllPages<GroupMemberRow>(async (from, to) => {
+    const { data, error } = await supabase
       .from("group_members")
       .select(
         "id, group_id, user_id, role, invited_by, joined_at, profiles!group_members_user_id_fkey(username, display_name)"
-      ),
-  ]);
+      )
+      .order("id", { ascending: true })
+      .range(from, to);
 
-  if (groupsResult.error) fail("listGroupsForAdmin.groups", groupsResult.error.message);
-  if (membersResult.error) fail("listGroupsForAdmin.members", membersResult.error.message);
-
-  const groupRows = (groupsResult.data ?? []) as unknown as GroupRow[];
-  const memberRows = (membersResult.data ?? []) as unknown as GroupMemberRow[];
+    if (error) fail("listGroupsForAdmin.members", error.message);
+    return (data ?? []) as unknown as GroupMemberRow[];
+  });
 
   const iconUrls = await signedUrlMap(
     supabase,
