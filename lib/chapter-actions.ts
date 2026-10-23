@@ -393,7 +393,6 @@ export async function registerPanelsAction(input: {
 export async function removePanelAction(input: {
   chapterId: string;
   panelId: string;
-  path: string | null;
 }): Promise<ChapterActionResult<null>> {
   const auth = await requireViewer();
   if (!auth.ok) return auth.result;
@@ -403,6 +402,19 @@ export async function removePanelAction(input: {
   }
 
   const supabase = await createClient();
+
+  // The object path is read here, never accepted from the browser: a client
+  // that could name the path could ask the delete policy to remove any object
+  // it likes. Scoping the read to this chapter also proves the panel is ours.
+  const { data: panelRow, error: panelError } = await supabase
+    .from("chapter_pages")
+    .select("original_path")
+    .eq("id", input.panelId)
+    .eq("chapter_id", input.chapterId)
+    .maybeSingle();
+
+  if (panelError) return fromDbError(panelError, "Couldn't remove that panel.");
+
   const { error } = await supabase.rpc("remove_panel", {
     p_chapter_id: input.chapterId,
     p_page_id: input.panelId,
@@ -410,8 +422,11 @@ export async function removePanelAction(input: {
 
   if (error) return fromDbError(error, "Couldn't remove that panel.");
 
-  if (input.path) {
-    await supabase.storage.from("pages").remove([input.path]);
+  const originalPath = (panelRow as unknown as { original_path: string } | null)
+    ?.original_path;
+
+  if (originalPath) {
+    await supabase.storage.from("pages").remove([originalPath]);
   }
 
   return { ok: true, data: null };
