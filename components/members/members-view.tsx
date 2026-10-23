@@ -47,6 +47,7 @@ type MembersViewProps = {
   bundle: {
     active: ActiveGroup | null;
     received: InviteItem[];
+    seriesCounts: Record<string, number>;
   };
 };
 
@@ -153,8 +154,8 @@ export function MembersView({ viewer, bundle }: MembersViewProps) {
   const groupInvites: GroupInvite[] = activeGroup?.invites ?? [];
   const receivedWithGroups = bundle.received;
 
-  // Series assignments arrive in Phase 2; every count starts at zero.
-  const seriesCounts: Record<string, number> = {};
+  // Counted server-side from series_assignments (RLS scopes it to this group).
+  const seriesCounts: Record<string, number> = bundle.seriesCounts;
 
   const canManage = viewerRole ? canManageMembers(viewerRole) : false;
   const owner = members.find((member) => member.role === "owner") ?? null;

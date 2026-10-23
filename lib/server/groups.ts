@@ -25,6 +25,7 @@ import type {
 } from "../groups";
 import type { AuthUser } from "../identity";
 import { createClient } from "../supabase/server";
+import { countByKey } from "./counts";
 import { selectAllPages } from "./pagination";
 import { signedUrlMap } from "./storage";
 
@@ -102,6 +103,8 @@ export type ReceivedInvite = {
 export type MembersBundle = {
   active: GroupBundle | null;
   received: ReceivedInvite[];
+  /** series_assignments per member id, for the roster's "Series" column. */
+  seriesCounts: Record<string, number>;
 };
 
 export type AdminGroupCard = {
@@ -384,7 +387,57 @@ export async function getMembersBundle(
     ? await getGroupBundle(activeMembership.group_id, viewer)
     : null;
 
-  return { active, received };
+  const seriesCounts = active
+    ? await countSeriesAssignments(active.group.id)
+    : {};
+
+  return { active, received, seriesCounts };
+}
+
+/**
+ * How many series each member is assigned to, for one group.
+ *
+ * A Manager/Owner sees every assignment in the group (`can_view_series`), so
+ * the roster can show the real workload instead of a hardcoded zero. Staff
+ * cannot manage members, so this is only ever called for a manageable group.
+ */
+async function countSeriesAssignments(
+  groupId: string
+): Promise<Record<string, number>> {
+  const supabase = await createClient();
+
+  const { data: seriesRows, error: seriesError } = await supabase
+    .from("series")
+    .select("id")
+    .eq("group_id", groupId);
+
+  if (seriesError) fail("getMembersBundle.series", seriesError.message);
+
+  const seriesIds = ((seriesRows ?? []) as unknown as { id: string }[]).map(
+    (row) => row.id
+  );
+  if (seriesIds.length === 0) return {};
+
+  const assignments = await selectAllPages<{ user_id: string }>(
+    async (from, to) => {
+      const { data, error } = await supabase
+        .from("series_assignments")
+        .select("id, user_id")
+        .in("series_id", seriesIds)
+        .order("id", { ascending: true })
+        .range(from, to);
+
+      if (error) fail("getMembersBundle.assignments", error.message);
+      return (data ?? []) as unknown as { user_id: string }[];
+    }
+  );
+
+  return Object.fromEntries(
+    Array.from(countByKey(assignments, "user_id"), ([userId, count]) => [
+      userId,
+      count,
+    ])
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -431,6 +484,26 @@ export async function listGroupsForAdmin(): Promise<AdminGroupCard[]> {
     byGroup.set(row.group_id, list);
   }
 
+  // Counts come from a platform-admin RPC: the admin cannot select from
+  // `series` (RLS scopes it to the group's own staff), so a direct query would
+  // report zero for every group.
+  const { data: summaryData, error: summaryError } = await supabase.rpc(
+    "admin_group_summaries"
+  );
+
+  if (summaryError) fail("listGroupsForAdmin.summaries", summaryError.message);
+
+  const summaries = new Map(
+    (
+      (summaryData ?? []) as unknown as {
+        group_id: string;
+        member_count: number;
+        series_count: number;
+        chapter_count: number;
+      }[]
+    ).map((row) => [row.group_id, row])
+  );
+
   return groupRows.map((row) => {
     const members = byGroup.get(row.id) ?? [];
     return {
@@ -440,8 +513,7 @@ export async function listGroupsForAdmin(): Promise<AdminGroupCard[]> {
       ),
       owner: members.find((member) => member.role === "owner") ?? null,
       memberCount: members.length,
-      // No series table until Phase 2.
-      seriesCount: 0,
+      seriesCount: summaries.get(row.id)?.series_count ?? 0,
     };
   });
 }
