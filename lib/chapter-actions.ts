@@ -375,14 +375,19 @@ export async function registerPanelsAction(input: {
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.rpc("register_panels", {
+  const { data, error } = await supabase.rpc("register_panels", {
     p_chapter_id: input.chapterId,
     p_panels: input.panels,
   });
 
   if (error) return fromDbError(error, "Couldn't register those panels.");
 
-  return { ok: true, data: { registered: input.panels.length } };
+  // `on conflict (id) do nothing` means a retry re-sends rows that already
+  // exist. Report what the database wrote, not what we asked it to write.
+  const registered =
+    typeof data === "number" ? data : input.panels.length;
+
+  return { ok: true, data: { registered } };
 }
 
 export async function removePanelAction(input: {

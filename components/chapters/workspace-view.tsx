@@ -580,9 +580,10 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
           await supabase.storage.from("pages").remove(uploadedPaths);
           notify("error", result.message);
         } else {
+          const added = result.data.registered;
           notify(
             "success",
-            `${registered.length} panel${registered.length === 1 ? "" : "s"} added.`
+            `${added} panel${added === 1 ? "" : "s"} added.`
           );
           router.refresh();
         }
