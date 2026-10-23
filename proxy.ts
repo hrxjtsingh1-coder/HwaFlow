@@ -15,6 +15,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { resolveRedirect } from "./lib/auth-redirect";
+
 export async function proxy(request: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -73,35 +75,19 @@ export async function proxy(request: NextRequest) {
    *
    * This is a redirect, not authorization: RLS is what stops a signed-in user
    * from reading someone else's rows.
+   *
+   * The proxy only redirects *towards* /login. It must never bounce a signed-in
+   * request off /login or /register: `user` here is an auth session, while the
+   * pages gate on a profiles row, and when those disagree the two redirects
+   * point at each other forever. The auth pages redirect a real viewer
+   * themselves.
    */
-  if (!user && needsSignIn(pathname)) {
-    return redirectTo(request, response, "/login");
-  }
-
-  /*
-   * Signed-in visitors have no use for the auth pages, and the "already signed
-   * in" state there would just be a speed bump on the way to the dashboard.
-   */
-  if (user && (pathname === "/login" || pathname === "/register")) {
-    return redirectTo(request, response, "/dashboard");
+  const redirectTarget = resolveRedirect(pathname, Boolean(user));
+  if (redirectTarget) {
+    return redirectTo(request, response, redirectTarget);
   }
 
   return response;
-}
-
-const PROTECTED_PREFIXES = [
-  "/dashboard",
-  "/admin",
-  "/groups",
-  "/series",
-  "/chapters",
-  "/settings",
-];
-
-function needsSignIn(pathname: string): boolean {
-  return PROTECTED_PREFIXES.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
-  );
 }
 
 /**
