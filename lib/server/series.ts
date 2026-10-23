@@ -261,6 +261,15 @@ export async function getSeriesBundle(
       ) ?? null
     : null;
 
+  // The header shows the owning group's avatar. Signing it here (rather than
+  // passing null) is what makes the icon survive the move off the local store.
+  const groupRow = groupData as unknown as GroupRow;
+  const groupIconUrl = groupRow.icon_path
+    ? (await signedUrlMap(supabase, "group-icons", [groupRow.icon_path])).get(
+        groupRow.icon_path
+      ) ?? null
+    : null;
+
   const series = mapSeries(row, coverUrl);
   const assignments = (row.series_assignments ?? []).map((assignment) =>
     mapAssignment(series, assignment)
@@ -268,7 +277,7 @@ export async function getSeriesBundle(
 
   return {
     series,
-    group: mapGroup(groupData as unknown as GroupRow, null),
+    group: mapGroup(groupRow, groupIconUrl),
     viewerMember: mapGroupMember(viewerRow),
     viewerRole: viewerRow.role,
     members: memberRows
