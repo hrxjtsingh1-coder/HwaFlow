@@ -42,6 +42,7 @@ export default async function DashboardPage() {
       week={week}
       earnings={earnings}
       approved={approved}
+      nowIso={new Date().toISOString()}
     />
   );
 }

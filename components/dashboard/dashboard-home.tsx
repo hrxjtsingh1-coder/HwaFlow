@@ -133,10 +133,9 @@ function CountUp({
   return <>{format(done ? value : shown)}</>;
 }
 
-/** Human label for a day relative to today, e.g. "Today" or "In 2 days". */
-function relativeDay(day: CalendarDay): string {
+/** Human label for a day relative to `now`, e.g. "Today" or "In 2 days". */
+function relativeDay(day: CalendarDay, now: Date): string {
   const target = new Date(`${day.key}T00:00:00`);
-  const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const diff = Math.round((target.getTime() - today.getTime()) / 86_400_000);
 
@@ -178,9 +177,9 @@ function serverRelease(
 function buildWeek(
   log: Record<string, number>,
   liveSeconds: number,
-  releases: DashboardWeek["releases"]
+  releases: DashboardWeek["releases"],
+  now: Date
 ): { days: CalendarDay[]; releases: number } {
-  const now = new Date();
   const todayKey = dayKey(now);
   const monday = new Date(now);
   monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
@@ -229,6 +228,12 @@ type DashboardHomeProps = {
   week: DashboardWeek;
   earnings: number;
   approved: number;
+  /**
+   * The server's clock at render time. The first client render must use the
+   * same instant or the greeting, date and week grid hydrate against different
+   * values in a different timezone.
+   */
+  nowIso: string;
 };
 
 export function DashboardHome({
@@ -237,9 +242,18 @@ export function DashboardHome({
   week: serverWeek,
   earnings,
   approved,
+  nowIso,
 }: DashboardHomeProps) {
   // `viewer` keeps the existing JSX readable; the page owns auth now.
   const user = viewer;
+
+  // The server instant is the first paint on both sides; the browser's own
+  // clock replaces it after mount so the greeting matches the viewer.
+  const [now, setNow] = useState(() => new Date(nowIso));
+
+  useEffect(() => {
+    setNow(new Date());
+  }, []);
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [openDay, setOpenDay] = useState<CalendarDay | null>(null);
@@ -353,14 +367,14 @@ export function DashboardHome({
   };
 
   const firstName = user.displayName.trim().split(/\s+/)[0] || user.username;
-  const hour = new Date().getHours();
+  const hour = now.getHours();
   const greeting =
     hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   const today = new Intl.DateTimeFormat("en-US", {
     weekday: "long",
     month: "long",
     day: "numeric",
-  }).format(new Date());
+  }).format(now);
 
   const shippedLine =
     approved > 0
@@ -370,10 +384,10 @@ export function DashboardHome({
       : "You haven't shipped any chapters this month yet.";
   const monthLabel = new Intl.DateTimeFormat("en-US", {
     month: "long",
-  }).format(new Date());
+  }).format(now);
 
   const todaySeconds = baseToday + sessionSeconds;
-  const week = buildWeek(focusLog, todaySeconds, serverWeek.releases);
+  const week = buildWeek(focusLog, todaySeconds, serverWeek.releases, now);
   const weekSeconds = week.days.reduce((total, day) => total + day.seconds, 0);
   const peakSeconds = Math.max(1, ...week.days.map((day) => day.seconds));
   const activeDays = week.days.filter((day) => day.seconds > 0).length;
@@ -457,13 +471,6 @@ export function DashboardHome({
                         } · credited to you`
                       : "No approved chapters yet · credit appears here when a Manager approves work"}
                   </p>
-
-                  {earnings === 0 ? (
-                    <p className="dash-panel-foot-note">
-                      Approved work appears here. Nothing has been approved
-                      this month yet, so there is no chart to show.
-                    </p>
-                  ) : null}
 
                   <p className="dash-earnings-note">
                     <ShieldCheck className="h-3.5 w-3.5" />
@@ -689,7 +696,7 @@ export function DashboardHome({
                 <span className="dash-day-badge-date">{openDay.date}</span>
               </span>
               <div className="dash-day-popup-copy">
-                <p className="eyebrow">{relativeDay(openDay)}</p>
+                <p className="eyebrow">{relativeDay(openDay, now)}</p>
                 <h2 className="dash-panel-title" id="dash-day-title">
                   {openDay.long}
                 </h2>
