@@ -5,6 +5,33 @@ import { useEffect, useRef } from "react";
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+/*
+ * Body scroll lock is shared state.
+ *
+ * Two dialogs can be open at once (a roster row's confirm sheet over the invite
+ * drawer). Each one used to save the overflow it found on mount and restore it
+ * on unmount, so closing the *first* one restored the page to scrollable while
+ * the second was still open — and closing the second then restored "hidden"
+ * permanently. Counting opens fixes both directions.
+ */
+let openDialogs = 0;
+let lockedOverflow = "";
+
+function lockBodyScroll() {
+  if (openDialogs === 0) {
+    lockedOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+  }
+  openDialogs += 1;
+}
+
+function unlockBodyScroll() {
+  openDialogs = Math.max(0, openDialogs - 1);
+  if (openDialogs === 0) {
+    document.body.style.overflow = lockedOverflow;
+  }
+}
+
 /**
  * Drawer / dialog accessibility: traps Tab, closes on Escape, locks body
  * scroll, moves focus inside on open and restores it to the trigger on close.
@@ -19,12 +46,12 @@ export function useDialogA11y(open: boolean, onClose: () => void) {
   useEffect(() => {
     if (!open) return;
 
-    const trigger =
+    const previousFocus =
       document.activeElement instanceof HTMLElement
         ? document.activeElement
         : null;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+
+    lockBodyScroll();
 
     const focusFirst = () => {
       const panel = panelRef.current;
@@ -71,8 +98,8 @@ export function useDialogA11y(open: boolean, onClose: () => void) {
     return () => {
       window.clearTimeout(timer);
       document.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = previousOverflow;
-      trigger?.focus?.();
+      unlockBodyScroll();
+      previousFocus?.focus?.();
     };
   }, [open]);
 
