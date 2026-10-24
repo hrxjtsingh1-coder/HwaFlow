@@ -119,6 +119,8 @@ async function extractChunk(
 ): Promise<ExtractedPanel[]> {
   if (images.length === 0) return [];
 
+  // Measured in encoded bytes, which is what actually crosses the wire. The
+  // client must chunk with `encodedLengthOf` for the two numbers to agree.
   const encoded = images.reduce((total, image) => total + image.base64.length, 0);
   if (encoded > EXTRACT_BATCH_MAX_BYTES && images.length > 1) {
     const midpoint = Math.ceil(images.length / 2);

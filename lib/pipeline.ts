@@ -24,6 +24,7 @@ import {
   EXTRACT_BATCH_MAX_BYTES,
   PANEL_BATCH_MAX,
   chunkWithinByteBudget,
+  encodedLengthOf,
   splitIntoBatches,
 } from "./ai/batch";
 import { readingDirectionFor } from "./ai/languages";
@@ -355,7 +356,8 @@ async function runExtract(
   const batches = splitIntoBatches(panels, PANEL_BATCH_MAX).flatMap((batch) =>
     chunkWithinByteBudget(
       batch,
-      (panel) => panel.byteSize,
+      // Encoded bytes: the route caps `base64.length`, not the raw file size.
+      (panel) => encodedLengthOf(panel.byteSize),
       EXTRACT_BATCH_MAX_BYTES
     )
   );

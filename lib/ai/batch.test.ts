@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   assertTextPayloadSize,
   chunkWithinByteBudget,
+  encodedLengthOf,
   MAX_BLOCK_CHARS,
   splitIntoBatches,
 } from "./batch";
@@ -58,5 +59,19 @@ describe("assertTextPayloadSize", () => {
         { blocks: [{ text: "hello" }, { text: "world" }] },
       ])
     ).not.toThrow();
+  });
+});
+
+describe("encodedLengthOf", () => {
+  it("converts a raw size to the base64 the server measures", () => {
+    expect(encodedLengthOf(3_000_000)).toBe(4_000_000);
+  });
+
+  it("rounds up so a batch never lands one byte over the cap", () => {
+    expect(encodedLengthOf(1)).toBe(2);
+  });
+
+  it("treats a negative size as empty rather than NaN", () => {
+    expect(encodedLengthOf(-10)).toBe(0);
   });
 });

@@ -71,6 +71,19 @@ export function assertTextPayloadSize(
  */
 export const EXTRACT_BATCH_MAX_BYTES = 3_000_000;
 
+/**
+ * Base64 length of `rawBytes`.
+ *
+ * The client chunks a batch by each panel's raw file size, while the extract
+ * route measures `image.base64.length`. Base64 is 4/3 the raw size, so without
+ * this factor a 3 MB raw batch is 4 MB on the wire: the client builds a batch
+ * the server immediately splits, doubling the request count against a 500/day
+ * budget. Both sides must use the same unit.
+ */
+export function encodedLengthOf(rawBytes: number): number {
+  return Math.ceil((Math.max(0, rawBytes) * 4) / 3);
+}
+
 export function splitIntoBatches<T>(items: T[], max = PANEL_BATCH_MAX): T[][] {
   if (items.length === 0) return [];
   const limit = Math.max(1, Math.floor(max));
