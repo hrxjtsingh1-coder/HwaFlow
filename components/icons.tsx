@@ -37,6 +37,15 @@ export function ArrowUpRight(props: IconProps) {
   );
 }
 
+export function ArrowUp(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 19V5" />
+      <path d="m6 11 6-6 6 6" />
+    </Svg>
+  );
+}
+
 export function Check(props: IconProps) {
   return (
     <Svg {...props}>
@@ -303,6 +312,23 @@ export function Bell(props: IconProps) {
     <Svg {...props}>
       <path d="M18 8.5a6 6 0 0 0-12 0c0 5.8-2 7-2 7h16s-2-1.2-2-7Z" />
       <path d="M10.2 20a2 2 0 0 0 3.6 0" />
+    </Svg>
+  );
+}
+
+export function Sun(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+    </Svg>
+  );
+}
+
+export function Moon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" />
     </Svg>
   );
 }

@@ -1,16 +1,21 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { signOut } from "@/lib/auth";
 import { useActiveGroupId } from "@/lib/active-group";
+import {
+  acceptInviteAction,
+  declineInviteAction,
+} from "@/lib/groups-actions";
 import type { Group, GroupMember } from "@/lib/groups";
 import type { AuthUser } from "@/lib/identity";
 import { DashboardRail } from "../dashboard/dashboard-rail";
 import { DashboardTopbar } from "../dashboard/dashboard-topbar";
 import { workspaceLinks } from "../dashboard/workspace-nav";
-import { ArrowRight, Layers } from "../icons";
+import { Layers } from "../icons";
+import { ReceivedInvites, type InviteItem } from "../members/received-invites";
 import { GroupCard } from "./group-card";
 
 type Membership = {
@@ -23,6 +28,8 @@ type Membership = {
 type GroupsViewProps = {
   viewer: AuthUser;
   memberships: Membership[];
+  /** Pending invites for the viewer; these used to live on `/settings/members`. */
+  invites: InviteItem[];
   /** Latest joined group; used until this device picks one. */
   defaultActiveId: string | null;
 };
@@ -30,10 +37,27 @@ type GroupsViewProps = {
 export function GroupsView({
   viewer,
   memberships,
+  invites,
   defaultActiveId,
 }: GroupsViewProps) {
+  const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [busyInviteId, setBusyInviteId] = useState<string | null>(null);
   const activeId = useActiveGroupId(viewer.username, defaultActiveId);
+
+  const answerInvite = async (
+    inviteId: string,
+    answer: "accept" | "decline"
+  ) => {
+    setBusyInviteId(inviteId);
+    const result =
+      answer === "accept"
+        ? await acceptInviteAction(inviteId)
+        : await declineInviteAction(inviteId);
+    setBusyInviteId(null);
+
+    if (result.ok) router.refresh();
+  };
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -84,6 +108,13 @@ export function GroupsView({
               </p>
             </section>
 
+            <ReceivedInvites
+              items={invites}
+              busyId={busyInviteId}
+              onAccept={(inviteId) => void answerInvite(inviteId, "accept")}
+              onDecline={(inviteId) => void answerInvite(inviteId, "decline")}
+            />
+
             {memberships.length === 0 ? (
               <section className="grp-empty dash-enter" data-delay="70">
                 <span className="grp-empty-icon" aria-hidden="true">
@@ -93,14 +124,10 @@ export function GroupsView({
                   You&apos;re not in a group yet
                 </h2>
                 <p className="grp-empty-copy">
-                  Ask an Owner to invite your username, or accept a pending
-                  invite. Invites live on the member settings page.
+                  Ask an Owner to invite your username — pending invites show up
+                  right here.
                 </p>
                 <span className="grp-username-chip">@{viewer.username}</span>
-                <Link href="/settings/members" className="btn btn-primary btn-sm">
-                  Go to member settings
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
               </section>
             ) : (
               <div className="grp-grid">
@@ -117,17 +144,6 @@ export function GroupsView({
                 ))}
               </div>
             )}
-
-            <footer className="grp-footer">
-              <span>
-                Groups and members sync with your team — changes appear after a
-                refresh.
-              </span>
-              <Link href="/dashboard" className="dash-link">
-                Back to dashboard
-                <ArrowRight className="h-3 w-3" />
-              </Link>
-            </footer>
           </div>
         </main>
       </div>

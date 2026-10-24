@@ -11,6 +11,34 @@
 
 ---
 
+## 0. Update — 2026-10-24 (supersedes sections 1, 4, 9 below)
+
+Member management moved out of the workspace-level settings page and into the
+group it belongs to:
+
+| Then | Now |
+|---|---|
+| `/settings/members` (route deleted) | `/groups/[id]/settings` |
+| Chosen through the rail's "Members" link | Gear icon immediately left of the group name on `/groups/[id]` |
+| "Active group" = most recently joined membership | The group id is in the URL; there is no active-group guess anywhere |
+| Received invites on the members page | Received invites render on `/groups` |
+| Shell: workspace rail with Settings active | Same workspace shell, rail shows Groups active |
+
+`/groups/[id]/settings` has two tabs:
+
+- **Members** — pending invites (Revoke; Managers may revoke only their own), the
+  member table (avatar, name, `@username`, role, **series assigned**, joined
+  date), and Remove. Only the Owner sees row actions. Staff see the roster
+  read-only instead of a single self-card.
+- **General** — the group's pricing currency (Owner only), with a live
+  `1 <group> = x <target>` line and a switch that converts series rates and
+  every chapter still in flight, inside `set_group_currency`.
+
+Available roles, invite rules, and the removal confirm are unchanged from
+section 9.
+
+---
+
 ## 1. What this delivery is
 
 Three surfaces, built together:
@@ -19,13 +47,14 @@ Three surfaces, built together:
 |---|---|
 | `/admin/groups` | Platform admin console: card grid of every group, search, sort, create drawer |
 | `/admin/groups/[id]` | Single-page group detail: metadata, stats, Owner card, read-only member table |
-| `/settings/members` | Group-scoped member management: invites, role changes, removal, invite accept/decline |
+| `/groups/[id]/settings` | Group-scoped member management: invites, role changes, removal — plus the pricing currency (see §0) |
 
 Two navigation shells:
 
 - **Admin shell** — separate from the workspace shell. Sidebar contains **Groups only**
   plus a "Back to workspace" link. Used by `/admin/groups*`.
-- **Workspace shell** — the existing `dash-*` shell. Used by `/settings/members`.
+- **Workspace shell** — the existing `dash-*` shell. Used by `/groups` and
+  `/groups/[id]/settings` (see §0).
   The admin-only account gets an extra "Admin console" nav entry here, otherwise
   `/admin/groups` would be unreachable by navigation.
 
@@ -306,10 +335,13 @@ Content, in order:
 Disabled with a hint ("Add members before transferring ownership") when the group has
 only the Owner. The transfer is one atomic write.
 
-## 9. `/settings/members` — member management
+## 9. Member management (now `/groups/[id]/settings`, Members tab)
 
-Shell: workspace shell, Workspace nav with Settings active. Page resolves the active
-group via `getActiveGroupFor(user.username)`.
+> **Moved 2026-10-24 — see §0.** The flow below still describes the rules; only
+> the route and the group resolution changed. The group comes from the URL, not
+> from an "active group" lookup.
+
+Shell: workspace shell, Groups active in the rail.
 
 Render order:
 

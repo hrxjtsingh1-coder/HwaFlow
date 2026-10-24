@@ -1,11 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { getInitials, signOut } from "@/lib/auth";
 import { useAuthSession } from "@/lib/use-auth-session";
 import { ArrowLeft, LogOut, Menu, ShieldCheck, X } from "../icons";
 import { Logo } from "../logo";
+import { ThemeToggle } from "../theme-toggle";
 import { Forbidden } from "./forbidden";
 
 function AdminLoading({ message }: { message: string }) {
@@ -112,7 +114,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
           </p>
 
           <nav className="admin-nav" aria-label="Platform admin">
-            <a
+            <Link
               href="/admin/groups"
               className="admin-nav-link"
               data-active="true"
@@ -122,15 +124,15 @@ export function AdminShell({ children }: { children: ReactNode }) {
                 <ShieldCheck className="h-4 w-4" />
               </span>
               <span className="admin-nav-text">Groups</span>
-            </a>
+            </Link>
           </nav>
         </div>
 
         <div className="admin-rail-foot">
-          <a href="/dashboard" className="admin-back-link">
+          <Link href="/dashboard" className="admin-back-link">
             <ArrowLeft className="h-3.5 w-3.5" />
             Back to workspace
-          </a>
+          </Link>
 
           <div className="admin-account">
             <span className="admin-account-avatar" aria-hidden="true">
@@ -182,9 +184,9 @@ export function AdminShell({ children }: { children: ReactNode }) {
                   /
                 </span>
                 {detailId ? (
-                  <a href="/admin/groups" className="admin-crumb-link">
+                  <Link href="/admin/groups" className="admin-crumb-link">
                     Groups
-                  </a>
+                  </Link>
                 ) : (
                   <span className="admin-crumb-current" aria-current="page">
                     Groups
@@ -204,10 +206,13 @@ export function AdminShell({ children }: { children: ReactNode }) {
             </nav>
           </div>
 
-          <span className="admin-topbar-badge">
-            <ShieldCheck className="h-3 w-3" />
-            Admin
-          </span>
+          <div className="admin-topbar-right">
+            <ThemeToggle />
+            <span className="admin-topbar-badge">
+              <ShieldCheck className="h-3 w-3" />
+              Admin
+            </span>
+          </div>
         </header>
 
         <main className="admin-main" id="main">

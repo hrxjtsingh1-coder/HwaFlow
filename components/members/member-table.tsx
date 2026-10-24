@@ -11,7 +11,7 @@ type MemberTableProps = {
   members: GroupMember[];
   viewerRole: GroupRole;
   viewerUsername: string;
-  /** Keyed by membership id; assigned series only. */
+  /** Keyed by user id; assigned series only. */
   seriesCounts: Record<string, number>;
   onRoleChange: (member: GroupMember, role: "manager" | "staff") => void;
   onRemove: (member: GroupMember) => void;
@@ -179,7 +179,7 @@ export function MemberTable({
                   <RoleBadge role={member.role} />
                 </td>
                 <td className="mem-table-muted mem-table-series">
-                  {seriesCounts[member.id] ?? 0}
+                  {seriesCounts[member.userId] ?? 0}
                 </td>
                 <td className="mem-table-muted">
                   {formatShortDate(member.joinedAt)}

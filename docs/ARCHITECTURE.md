@@ -3,15 +3,15 @@
 > **Status:** In build. Landing, auth, workspace and the groups delivery (admin console
 > + member settings) are complete.
 > **Build mode:** Page-by-page. The user names a page; we build that page fully, then move on.
-> **Last updated:** 2026-10-21
+> **Last updated:** 2026-10-23
 > **Next up:** Series module (tiles grid, create/edit, assignments). The groups build
 > spec and decision record stays at [`docs/GROUPS-PAGE.md`](GROUPS-PAGE.md).
 
 This document is the single source of truth for architecture, decisions, and the page
 inventory. Read it before building anything.
 
-> Note: the repo's `context.md` is empty (0 bytes). This document supersedes it.
-> When we start building, a copy belongs at `D:\Noddy\MTL\docs\ARCHITECTURE.md`.
+> Note: `docs/context.md` carries the original product intent. This document
+> supersedes it for architecture, data model, RBAC, and page inventory.
 
 ---
 
@@ -61,8 +61,12 @@ processing, public reading audience, reader accounts, comments/community.
 2. "Money earned this month" = sum of `series.rate_amount` for chapters whose
    `approved_at` falls in the current calendar month. Moving a chapter out of
    approved removes the earning.
-3. Currency is a label on the group (USD default). No conversion, no formatting rules
-   beyond symbol + 2 decimals.
+3. Money has **two currencies**. A group prices its work in `groups.currency`
+   (Owner-set); each member reads amounts in `profiles.display_currency`. Conversion
+   uses `fx_rates` (units per 1 USD, refreshed from Frankfurter every 30 days) and
+   happens on the server, so the client only ever formats the number it is given.
+   An approved chapter keeps the currency it was earned in (`chapters.rate_currency`);
+   switching a group's currency converts series rates and in-flight snapshots only.
 4. Chapter numbers are entered manually by staff, with the next number auto-suggested.
 5. Bubble reading order is auto-derived and staff can drag to reorder.
 6. Username auth is implemented over Supabase's email-based auth using a synthetic
@@ -433,21 +437,94 @@ browser (no worker) but reads from and writes to Supabase:
 
 ## 9. Design system
 
-- **Palette:** pastel. Muted mint, lavender, peach, sky as accents on near-white
-  surfaces. Never saturated primaries. Dark mode uses desaturated deep slate, not black.
-- **Tokens:** `--bg`, `--surface`, `--surface-2`, `--border`, `--text`, `--muted`,
-  `--accent`, `--accent-soft`, `--success`, `--warning`, `--danger`. All colors go
-  through tokens; no hard-coded hex in components.
-- **Shape:** generous rounding (12–16 px), 1px soft borders, low-opacity shadows.
-- **Density:** roomy. This is a tool people stare at for hours.
-- **Shared primitives:** `.chip` (+ `chip-mint`, `chip-accent`, `chip-peach`), `.eyebrow`,
-  `.display-serif`, `.status-dot`, `.group-avatar`, `.role-badge`, `Logo`, `getInitials`.
-  Both the admin and workspace shells compose these rather than each defining their own.
-- **Type:** Inter for UI; Noto Sans KR/JP/SC as CJK fallback for source text.
-- **Motion:** 120–180 ms ease-out, no bounce. Respect `prefers-reduced-motion`.
-- **Layout:** 240 px sidebar nav, max-width content, page headers with title + actions.
+**Direction:** neo-brutalism. Pastel ink blocks printed on paper, and the same
+blocks printed on ink in dark mode. Flat fills, hard offset shadows, visible
+edges, square corners. Depth comes from a 2–6 px offset, never from blur.
+
+- **Palette (light):** paper `oklch(0.964 0.012 91.52)` (#F6F3EA), raised
+  surface `oklch(0.994 0.009 93.57)` (#FFFDF6), ink `oklch(0.182 0 89.88)`
+  (#121212). Pastel fills: mint `oklch(0.897 0.083 165.63)`, lilac
+  `oklch(0.834 0.093 295.44)`, apricot `oklch(0.885 0.075 59.4)`, sky
+  `oklch(0.865 0.073 242.52)`, blush `oklch(0.876 0.072 357.9)`. The
+  highlighter lime was retired; no lime token or primitive remains. Accent is
+  a readable ink violet
+  `oklch(0.37 0.154 283.9)`, because `var(--accent)` is also used as text.
+- **Palette (dark):** ink `oklch(0.155 0.002 286.15)` (#0C0C0D), raised surface
+  `oklch(0.197 0.004 286.03)`, cream edge/text `oklch(0.952 0.016 91.55)`
+  (#F3EFE3). Pastel fills keep their light values in both themes.
+- **The pastel rule:** pastels are always **fills**, never text colours. Text on
+  a pastel is ink. Because a cream edge is invisible on a pastel in dark mode,
+  pastel blocks carry a fixed ink outline (`--fill-edge`), not `--edge`.
+- **Two edges:** `--edge` is the 2 px chrome outline (ink in light, cream in
+  dark) for cards, modals, toolbars, inputs and topbars. `--border` is a 1 px
+  hairline for tables, dense lists and row dividers. Controls are never hairline
+  only.
+- **Shape:** `border-radius: 0` everywhere. Only status dots, spinners and the
+  unread pip stay round (11 intentional circles).
+- **Shadows:** hard offsets only — `--shadow-hard` (4 px), `--shadow-hard-sm`
+  (2 px), `--shadow-hard-lg` (6 px). No blurred shadow, no `backdrop-filter`,
+  no gradients except the halftone dot screen (`.grid-field`) and the SVG
+  halftone pattern in `PanelArt`.
+- **Tokens:** `--bg`, `--surface`, `--surface-2`, `--surface-3`, `--edge`,
+  `--border`, `--border-strong`, `--text`, `--muted`, `--faint`, `--accent`,
+  `--accent-hover`, `--accent-ink`, `--accent-fill`, `--accent-soft`, `--mint`,
+  `--lavender`, `--peach`, `--sky`, `--blush`, `--fill-edge`,
+  `--success`, `--warning`, `--danger`, `--scrim`, `--scrim-strong`. Route CSS
+  must not introduce new hex values.
+- **Type:** Archivo Black for display (`--font-display`), Inter for UI, IBM Plex
+  Mono for labels, metadata and numbers (`--font-mono`). `.eyebrow` renders
+  mono, uppercase, bracketed `[ like this ]`. `.display-serif` survives by name
+  as the heading emphasis: accent-violet text with an apricot underline. It
+  deliberately repeats across wrapped lines; it is a rule, not a highlight
+  block, so it also reads correctly in auth and dashboard headings.
+- **Buttons:** `.btn` = surface block with a 2 px edge; hover lifts by 2 px and
+  casts `--shadow-hard`; active presses into the page. `.btn-primary` is the
+  ink tile with `--bg` text in light mode, inverting to a cream tile in dark;
+  hover turns it apricot with ink text. Focus is a 3 px `--edge` ring, never a
+  soft halo.
+- **Shared primitives:** `.chip` (+ `chip-mint`, `chip-accent`, `chip-peach`,
+  `chip-blush`), `.eyebrow`, `.display-serif`, `.status-dot`,
+  `.group-avatar`, `.role-badge`, `.theme-toggle`, `Logo`, `getInitials`.
+  Landing-only pieces — `SectionHead`, `ReleaseSlip`, `WorkspacePreview`,
+  `TiltFrame`, proof rows, the inverted run band, the role ladder/access
+  matrix, and `NotFoundState` — are styled in `app/landing.css`.
+- **Theme runtime:** `lib/theme.ts` owns the preference (`hwaflow.theme.v1`).
+  First visit follows the OS; pressing the toggle stores an explicit
+  light/dark choice. An inline script in `app/layout.tsx` applies
+  `data-theme` on `<html>` before paint, so there is no flash. The toggle lives
+  in the dashboard and admin topbars and in the landing header; it uses one
+  stored preference, so there is no second theme system. Pressing it hands the
+  button's viewport centre to `toggle(origin)`, which runs a same-document View
+  Transition: the new theme grows out of a `clip-path` circle from behind the
+  button (480 ms, ease-out). Browsers without `startViewTransition`, and
+  reduced-motion users, get the instant swap.
+- **Contrast:** all text pairs meet WCAG AA — body 16.9:1, muted 8.0:1, faint
+  5.0:1 on paper; ink on every pastel ≥ 11:1; dark body 17.0:1, muted 9.4:1,
+  faint 5.8:1. Status colours were darkened for AA on their pastel fills.
+- **Motion:** `app/motion.css` is the interaction layer. Route CSS keeps its
+  own surface entrances; the motion layer fills in navigation, rows, menus,
+  tabs, fields, skeletons and press feedback. 90–130 ms for input response,
+  160–220 ms for entrances, `cubic-bezier(0.2, 0, 0, 1)` (plus an in-out curve
+  for width/scan loops), transform/opacity only. Entrance animations use
+  `backwards`, so hover transforms keep working after the animation releases.
+  Rules are scoped to `:root[data-theme]` so they win against route CSS order.
+  Hover transforms are gated to fine pointers; `prefers-reduced-motion` is
+  honoured globally. The landing workspace is the one deliberate 3D exception:
+  `TiltFrame` lerps to ±16 px x, ±8 px y, ±3° rotateY and ±1.5° rotateX under a
+  fine pointer, returns to rest, and is disabled for touch or reduced motion.
+  No parallax, no shine sweeps.
+- **Layout:** 240 px sidebar nav, max-width content, page headers with title +
+  actions. The landing uses a 12-column editorial grid, an 8/4 hero, horizontal
+  proof rows, a single inverted run band, and a 5/7 role ladder + access matrix.
 - **Mobile:** dashboard/library/calendar responsive; workspace shows a
-  "best viewed on desktop" notice instead of a broken layout.
+  "best viewed on desktop" notice instead of a broken layout. The landing
+  collapses the hero, proof rows, run band, team grid and CTA to one column;
+  the workspace mock drops its rail and viewer and keeps the chapter editor.
+- **Missing states:** `components/not-found-state.tsx` is the shared shape
+  (torn panel, route back, optional secondary route). `app/not-found.tsx` is
+  the global 404 for unmatched URLs. In-app missing states stay in-page at
+  HTTP 200 instead of throwing `notFound()`, so a stale link still has the
+  surrounding dashboard chrome.
 
 ---
 
@@ -516,18 +593,26 @@ approved counts come from `chapters.rate_snapshot`.
 | # | Route | Purpose | Depends on |
 |---|---|---|---|
 | 18 | `/settings/profile` | Display name, avatar, password change | profiles |
-| 19 | `/settings/group` | Owner: group name, currency, retention policy | groups |
-| 20 | `/settings/members` | Invite by username, pending invites, change roles, remove | group_members, group_invites |
+| 19 | `/settings/group` | Group name, pricing currency, retention policy — now `/groups/[id]/settings` (General tab) | groups |
+| 20 | `/groups/[id]/settings` | Members tab: invites, role changes, remove. General tab: pricing currency | group_members, group_invites, series_assignments, fx_rates |
 
-**Built:** `/settings/members` — received invites, Staff self-card, and the
-Owner/Manager roster with the invite drawer and remove confirmation. Roster and
-counts read Supabase and refresh after a write; removing a member also unassigns
-their series. `/settings/profile` and `/settings/group` are deferred.
+**Built:** `/groups/[id]/settings` — reached from the gear beside the group name.
+Members tab: pending invites with revoke, member table with real per-member series
+counts, Owner-only role changes and removal (removal also unassigns their series).
+General tab: currency switch, Owner only, converting inside `set_group_currency`.
+Received invites live on `/groups`. `/settings/members` was deleted on 2026-10-24:
+it guessed a group from the newest membership, which was wrong for anyone in more
+than one group. Account settings (display name, username, password, display
+currency) open from the profile block in the rail on every signed-in surface.
+`/settings/profile` and `/settings/group` are otherwise deferred.
 
 ### Shared states (not routes)
 Signed-out redirect, no-group-yet screen (signed in but uninvited), 403 for
 unassigned series, empty states for every list, mobile workspace notice,
-quota-exhausted pipeline banner.
+quota-exhausted pipeline banner. Every route segment also ships a `loading.tsx`
+skeleton shaped like its own page (`components/page-skeleton.tsx`) and an
+`error.tsx` built on `components/error-state.tsx`, so a navigation or a render
+failure never shows a blank shell.
 
 ---
 
@@ -597,6 +682,13 @@ quota-exhausted pipeline banner.
 | 2026-10-22 | `/admin/groups/[id]` remains on the pre-Supabase local stores for now | Platform admins can see group metadata but not series/chapter content under RLS, so the page needs its own admin bundle before it can be converted honestly. Every other surface is Supabase-backed |
 | 2026-10-22 | Pipeline routes require a session (`requirePipelineViewer`) | They spend paid/free-tier provider quota; an unauthenticated endpoint would be an open proxy |
 | 2026-10-22 | Dashboard money and approved counts are computed server-side from approved chapters' `rate_snapshot`; `lib/earnings.ts` and the chapter/glossary/notification browser stores are retired | One query shape for one number, and no second copy of chapter state to drift. The deferred admin detail keeps the remaining local helpers alive until it is converted |
+| 2026-10-24 | Member management lives at `/groups/[id]/settings`; `/settings/members` is deleted | The old page guessed a group from the newest membership, which is simply wrong for an Owner in several groups. The group id is now in the URL, so there is nothing to guess |
+| 2026-10-24 | Two currencies: `groups.currency` for pricing, `profiles.display_currency` for reading; conversion is server-side from `fx_rates` | Yields one place to set a price and no per-page conversion logic. `FALLBACK_RATES` keeps the UI working when a refresh fails, and the client never supplies the factor the `set_group_currency` RPC uses |
+| 2026-10-24 | Approved chapters keep the currency they were earned in (`chapters.rate_currency`, snapshotted at submit) | A group switching currency must not rewrite what someone already earned; only series rates and in-flight snapshots convert |
+| 2026-10-24 | Time spent is stored per member per day in `focus_time`, written only through `log_focus_time` | `localStorage` reset on a second device and on cleared site data, so the widget undercounted. The cap (600s per call) keeps a stuck loop from claiming an hour in one request |
+| 2026-10-24 | Every route segment has its own loading skeleton shaped like the page, and its own `error.tsx` built on `ErrorState` | A single generic skeleton made every navigation look identical, and an unhandled render error used to land on the bare Next error screen |
+| 2026-10-24 | Account settings are a dialog owned by `DashboardRail` | The rail is present on every signed-in surface, so one mount point covers all of them without another shell or route |
+| 2026-10-24 | `FocusTracker` is mounted in the root layout and is the only counter; the dashboard reads it through `useFocus` | Time spent is app-wide, not dashboard-only, and the provider survives client navigation. It seeds from `GET /api/focus-time` so a new tab or a fresh sign-in resumes today's stored total instead of restarting at zero |
 
 ---
 

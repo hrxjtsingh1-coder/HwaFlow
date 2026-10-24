@@ -214,6 +214,25 @@ function toFailure(error: unknown): Failure {
   return { code: "unknown", message: pipelineErrorMessage(null) };
 }
 
+/**
+ * A 429 is not a failed chapter. Wait out the advertised delay and go again
+ * once; a longer delay is left to the user, because a run that silently sleeps
+ * for a minute looks hung.
+ */
+async function fetchWithThrottle(
+  input: string,
+  init: RequestInit
+): Promise<Response> {
+  const response = await fetch(input, init);
+  if (response.status !== 429) return response;
+
+  const wait = Number(response.headers.get("retry-after"));
+  if (!Number.isFinite(wait) || wait <= 0 || wait > 10) return response;
+
+  await new Promise((resolve) => setTimeout(resolve, wait * 1000));
+  return fetch(input, init);
+}
+
 /* ------------------------------------------------------------------ */
 /* Block cache                                                         */
 /* ------------------------------------------------------------------ */
@@ -298,7 +317,7 @@ async function extractBatch(
 
   let response: Response;
   try {
-    response = await fetch("/api/pipeline/extract", {
+    response = await fetchWithThrottle("/api/pipeline/extract", {
       method: "POST",
       body: form,
       signal: runController?.signal,
@@ -445,7 +464,7 @@ async function runTextStages(ctx: PipelineContext): Promise<boolean> {
 
   let translations: TranslateResponse["translations"];
   try {
-    const response = await fetch("/api/pipeline/translate", {
+    const response = await fetchWithThrottle("/api/pipeline/translate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -534,7 +553,7 @@ async function runTextStages(ctx: PipelineContext): Promise<boolean> {
 
   let proof: ProofreadResponse;
   try {
-    const response = await fetch("/api/pipeline/proofread", {
+    const response = await fetchWithThrottle("/api/pipeline/proofread", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

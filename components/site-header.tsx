@@ -6,11 +6,12 @@ import { Logo } from "./logo";
 import { ArrowRight, LogOut, Menu, X } from "./icons";
 import { getInitials, signOut } from "@/lib/auth";
 import { useAuthSession } from "@/lib/use-auth-session";
+import { ThemeToggle } from "./theme-toggle";
 
 const links = [
-  { href: "#product", label: "What it does" },
-  { href: "#pipeline", label: "How it works" },
-  { href: "#team", label: "For teams" },
+  { href: "/#product", label: "What it does" },
+  { href: "/#pipeline", label: "How it works" },
+  { href: "/#team", label: "For teams" },
 ];
 
 export function SiteHeader() {
@@ -44,15 +45,16 @@ export function SiteHeader() {
       <div className="shell flex h-[4.25rem] items-center justify-between gap-4">
         <Logo />
 
-        <nav className="hidden items-center gap-8 md:flex" aria-label="Primary">
+        <nav className="hidden items-center gap-8 lg:flex" aria-label="Primary">
           {links.map((link) => (
-            <a key={link.href} href={link.href} className="nav-link">
+            <Link key={link.href} href={link.href} className="nav-link">
               {link.label}
-            </a>
+            </Link>
           ))}
         </nav>
 
-        <div className="hidden items-center gap-2 md:flex">
+        <div className="hidden items-center gap-2 lg:flex">
+          <ThemeToggle />
           {signedIn ? (
             <div className="account-chip">
               <Link
@@ -91,47 +93,64 @@ export function SiteHeader() {
           )}
         </div>
 
-        <button
-          type="button"
-          onClick={() => setOpen((value) => !value)}
-          aria-expanded={open}
-          aria-controls="mobile-nav"
-          aria-label={open ? "Close menu" : "Open menu"}
-          className="grid h-10 w-10 place-items-center rounded-full border border-border bg-surface/70 text-ink backdrop-blur transition-[color,background-color,transform] duration-150 hover:bg-surface active:scale-95 md:hidden"
-        >
-          {open ? (
-            <X className="h-[18px] w-[18px]" />
+        <div className="flex items-center gap-2 lg:hidden">
+          {signedIn ? (
+            <Link
+              href="/dashboard"
+              className="account-avatar"
+              aria-label="Open your dashboard"
+              title="Open your dashboard"
+            >
+              {getInitials(signedIn.displayName, signedIn.username)}
+            </Link>
           ) : (
-            <Menu className="h-[18px] w-[18px]" />
+            <Link href="/register" className="btn btn-primary btn-sm header-join">
+              Join
+            </Link>
           )}
-        </button>
+          <ThemeToggle />
+          <button
+            type="button"
+            onClick={() => setOpen((value) => !value)}
+            aria-expanded={open}
+            aria-controls="mobile-nav"
+            aria-label={open ? "Close menu" : "Open menu"}
+            className="grid h-10 w-10 place-items-center border-2 border-[var(--edge)] bg-[var(--surface)] text-[var(--text)] transition-[background-color,transform] duration-150 hover:bg-[var(--peach)] hover:text-[var(--ink)] active:translate-x-0.5 active:translate-y-0.5"
+          >
+            {open ? (
+              <X className="h-[18px] w-[18px]" />
+            ) : (
+              <Menu className="h-[18px] w-[18px]" />
+            )}
+          </button>
+        </div>
       </div>
 
       <div
         id="mobile-nav"
         aria-hidden={!open}
         inert={!open}
-        className={`grid overflow-hidden bg-[var(--header-bg)] backdrop-blur-xl transition-[grid-template-rows,opacity] duration-300 ease-[var(--ease)] md:hidden ${
+        className={`grid overflow-hidden bg-[var(--bg)] transition-[grid-template-rows,opacity] duration-300 ease-[var(--ease)] lg:hidden ${
           open
-            ? "grid-rows-[1fr] border-b border-border opacity-100"
-            : "grid-rows-[0fr] border-b border-transparent opacity-0"
+            ? "grid-rows-[1fr] border-b-2 border-[var(--edge)] opacity-100"
+            : "grid-rows-[0fr] border-b-2 border-transparent opacity-0"
         }`}
       >
         <div className="min-h-0">
           <nav className="shell flex flex-col gap-1 py-4" aria-label="Mobile">
             {links.map((link) => (
-              <a
+              <Link
                 key={link.href}
                 href={link.href}
                 onClick={() => setOpen(false)}
-                className="rounded-xl px-3 py-2.5 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-ink"
+                className="px-3 py-2.5 text-sm font-medium text-muted transition-colors hover:bg-[var(--peach)] hover:text-[var(--ink)]"
               >
                 {link.label}
-              </a>
+              </Link>
             ))}
             <div className="mt-2 border-t border-border pt-4">
               {signedIn ? (
-                <div className="flex items-center justify-between gap-2 rounded-xl border border-border bg-surface px-3 py-2">
+                <div className="flex items-center justify-between gap-2 border-2 border-[var(--edge)] bg-[var(--surface)] px-3 py-2">
                   <Link
                     href="/dashboard"
                     onClick={() => setOpen(false)}

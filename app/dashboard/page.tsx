@@ -7,7 +7,7 @@ import {
   dashboardWeek,
   earningsForViewer,
 } from "@/lib/server/chapters";
-import { listGroupsForViewer } from "@/lib/server/groups";
+import { recentFocusDays } from "@/lib/server/focus";
 import { getViewer } from "@/lib/session";
 
 export const metadata: Metadata = {
@@ -24,24 +24,21 @@ export default async function DashboardPage() {
   const viewer = await getViewer();
   if (!viewer) redirect("/login");
 
-  const [memberships, week, earnings, approved] = await Promise.all([
-    listGroupsForViewer(viewer),
+  const [week, earnings, approved, focus] = await Promise.all([
     dashboardWeek(viewer),
     earningsForViewer(viewer),
     countApprovedForViewer(viewer),
+    recentFocusDays(viewer),
   ]);
-
-  const newest = [...memberships].sort((a, b) =>
-    b.member.joinedAt.localeCompare(a.member.joinedAt)
-  )[0];
 
   return (
     <DashboardHome
       viewer={viewer}
-      currency={newest?.group.currency ?? "USD"}
+      currency={viewer.displayCurrency}
       week={week}
       earnings={earnings}
       approved={approved}
+      focus={focus}
       nowIso={new Date().toISOString()}
     />
   );

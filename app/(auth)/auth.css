@@ -30,9 +30,11 @@
 
 .auth-aura {
   position: absolute;
-  border-radius: 999px;
+  border-radius: 0;
   filter: blur(90px);
   will-change: transform;
+
+  display: none;
 }
 
 .auth-aura-lavender {
@@ -40,9 +42,11 @@
   left: -12rem;
   width: 44rem;
   height: 44rem;
-  background: radial-gradient(circle at center, var(--glow-lavender), transparent 66%);
+
   opacity: 0.9;
   animation: auth-drift-lavender 28s ease-in-out infinite;
+
+  display: none;
 }
 
 .auth-aura-mint {
@@ -50,9 +54,11 @@
   bottom: -20rem;
   width: 42rem;
   height: 42rem;
-  background: radial-gradient(circle at center, var(--glow-mint), transparent 66%);
+
   opacity: 0.8;
   animation: auth-drift-mint 34s ease-in-out infinite;
+
+  display: none;
 }
 
 .auth-aura-peach {
@@ -60,9 +66,11 @@
   left: 18%;
   width: 30rem;
   height: 30rem;
-  background: radial-gradient(circle at center, var(--glow-peach), transparent 68%);
+
   opacity: 0.7;
   animation: auth-drift-peach 40s ease-in-out infinite;
+
+  display: none;
 }
 
 .auth-aura-sky {
@@ -70,9 +78,11 @@
   right: 16%;
   width: 32rem;
   height: 32rem;
-  background: radial-gradient(circle at center, var(--glow-sky), transparent 68%);
+
   opacity: 0.65;
   animation: auth-drift-sky 32s ease-in-out infinite;
+
+  display: none;
 }
 
 .auth-aside-grid {
@@ -86,11 +96,9 @@
 .auth-aside-vignette {
   position: absolute;
   inset: 0;
-  background: radial-gradient(
-    ellipse at 50% 46%,
-    transparent 26%,
-    color-mix(in oklab, var(--bg) 74%, transparent) 100%
-  );
+
+
+  display: none;
 }
 
 /* floating product chips, wide screens only */
@@ -112,13 +120,11 @@
   display: flex;
   align-items: center;
   gap: 0.55rem;
-  border-radius: 0.95rem;
-  border: 1px solid var(--border);
+  border-radius: 0;
+  border: 2px solid var(--edge);
   background: color-mix(in oklab, var(--surface) 88%, transparent);
   padding: 0.5rem 0.65rem;
   box-shadow: var(--shadow-chip);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
   animation: auth-float 9s ease-in-out infinite,
     auth-fade-in 0.9s var(--ease-out) 0.45s both;
 }
@@ -141,7 +147,7 @@
   flex-shrink: 0;
   width: 1.65rem;
   height: 1.65rem;
-  border-radius: 0.5rem;
+  border-radius: 0;
 }
 
 .auth-float-icon--mint {
@@ -213,15 +219,13 @@
   align-items: center;
   gap: 0.4rem;
   height: 2.1rem;
-  border-radius: 999px;
-  border: 1px solid var(--border);
+  border-radius: 0;
+  border: 2px solid var(--edge);
   background: color-mix(in oklab, var(--surface) 78%, transparent);
   padding-inline: 0.8rem;
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--muted);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   transition: color 0.22s var(--ease), border-color 0.22s var(--ease),
     transform 0.22s var(--ease), background-color 0.22s var(--ease);
 }
@@ -269,31 +273,41 @@
   top: 50%;
   width: min(46rem, 130vw);
   aspect-ratio: 1;
-  border-radius: 999px;
+  border-radius: 0;
   filter: blur(42px);
   transform: translate(-50%, -50%);
   transition: opacity 1.2s var(--ease);
   will-change: transform;
+
+  display: none;
 }
 
 .auth-halo--lavender {
-  background: radial-gradient(circle at 50% 50%, var(--glow-lavender), transparent 62%);
+
   opacity: 0.72;
   animation: auth-halo-pulse 18s ease-in-out infinite;
+
+  display: none;
 }
 
 .auth-halo--mint {
-  background: radial-gradient(circle at 50% 50%, var(--glow-mint), transparent 62%);
+
   opacity: 0;
   animation: auth-halo-pulse 15s ease-in-out -5s infinite;
+
+  display: none;
 }
 
 .auth-shell[data-mode="sign-up"] .auth-halo--lavender {
   opacity: 0.28;
+
+  display: none;
 }
 
 .auth-shell[data-mode="sign-up"] .auth-halo--mint {
   opacity: 0.72;
+
+  display: none;
 }
 
 .auth-main-body {
@@ -315,8 +329,8 @@
   isolation: isolate;
   width: 100%;
   overflow: hidden;
-  border-radius: 1.75rem;
-  border: 1px solid var(--border);
+  border-radius: 0;
+  border: 2px solid var(--edge);
   background: color-mix(in oklab, var(--surface) 93%, transparent);
   box-shadow: var(--shadow-float);
   padding: 1.4rem;
@@ -335,14 +349,12 @@
   position: absolute;
   inset: 0;
   z-index: -1;
-  background: radial-gradient(
-    400px circle at var(--auth-mx, 50%) var(--auth-my, 0%),
-    color-mix(in oklab, var(--accent-soft) 62%, transparent),
-    transparent 66%
-  );
+
   opacity: 0;
   transition: opacity 0.35s var(--ease);
   pointer-events: none;
+
+  display: none;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -358,13 +370,10 @@
   top: 0;
   height: 1px;
   z-index: 2;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.7),
-    transparent
-  );
+
   pointer-events: none;
+
+  display: none;
 }
 
 .auth-card[data-success="true"] {
@@ -380,8 +389,8 @@
   position: relative;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  border-radius: 999px;
-  border: 1px solid var(--border);
+  border-radius: 0;
+  border: 2px solid var(--edge);
   background: var(--surface-2);
   padding: 0.25rem;
   animation: auth-rise 0.45s var(--ease-out) 0.05s both;
@@ -393,10 +402,9 @@
   bottom: 0.25rem;
   left: 0.25rem;
   width: calc(50% - 0.25rem);
-  border-radius: 999px;
+  border-radius: 0;
   background: var(--surface);
-  box-shadow: 0 3px 10px -4px rgb(var(--shadow-tint) / 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.65);
+
   transition: transform 0.42s var(--ease-out);
   will-change: transform;
 }
@@ -411,7 +419,7 @@
   display: grid;
   place-items: center;
   height: 2.15rem;
-  border-radius: 999px;
+  border-radius: 0;
   font-size: 0.8125rem;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -550,8 +558,8 @@
 .auth-input {
   width: 100%;
   height: 3.2rem;
-  border-radius: 0.85rem;
-  border: 1px solid var(--border);
+  border-radius: 0;
+  border: 2px solid var(--edge);
   background: var(--surface);
   padding: 1.05rem 0.9rem 0.3rem 2.55rem;
   font-size: 0.86rem;
@@ -575,7 +583,7 @@
 .auth-input:focus {
   outline: none;
   border-color: color-mix(in oklab, var(--accent) 52%, var(--border));
-  box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent) 13%, transparent);
+  box-shadow: 0 0 0 3px var(--edge);
 }
 
 .auth-input:disabled {
@@ -638,7 +646,7 @@
   place-items: center;
   width: 2rem;
   height: 2rem;
-  border-radius: 0.6rem;
+  border-radius: 0;
   color: var(--faint);
   transition: color 0.2s var(--ease), background-color 0.2s var(--ease),
     transform 0.15s var(--ease);
@@ -680,7 +688,7 @@
 }
 
 .auth-field[data-invalid="true"] .auth-input:focus {
-  box-shadow: 0 0 0 4px color-mix(in oklab, var(--danger) 12%, transparent);
+  box-shadow: 0 0 0 3px var(--edge);
 }
 
 .auth-field[data-invalid="true"] .auth-field-icon {
@@ -710,7 +718,7 @@
   place-items: center;
   width: 1.25rem;
   height: 1.25rem;
-  border-radius: 999px;
+  border-radius: 0;
   animation: auth-pop 0.3s var(--ease-out);
 }
 
@@ -789,7 +797,7 @@
 }
 
 .auth-forgot-panel p {
-  border-radius: 0.75rem;
+  border-radius: 0;
   border: 1px solid var(--border);
   background: var(--surface-2);
   padding: 0.6rem 0.7rem;
@@ -824,7 +832,7 @@
   place-items: center;
   width: 1.05rem;
   height: 1.05rem;
-  border-radius: 0.35rem;
+  border-radius: 0;
   border: 1px solid var(--border-strong);
   background: var(--surface);
   color: transparent;
@@ -834,9 +842,9 @@
 }
 
 .auth-check input:checked + .auth-check-box {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #ffffff;
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--bg);
   animation: auth-check-pop 0.28s var(--ease-out);
 }
 
@@ -851,7 +859,7 @@
   display: flex;
   align-items: flex-start;
   gap: 0.4rem;
-  border-radius: 0.7rem;
+  border-radius: 0;
   border: 1px solid color-mix(in oklab, var(--danger) 28%, transparent);
   background: color-mix(in oklab, var(--danger) 9%, var(--surface));
   padding: 0.55rem 0.65rem;
@@ -874,15 +882,14 @@
   height: 3rem;
   margin-top: 0.15rem;
   overflow: hidden;
-  border-radius: 0.85rem;
+  border-radius: 0;
   border: 1px solid transparent;
   background: var(--text);
   color: var(--bg);
   font-size: 0.875rem;
   font-weight: 600;
   letter-spacing: -0.01em;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16),
-    0 16px 30px -20px rgb(var(--shadow-tint) / 0.8);
+
   transition: background-color 0.22s var(--ease), transform 0.16s var(--ease),
     box-shadow 0.22s var(--ease), opacity 0.2s var(--ease);
 }
@@ -891,22 +898,18 @@
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    105deg,
-    transparent 34%,
-    rgba(255, 255, 255, 0.22) 48%,
-    transparent 62%
-  );
+
   transform: translateX(-130%);
   transition: transform 0.7s var(--ease);
   pointer-events: none;
+
+  display: none;
 }
 
 .auth-submit:hover:not(:disabled) {
   background: color-mix(in oklab, var(--text) 86%, var(--accent));
   transform: translateY(-1px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    0 20px 36px -18px rgb(var(--shadow-tint) / 0.7);
+
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -999,7 +1002,7 @@
 .auth-meter-bars > span {
   flex: 1;
   height: 0.25rem;
-  border-radius: 999px;
+  border-radius: 0;
   background: var(--surface-3);
   transition: background-color 0.3s var(--ease);
   transform-origin: left;
@@ -1143,10 +1146,10 @@
   width: 3.5rem;
   height: 3.5rem;
   margin-bottom: 0.55rem;
-  border-radius: 999px;
-  border: 1px solid color-mix(in oklab, var(--mint-ink) 18%, transparent);
-  background: color-mix(in oklab, var(--mint) 62%, var(--surface));
-  color: var(--mint-ink);
+  border-radius: 0;
+  border: 1px solid color-mix(in oklab, var(--fill-edge) 18%, transparent);
+  background: var(--mint);
+  color: var(--fill-edge);
   animation: auth-badge-in 0.6s var(--ease-out);
 }
 
@@ -1192,7 +1195,7 @@
   height: 3px;
   margin: 0.9rem 0 0.6rem;
   overflow: hidden;
-  border-radius: 999px;
+  border-radius: 0;
   background: var(--surface-2);
 }
 
@@ -1201,7 +1204,7 @@
   width: 100%;
   height: 100%;
   transform-origin: left;
-  background: linear-gradient(90deg, var(--accent), var(--mint-ink));
+  background: var(--peach);
   animation: auth-progress 3.2s linear forwards;
 }
 
@@ -1209,14 +1212,11 @@
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.55),
-    transparent
-  );
+
   transform: translateX(-100%);
   animation: auth-shine 1.6s var(--ease) 0.35s infinite;
+
+  display: none;
 }
 
 .auth-success .auth-submit {
@@ -1235,24 +1235,32 @@
   width: 0;
   height: 0;
   pointer-events: none;
+
+  display: none;
 }
 
 .auth-sparks > span {
   position: absolute;
   width: 0.3rem;
   height: 0.3rem;
-  border-radius: 999px;
-  background: var(--accent);
+  border-radius: 0;
+
   opacity: 0;
   animation: auth-spark 0.9s var(--ease-out) var(--spark-delay, 0ms) both;
+
+  display: none;
 }
 
 .auth-sparks > span:nth-child(3n) {
-  background: var(--mint-ink);
+
+
+  display: none;
 }
 
 .auth-sparks > span:nth-child(3n + 1) {
-  background: var(--warning);
+
+
+  display: none;
 }
 
 /* existing session */
@@ -1275,16 +1283,16 @@
   width: 3.5rem;
   height: 3.5rem;
   margin-bottom: 0.6rem;
-  border-radius: 999px;
-  background: linear-gradient(145deg, #c9efdd 0%, #e7e2fb 58%, #ffe3d1 100%);
-  color: #17181c;
+  border-radius: 0;
+  background: var(--lavender);
+  color: var(--ink);
   font-size: 0.9rem;
   font-weight: 700;
   letter-spacing: 0.04em;
-  box-shadow: inset 0 0 0 1px rgba(23, 24, 28, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.55),
-    0 14px 30px -18px rgb(var(--shadow-tint) / 0.5);
+
   animation: auth-badge-in 0.55s var(--ease-out);
+
+  border: 2px solid var(--fill-edge);
 }
 
 .auth-resume .auth-submit {
@@ -1314,7 +1322,7 @@
   flex-shrink: 0;
   border-radius: 999px;
   background: var(--success);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--success) 12%, transparent);
+  box-shadow: 0 0 0 2px var(--bg);
 }
 
 .auth-legal {
@@ -1601,7 +1609,7 @@
 
 @media (max-width: 420px) {
   .auth-card {
-    border-radius: 1.5rem;
+    border-radius: 0;
     padding: 1.2rem;
   }
 

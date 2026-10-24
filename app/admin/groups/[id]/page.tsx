@@ -1,20 +1,30 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 
 import { GroupDetailAdmin } from "@/components/admin/group-detail-admin";
 import { NotFoundState } from "@/components/not-found-state";
 import { getGroupDetailForAdmin } from "@/lib/server/admin-groups";
 import { getViewer } from "@/lib/session";
 
-export const metadata: Metadata = {
-  title: "Group details",
-  description:
-    "Platform admin view of one HwaFlow group: owner, roster and metadata counts.",
-  robots: {
-    index: false,
-    follow: false,
-  },
-};
+const loadDetail = cache(getGroupDetailForAdmin);
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const detail = await loadDetail(id);
+
+  return {
+    title: detail?.group.name ?? "Group details",
+    description: detail
+      ? `Platform admin view of ${detail.group.name}: owner, roster and metadata counts.`
+      : "Platform admin view of one HwaFlow group: owner, roster and metadata counts.",
+    robots: { index: false, follow: false },
+  };
+}
 
 export default async function AdminGroupPage({
   params,
@@ -26,7 +36,7 @@ export default async function AdminGroupPage({
   if (!viewer.isPlatformAdmin) redirect("/admin/groups");
 
   const { id } = await params;
-  const detail = await getGroupDetailForAdmin(id);
+  const detail = await loadDetail(id);
 
   // ARCHITECTURE §9: in-app missing states stay at HTTP 200, so this is a
   // rendered state rather than `notFound()`.

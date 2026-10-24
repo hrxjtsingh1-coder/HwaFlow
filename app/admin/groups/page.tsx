@@ -6,7 +6,7 @@ import { listGroupsForAdmin } from "@/lib/server/groups";
 import { getViewer } from "@/lib/session";
 
 export const metadata: Metadata = {
-  title: "Groups",
+  title: "Group directory",
   description:
     "Platform admin console for HwaFlow groups: create a group, assign its Owner, and review metadata.",
   robots: {

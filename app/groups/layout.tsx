@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import "../dashboard/dashboard.css";
+import "../settings/settings.css";
 import "./groups.css";
 
 export const metadata: Metadata = {

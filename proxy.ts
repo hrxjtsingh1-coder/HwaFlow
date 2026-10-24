@@ -27,6 +27,7 @@ export async function proxy(request: NextRequest) {
    * let /api/health/supabase report exactly what is missing.
    */
   if (!url || !publishableKey) {
+    warnMissingEnvOnce();
     return NextResponse.next({ request });
   }
 
@@ -58,13 +59,26 @@ export async function proxy(request: NextRequest) {
   });
 
   /*
-   * Do not remove. `getUser()` is what triggers the refresh: it validates the
-   * token against the Auth server and, when it has expired, writes the new one.
-   * `getSession()` alone would not refresh.
+   * Read the session instead of validating it.
+   *
+   * `getSession()` costs nothing on the wire while the access token is still
+   * valid, and refreshes through the refresh token the moment it expires, so an
+   * active session keeps extending itself exactly as it did with `getUser()`.
+   * The difference is one fewer Auth round trip on every request, and this runs
+   * on every request the app makes.
+   *
+   * Validating here was redundant: every protected page calls `getViewer()`,
+   * which does call `getUser()` and is the gate that actually rejects a bad
+   * session. This function only decides where to redirect, and RLS is what
+   * stops one signed-in user reading another's rows.
+   *
+   * Do not remove the call. Reading the session is what lets @supabase/ssr
+   * write a rotated token through `setAll` below; without it an expired token
+   * is never renewed and a user who left a tab open gets signed out.
    */
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
 
   const { pathname } = request.nextUrl;
 
@@ -77,12 +91,12 @@ export async function proxy(request: NextRequest) {
    * from reading someone else's rows.
    *
    * The proxy only redirects *towards* /login. It must never bounce a signed-in
-   * request off /login or /register: `user` here is an auth session, while the
-   * pages gate on a profiles row, and when those disagree the two redirects
+   * request off /login or /register: `session` here is an auth session, while
+   * the pages gate on a profiles row, and when those disagree the two redirects
    * point at each other forever. The auth pages redirect a real viewer
    * themselves.
    */
-  const redirectTarget = resolveRedirect(pathname, Boolean(user));
+  const redirectTarget = resolveRedirect(pathname, Boolean(session));
   if (redirectTarget) {
     return redirectTo(request, response, redirectTarget);
   }
@@ -91,8 +105,8 @@ export async function proxy(request: NextRequest) {
 }
 
 /**
- * Redirects while keeping the refreshed auth cookies. `getUser()` above may
- * have written a new token to `source`; dropping it on the floor here would
+ * Redirects while keeping the refreshed auth cookies. The session read above
+ * may have written a new token to `source`; dropping it on the floor here would
  * sign the user out on their next request.
  */
 function redirectTo(
@@ -109,6 +123,15 @@ function redirectTo(
     redirect.cookies.set(cookie);
   }
   return redirect;
+}
+
+let warnedMissingEnv = false;
+function warnMissingEnvOnce() {
+  if (warnedMissingEnv) return;
+  warnedMissingEnv = true;
+  console.warn(
+    "[proxy] Supabase env is missing — route protection is disabled. Fill .env.local; /api/health/supabase lists what is absent."
+  );
 }
 
 export const config = {

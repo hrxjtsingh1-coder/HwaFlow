@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -18,13 +18,13 @@ import { formatMoney } from "@/lib/format";
 import type { AuthUser } from "@/lib/identity";
 import type { DashboardWeek } from "@/lib/server/chapters";
 import {
-  ArrowUpRight,
   CalendarDays,
   Clock,
   ShieldCheck,
   TrendingUp,
   X,
 } from "../icons";
+import { dayKey, useFocus } from "../focus-tracker";
 import { DashboardRail } from "./dashboard-rail";
 import { DashboardTopbar } from "./dashboard-topbar";
 import { workspaceLinks } from "./workspace-nav";
@@ -33,7 +33,6 @@ import { workspaceLinks } from "./workspace-nav";
 /* Focus tracking                                                      */
 /* ------------------------------------------------------------------ */
 
-const FOCUS_KEY = "hwaflow.focus.v1";
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 type CalendarDay = {
@@ -45,39 +44,6 @@ type CalendarDay = {
   seconds: number;
   releases: Release[];
 };
-
-function dayKey(date = new Date()): string {
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${date.getFullYear()}-${month}-${day}`;
-}
-
-function readFocusLog(): Record<string, number> {
-  if (typeof window === "undefined") return {};
-  try {
-    const raw = window.localStorage.getItem(FOCUS_KEY);
-    if (!raw) return {};
-    const parsed: unknown = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") return {};
-    const log: Record<string, number> = {};
-    for (const [key, value] of Object.entries(parsed)) {
-      if (typeof value === "number" && Number.isFinite(value) && value > 0) {
-        log[key] = Math.floor(value);
-      }
-    }
-    return log;
-  } catch {
-    return {};
-  }
-}
-
-function writeFocusLog(log: Record<string, number>): void {
-  try {
-    window.localStorage.setItem(FOCUS_KEY, JSON.stringify(log));
-  } catch {
-    /* Focus tracking is a nicety, never a requirement. */
-  }
-}
 
 function formatFocus(seconds: number): string {
   const total = Math.max(0, Math.floor(seconds));
@@ -228,10 +194,12 @@ type DashboardHomeProps = {
   week: DashboardWeek;
   earnings: number;
   approved: number;
+  /** Seconds per day for the last eight days, read from the account. */
+  focus: Array<{ day: string; seconds: number }>;
   /**
    * The server's clock at render time. The first client render must use the
-   * same instant or the greeting, date and week grid hydrate against different
-   * values in a different timezone.
+   * same instant or the date and week grid hydrate against different values in
+   * a different timezone.
    */
   nowIso: string;
 };
@@ -242,6 +210,7 @@ export function DashboardHome({
   week: serverWeek,
   earnings,
   approved,
+  focus,
   nowIso,
 }: DashboardHomeProps) {
   // `viewer` keeps the existing JSX readable; the page owns auth now.
@@ -257,12 +226,8 @@ export function DashboardHome({
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [openDay, setOpenDay] = useState<CalendarDay | null>(null);
-  const [tracking, setTracking] = useState(false);
-  const [focused, setFocused] = useState(false);
-  const [baseToday, setBaseToday] = useState(0);
-  const [sessionSeconds, setSessionSeconds] = useState(0);
-  const [focusLog, setFocusLog] = useState<Record<string, number>>({});
-  const focusLogRef = useRef<Record<string, number>>({});
+  // Counted once for the whole app by <FocusTracker>, not here.
+  const { todaySeconds, sessionSeconds, tracking } = useFocus();
   const dialogRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
@@ -315,61 +280,11 @@ export function DashboardHome({
     dialogRef.current?.focus();
   }, [openDay]);
 
-  // Pick up whatever this browser already tracked for today.
-  useEffect(() => {
-    const log = readFocusLog();
-    focusLogRef.current = log;
-    setFocusLog(log);
-    setBaseToday(log[dayKey()] ?? 0);
-    setTracking(true);
-  }, []);
-
-  // Focused means the tab is visible *and* the window has focus.
-  useEffect(() => {
-    const sync = () =>
-      setFocused(
-        document.visibilityState === "visible" && document.hasFocus()
-      );
-
-    sync();
-    window.addEventListener("focus", sync);
-    window.addEventListener("blur", sync);
-    document.addEventListener("visibilitychange", sync);
-    return () => {
-      window.removeEventListener("focus", sync);
-      window.removeEventListener("blur", sync);
-      document.removeEventListener("visibilitychange", sync);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!tracking || !focused) return;
-    const id = window.setInterval(
-      () => setSessionSeconds((value) => value + 1),
-      1000
-    );
-    return () => window.clearInterval(id);
-  }, [tracking, focused]);
-
-  // Fold the live session into today's stored total.
-  useEffect(() => {
-    if (!tracking || sessionSeconds === 0) return;
-
-    const key = dayKey();
-    const next = { ...focusLogRef.current, [key]: baseToday + sessionSeconds };
-    focusLogRef.current = next;
-    writeFocusLog(next);
-    setFocusLog(next);
-  }, [tracking, sessionSeconds, baseToday]);
-
   const handleSignOut = () => {
     void signOut();
   };
 
   const firstName = user.displayName.trim().split(/\s+/)[0] || user.username;
-  const hour = now.getHours();
-  const greeting =
-    hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   const today = new Intl.DateTimeFormat("en-US", {
     weekday: "long",
     month: "long",
@@ -386,11 +301,14 @@ export function DashboardHome({
     month: "long",
   }).format(now);
 
-  const todaySeconds = baseToday + sessionSeconds;
+  const focusLog = useMemo(
+    () => Object.fromEntries(focus.map((entry) => [entry.day, entry.seconds])),
+    [focus]
+  );
+
   const week = buildWeek(focusLog, todaySeconds, serverWeek.releases, now);
   const weekSeconds = week.days.reduce((total, day) => total + day.seconds, 0);
   const peakSeconds = Math.max(1, ...week.days.map((day) => day.seconds));
-  const activeDays = week.days.filter((day) => day.seconds > 0).length;
 
   return (
     <div className="dash-shell">
@@ -412,7 +330,7 @@ export function DashboardHome({
               <div className="dash-hero-copy">
                 <p className="eyebrow">{today}</p>
                 <h1 className="dash-hero-title">
-                  {greeting},{" "}
+                  Welcome back,{" "}
                   <span className="display-serif text-accent-ink">
                     {firstName}
                   </span>
@@ -474,8 +392,8 @@ export function DashboardHome({
 
                   <p className="dash-earnings-note">
                     <ShieldCheck className="h-3.5 w-3.5" />
-                    Credit follows approved work. Undo an approval and it
-                    updates.
+                    This adds up every chapter a Manager approved this month,
+                    at its series rate.
                   </p>
                 </div>
               </section>
@@ -490,7 +408,7 @@ export function DashboardHome({
                     <p className="eyebrow">Time spent</p>
                     <h2 className="dash-panel-title">Tab in focus</h2>
                   </div>
-                  {focused ? (
+                  {tracking ? (
                     <span className="chip chip-mint dash-chip-swap">
                       <span className="status-dot h-1.5 w-1.5" />
                       Tracking
@@ -545,8 +463,8 @@ export function DashboardHome({
 
                   <p className="dash-time-note">
                     <Clock className="h-3.5 w-3.5" />
-                    Counted only while this tab is open and focused —{" "}
-                    {activeDays} of 7 days so far.
+                    This counts the time this tab is open and on screen, and
+                    keeps the week with your account on every device.
                   </p>
                 </div>
               </section>
@@ -660,20 +578,10 @@ export function DashboardHome({
               </div>
 
               <p className="dash-panel-foot-note">
-                A dot marks a release day. Select one to see every chapter
-                scheduled. Times are shown in your local timezone.
+                Each dot is a chapter due that day. Pick a day to see which
+                series are scheduled.
               </p>
             </section>
-
-            <footer className="dash-footer">
-              <span>
-                Your work is saved to your workspace and syncs across devices.
-              </span>
-              <Link href="/" className="dash-link">
-                Back to the site
-                <ArrowUpRight className="h-3 w-3" />
-              </Link>
-            </footer>
           </div>
         </main>
       </div>
@@ -740,11 +648,6 @@ export function DashboardHome({
                 </li>
               ))}
             </ul>
-
-            <p className="dash-day-popup-note">
-              <Clock className="h-3 w-3" />
-              Times are shown in your local timezone.
-            </p>
           </div>
         </div>
       ) : null}

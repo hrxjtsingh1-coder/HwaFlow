@@ -22,7 +22,9 @@ import type {
 import type { GroupMember, GroupRole } from "../groups";
 import type { GlossaryTerm } from "../glossary";
 import type { AuthUser } from "../identity";
+import { convert, roundForCurrency, type Rates } from "../money";
 import { createClient } from "../supabase/server";
+import { getRates } from "./fx";
 import {
   mapGroupMember,
   type GroupMemberRow,
@@ -437,12 +439,32 @@ function monthBounds(now = new Date()): { start: string; end: string } {
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
-function sumRates(rows: Array<{ rate_snapshot: number | string | null }>): number {
+type EarningRow = {
+  rate_snapshot: number | string | null;
+  rate_currency: string | null;
+};
+
+/**
+ * Adds approved chapter snapshots into one total. Snapshots can be in different
+ * currencies — an approved chapter keeps the currency it was earned in — so the
+ * sum converts row by row instead of adding raw numbers.
+ */
+function sumRates(rows: EarningRow[], currency: string, rates: Rates): number {
   const total = rows.reduce(
-    (sum, row) => sum + Number(row.rate_snapshot ?? 0),
+    (sum, row) =>
+      sum +
+      convert(
+        Number(row.rate_snapshot ?? 0),
+        // A snapshot with no currency predates the switch. It is zero in
+        // practice; leaving it unconverted keeps it from inventing money.
+        row.rate_currency ?? currency,
+        currency,
+        rates
+      ),
     0
   );
-  return Math.round(total * 100) / 100;
+
+  return roundForCurrency(total, currency);
 }
 
 /** Approved this calendar month, credited to the viewer. */
@@ -462,51 +484,61 @@ export async function countApprovedForViewer(viewer: AuthUser): Promise<number> 
   return count ?? 0;
 }
 
-/** Approved this calendar month, credited to the viewer. */
+/** Approved this calendar month, credited to the viewer, in their currency. */
 export async function earningsForViewer(viewer: AuthUser): Promise<number> {
   const supabase = await createClient();
   const { start, end } = monthBounds();
 
   const { data, error } = await supabase
     .from("chapters")
-    .select("rate_snapshot")
+    .select("rate_snapshot, rate_currency")
     .eq("status", "approved")
     .eq("submitted_by", viewer.id)
     .gte("approved_at", start)
     .lt("approved_at", end);
 
   if (error) fail("earningsForViewer", error.message);
-  return sumRates((data ?? []) as Array<{ rate_snapshot: number | null }>);
+
+  return sumRates(
+    (data ?? []) as EarningRow[],
+    viewer.displayCurrency,
+    await getRates()
+  );
 }
 
-/** Approved this month across one group. Owner-only surface. */
-export async function groupEarnings(groupId: string): Promise<number> {
-  const supabase = await createClient();
-  const { start, end } = monthBounds();
-
-  const { data, error } = await supabase
-    .from("chapters")
-    .select("rate_snapshot, series!inner(group_id)")
-    .eq("status", "approved")
-    .eq("series.group_id", groupId)
-    .gte("approved_at", start)
-    .lt("approved_at", end);
-
-  if (error) fail("groupEarnings", error.message);
-  return sumRates((data ?? []) as Array<{ rate_snapshot: number | null }>);
-}
-
-/** Approved this month for one member inside one group. */
-export async function memberEarningsInGroup(
+/** Approved this month across one group, in the caller's currency. */
+export async function groupEarnings(
   groupId: string,
-  userId: string
+  displayCurrency: string
 ): Promise<number> {
   const supabase = await createClient();
   const { start, end } = monthBounds();
 
   const { data, error } = await supabase
     .from("chapters")
-    .select("rate_snapshot, series!inner(group_id)")
+    .select("rate_snapshot, rate_currency, series!inner(group_id)")
+    .eq("status", "approved")
+    .eq("series.group_id", groupId)
+    .gte("approved_at", start)
+    .lt("approved_at", end);
+
+  if (error) fail("groupEarnings", error.message);
+
+  return sumRates((data ?? []) as EarningRow[], displayCurrency, await getRates());
+}
+
+/** Approved this month for one member inside one group, in the caller's currency. */
+export async function memberEarningsInGroup(
+  groupId: string,
+  userId: string,
+  displayCurrency: string
+): Promise<number> {
+  const supabase = await createClient();
+  const { start, end } = monthBounds();
+
+  const { data, error } = await supabase
+    .from("chapters")
+    .select("rate_snapshot, rate_currency, series!inner(group_id)")
     .eq("status", "approved")
     .eq("submitted_by", userId)
     .eq("series.group_id", groupId)
@@ -514,7 +546,8 @@ export async function memberEarningsInGroup(
     .lt("approved_at", end);
 
   if (error) fail("memberEarningsInGroup", error.message);
-  return sumRates((data ?? []) as Array<{ rate_snapshot: number | null }>);
+
+  return sumRates((data ?? []) as EarningRow[], displayCurrency, await getRates());
 }
 
 export async function countApprovedForMember(

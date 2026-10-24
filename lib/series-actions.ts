@@ -26,6 +26,7 @@ import { MAX_SERIES_COVER_BYTES } from "./series-cover";
 import { getViewer } from "./session";
 import type { SeriesRow } from "./server/series";
 import { signedUrlFor } from "./server/storage";
+import { createAdminClient } from "./supabase/admin";
 import { createClient } from "./supabase/server";
 
 /* ------------------------------------------------------------------ */
@@ -363,6 +364,104 @@ export async function updateSeriesAction(
   }
 
   return { ok: true, data: actionSeries(row, releaseDays, coverUrl) };
+}
+
+/* ------------------------------------------------------------------ */
+/* Delete                                                              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Owner/Manager only; the RPC enforces it again on the row.
+ *
+ * Storage does not cascade with rows, so the paths are collected first and the
+ * objects are removed after the delete with the privileged client — the same
+ * reason `deleteChapterAction` does it: once the rows are gone, RLS has nothing
+ * left to authorize the object delete against.
+ */
+export async function deleteSeriesAction(input: {
+  seriesId: string;
+}): Promise<SeriesActionResult<{ removedObjects: number }>> {
+  const auth = await requireViewer();
+  if (!auth.ok) return auth.result;
+
+  if (!isUuid(input.seriesId)) {
+    return failure("not-found", "That series no longer exists.");
+  }
+
+  const supabase = await createClient();
+
+  const { data: seriesData, error: seriesError } = await supabase
+    .from("series")
+    .select("id, cover_path")
+    .eq("id", input.seriesId)
+    .maybeSingle();
+
+  if (seriesError) {
+    return fromDbError(seriesError, "We couldn't delete that series.");
+  }
+  if (!seriesData) {
+    return failure("not-found", "That series no longer exists.");
+  }
+
+  const { data: chapterData } = await supabase
+    .from("chapters")
+    .select("id")
+    .eq("series_id", input.seriesId);
+
+  const chapterIds = ((chapterData ?? []) as Array<{ id: string }>).map(
+    (chapter) => chapter.id
+  );
+
+  let pagePaths: string[] = [];
+  if (chapterIds.length > 0) {
+    const { data: pageData } = await supabase
+      .from("chapter_pages")
+      .select("original_path")
+      .in("chapter_id", chapterIds);
+
+    pagePaths = ((pageData ?? []) as Array<{ original_path: string }>).map(
+      (page) => page.original_path
+    );
+  }
+
+  const coverPath = (seriesData as { cover_path: string | null }).cover_path;
+
+  const { error } = await supabase.rpc("delete_series", {
+    p_series_id: input.seriesId,
+  });
+
+  if (error) {
+    return fromDbError(error, "We couldn't delete that series.");
+  }
+
+  let removedObjects = 0;
+
+  try {
+    const admin = createAdminClient();
+
+    if (pagePaths.length > 0) {
+      const { data: removed } = await admin.storage
+        .from("pages")
+        .remove(pagePaths);
+      removedObjects += removed?.length ?? 0;
+    }
+
+    if (coverPath) {
+      const { data: removed } = await admin.storage
+        .from("covers")
+        .remove([coverPath]);
+      removedObjects += removed?.length ?? 0;
+    }
+  } catch (cause) {
+    // A missing secret key must not turn a completed deletion into an error.
+    console.warn(
+      `[series] storage cleanup skipped for ${input.seriesId}: ${
+        cause instanceof Error ? cause.message : "unknown error"
+      }`
+    );
+  }
+
+  return { ok: true, data: { removedObjects } };
 }
 
 /* ------------------------------------------------------------------ */

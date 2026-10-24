@@ -20,10 +20,8 @@ import {
 } from "./groups";
 import type { AuthUser } from "./identity";
 import { getViewer } from "./session";
-import {
-  mapGroup,
-  type GroupRow,
-} from "./server/groups";
+import { mapGroup, type GroupRow } from "./server/groups";
+import { getRates } from "./server/fx";
 import { signedUrlFor } from "./server/storage";
 import { createClient } from "./supabase/server";
 
@@ -344,6 +342,53 @@ export async function removeMemberAction(input: {
 
   if (error) return fromDbError(error, "We couldn't remove that member.");
   return { ok: true, data: null };
+}
+
+/**
+ * Switches the group's pricing currency and converts everything in flight.
+ *
+ * The conversion factor is computed inside the RPC from the stored rates, so
+ * nothing here can pick a favourable exchange rate. `getRates()` runs first so
+ * a first-ever switch has a table to read from.
+ */
+export async function setGroupCurrencyAction(input: {
+  groupId: string;
+  currency: string;
+}): Promise<GroupActionResult<{ series: number; chapters: number }>> {
+  const auth = await requireViewer();
+  if (!auth.ok) return auth.result;
+
+  if (!UUID.test(input.groupId)) {
+    return failure("not-found", "That group no longer exists.");
+  }
+
+  const currency = input.currency.trim().toUpperCase();
+  if (!GROUP_CURRENCIES.includes(currency as GroupCurrency)) {
+    return failure("invalid-currency", "Pick a supported currency.");
+  }
+
+  await getRates();
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("set_group_currency", {
+    p_group_id: input.groupId,
+    p_currency: currency,
+  });
+
+  if (error) return fromDbError(error, "We couldn't change the currency.");
+
+  const row = (data ?? []) as unknown as
+    | Array<{ converted_series: number; converted_chapters: number }>
+    | null;
+  const counts = row?.[0];
+
+  return {
+    ok: true,
+    data: {
+      series: counts?.converted_series ?? 0,
+      chapters: counts?.converted_chapters ?? 0,
+    },
+  };
 }
 
 /**

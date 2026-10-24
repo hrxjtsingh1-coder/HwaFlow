@@ -20,6 +20,8 @@ import {
   validatePassword,
   validateUsername,
 } from "./identity";
+import { LIMITS, throttleMessage } from "./rate-limit";
+import { rateLimit, requestIp } from "./rate-limit-server";
 import { viewerFor } from "./session";
 import { createClient } from "./supabase/server";
 
@@ -83,6 +85,19 @@ export async function register(input: {
 
   const passwordError = validatePassword(input.password);
   if (passwordError) return failure("invalid-input", passwordError);
+
+  /*
+   * Bulk signup is the cheapest way to fill the database. Five new accounts per
+   * address per five minutes is far above a human pace and far below a bot's.
+   */
+  const ipLimit = await rateLimit(
+    "auth:register:ip",
+    await requestIp(),
+    LIMITS.registerPerIp
+  );
+  if (!ipLimit.allowed) {
+    return failure("rate-limited", throttleMessage(ipLimit.retryAfter));
+  }
 
   const supabase = await createClient();
 
@@ -164,6 +179,21 @@ export async function login(input: {
   const username = normalizeUsername(input.username);
   if (!username) return failure("invalid-input", "Enter your username.");
   if (!input.password) return failure("invalid-input", "Enter your password.");
+
+  /*
+   * Two dimensions on purpose: the address stops one machine hammering many
+   * accounts, the username stops a botnet spraying one account from many IPs.
+   */
+  const [byIp, byUser] = await Promise.all([
+    rateLimit("auth:login:ip", await requestIp(), LIMITS.loginPerIp),
+    rateLimit("auth:login:user", username, LIMITS.loginPerUser),
+  ]);
+  if (!byIp.allowed) {
+    return failure("rate-limited", throttleMessage(byIp.retryAfter));
+  }
+  if (!byUser.allowed) {
+    return failure("rate-limited", throttleMessage(byUser.retryAfter));
+  }
 
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signInWithPassword({

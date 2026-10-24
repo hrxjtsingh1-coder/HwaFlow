@@ -7,9 +7,9 @@
  * ask PostgREST for.
  *
  * Reads are split by surface so each page fetches only what it renders:
- *   - `/groups`              -> listGroupsForViewer
+ *   - `/groups`              -> listGroupsForViewer, listReceivedInvites
  *   - `/groups/[id]`         -> getGroupBundle
- *   - `/settings/members`    -> getMembersBundle
+ *   - `/groups/[id]/settings`-> getGroupBundle, countSeriesAssignments
  *   - `/admin/groups`        -> listGroupsForAdmin
  */
 
@@ -100,13 +100,6 @@ export type ReceivedInvite = {
   group: Group;
 };
 
-export type MembersBundle = {
-  active: GroupBundle | null;
-  received: ReceivedInvite[];
-  /** series_assignments per member id, for the roster's "Series" column. */
-  seriesCounts: Record<string, number>;
-};
-
 export type AdminGroupCard = {
   group: Group;
   owner: GroupMember | null;
@@ -164,10 +157,6 @@ function mapGroupInvite(
 
 function fail(scope: string, message: string): never {
   throw new Error(`[groups:${scope}] ${message}`);
-}
-
-function newestFirst<T extends { joined_at: string }>(rows: T[]): T[] {
-  return [...rows].sort((a, b) => b.joined_at.localeCompare(a.joined_at));
 }
 
 /* ------------------------------------------------------------------ */
@@ -325,7 +314,7 @@ export async function getGroupBundle(
 }
 
 /* ------------------------------------------------------------------ */
-/* `/settings/members`                                                 */
+/* Invites + roster counts                                             */
 /* ------------------------------------------------------------------ */
 
 export async function listReceivedInvites(
@@ -364,44 +353,13 @@ export async function listReceivedInvites(
 }
 
 /**
- * The member settings page is about one group. That is the most recently
- * joined membership: accepting an invite is the only action that changes the
- * active group, and it always creates the newest membership.
- */
-export async function getMembersBundle(
-  viewer: AuthUser
-): Promise<MembersBundle> {
-  const [memberships, received] = await Promise.all([
-    listGroupsForViewer(viewer),
-    listReceivedInvites(viewer),
-  ]);
-
-  const activeMembership = newestFirst(
-    memberships.map((entry) => ({
-      group_id: entry.group.id,
-      joined_at: entry.member.joinedAt,
-    }))
-  )[0];
-
-  const active = activeMembership
-    ? await getGroupBundle(activeMembership.group_id, viewer)
-    : null;
-
-  const seriesCounts = active
-    ? await countSeriesAssignments(active.group.id)
-    : {};
-
-  return { active, received, seriesCounts };
-}
-
-/**
  * How many series each member is assigned to, for one group.
  *
  * A Manager/Owner sees every assignment in the group (`can_view_series`), so
  * the roster can show the real workload instead of a hardcoded zero. Staff
  * cannot manage members, so this is only ever called for a manageable group.
  */
-async function countSeriesAssignments(
+export async function countSeriesAssignments(
   groupId: string
 ): Promise<Record<string, number>> {
   const supabase = await createClient();
@@ -420,11 +378,14 @@ async function countSeriesAssignments(
 
   const assignments = await selectAllPages<{ user_id: string }>(
     async (from, to) => {
+      // `series_assignments` has a composite primary key (series_id, user_id)
+      // and no `id` column, so the keyset for paging is those two columns.
       const { data, error } = await supabase
         .from("series_assignments")
-        .select("id, user_id")
+        .select("user_id")
         .in("series_id", seriesIds)
-        .order("id", { ascending: true })
+        .order("series_id", { ascending: true })
+        .order("user_id", { ascending: true })
         .range(from, to);
 
       if (error) fail("getMembersBundle.assignments", error.message);

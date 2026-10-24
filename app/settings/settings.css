@@ -28,8 +28,8 @@
   align-items: center;
   gap: 0.6rem;
   padding: 0.65rem 0.7rem;
-  border: 1px solid var(--border);
-  border-radius: 0.8rem;
+  border: 2px solid var(--edge);
+  border-radius: 0;
   background: var(--surface);
   font-size: 0.75rem;
   line-height: 1.45;
@@ -53,7 +53,7 @@
   flex-shrink: 0;
   width: 1.4rem;
   height: 1.4rem;
-  border-radius: 999px;
+  border-radius: 0;
   background: color-mix(in oklab, var(--mint-ink) 14%, transparent);
   color: var(--mint-ink);
 }
@@ -74,7 +74,7 @@
   flex-shrink: 0;
   width: 1.5rem;
   height: 1.5rem;
-  border-radius: 999px;
+  border-radius: 0;
   color: var(--faint);
   transition: color 0.16s var(--ease), background-color 0.16s var(--ease);
 }
@@ -91,13 +91,8 @@
 .mem-invites {
   padding: 1.1rem 1.2rem;
   border: 1px solid color-mix(in oklab, var(--accent) 22%, var(--border));
-  border-radius: 1.3rem;
-  background: radial-gradient(
-      62% 120% at 0% 0%,
-      color-mix(in oklab, var(--lavender) 46%, transparent),
-      transparent 70%
-    ),
-    var(--surface);
+  border-radius: 0;
+  background: var(--surface);
   box-shadow: var(--shadow-card);
 }
 
@@ -136,8 +131,8 @@
   align-items: center;
   gap: 0.85rem;
   padding: 0.8rem 0.9rem;
-  border: 1px solid var(--border);
-  border-radius: 1rem;
+  border: 2px solid var(--edge);
+  border-radius: 0;
   background: color-mix(in oklab, var(--surface) 78%, transparent);
 }
 
@@ -189,8 +184,8 @@
   width: min(34rem, 100%);
   margin: 2rem auto 0;
   padding: 2.6rem 1.75rem;
-  border: 1px solid var(--border);
-  border-radius: 1.5rem;
+  border: 2px solid var(--edge);
+  border-radius: 0;
   background: color-mix(in oklab, var(--surface) 88%, transparent);
   text-align: center;
 }
@@ -202,7 +197,7 @@
   height: 3rem;
   margin-bottom: 0.95rem;
   border: 1px solid color-mix(in oklab, var(--accent) 18%, transparent);
-  border-radius: 0.9rem;
+  border-radius: 0;
   background: var(--accent-soft);
   color: var(--accent-ink);
 }
@@ -226,7 +221,7 @@
   margin-top: 1.1rem;
   padding: 0.22rem 0.55rem;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: 0;
   background: var(--surface-2);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.6875rem;
@@ -236,7 +231,7 @@
 .mem-back-link {
   margin-top: 1.2rem;
   padding: 0.4rem 0.65rem;
-  border-radius: 999px;
+  border-radius: 0;
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--accent-ink);
@@ -259,19 +254,9 @@
   justify-content: space-between;
   gap: 1rem;
   padding: 1.2rem;
-  border: 1px solid var(--border);
-  border-radius: 1.4rem;
-  background: radial-gradient(
-      52% 90% at 3% 0%,
-      color-mix(in oklab, var(--mint) 34%, transparent),
-      transparent 70%
-    ),
-    radial-gradient(
-      48% 84% at 97% 6%,
-      color-mix(in oklab, var(--lavender) 38%, transparent),
-      transparent 72%
-    ),
-    var(--surface);
+  border: 2px solid var(--edge);
+  border-radius: 0;
+  background: var(--surface);
   box-shadow: var(--shadow-card);
 }
 
@@ -307,7 +292,7 @@
 .mem-group-slug {
   padding: 0.12rem 0.42rem;
   border: 1px solid var(--border);
-  border-radius: 0.4rem;
+  border-radius: 0;
   background: color-mix(in oklab, var(--surface) 65%, transparent);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.625rem;
@@ -324,8 +309,8 @@
 
 .mem-panel {
   padding: 1.05rem 1.2rem 1.1rem;
-  border: 1px solid var(--border);
-  border-radius: 1.3rem;
+  border: 2px solid var(--edge);
+  border-radius: 0;
   background: var(--surface);
 }
 
@@ -333,7 +318,7 @@
   margin-top: 0.85rem;
   padding: 0.9rem 0.95rem;
   border: 1px dashed var(--border-strong);
-  border-radius: 0.9rem;
+  border-radius: 0;
   font-size: 0.75rem;
   line-height: 1.55;
   color: var(--muted);
@@ -366,7 +351,7 @@
   gap: 0.55rem;
   padding: 0.55rem 0.6rem;
   border: 1px solid var(--border);
-  border-radius: 0.8rem;
+  border-radius: 0;
   background: color-mix(in oklab, var(--surface-2) 38%, var(--surface));
 }
 
@@ -399,7 +384,7 @@
 
 .mem-text-btn {
   padding: 0.2rem 0.4rem;
-  border-radius: 0.4rem;
+  border-radius: 0;
   font-size: 0.6875rem;
   font-weight: 600;
   color: var(--faint);
@@ -417,8 +402,8 @@
 
 .mem-table-wrap {
   margin-top: 0.85rem;
-  border: 1px solid var(--border);
-  border-radius: 0.95rem;
+  border: 2px solid var(--edge);
+  border-radius: 0;
 }
 
 .mem-table {
@@ -485,15 +470,17 @@
   flex-shrink: 0;
   width: 2rem;
   height: 2rem;
-  border-radius: 999px;
+  border-radius: 0;
   /* Same fixed pastel "photo" wash as the admin and workspace avatars: it is a
      brand chip, so it stays light on both themes. */
-  background: linear-gradient(145deg, #c9efdd 0%, #e7e2fb 58%, #ffe3d1 100%);
-  color: #17181c;
+  background: var(--lavender);
+  color: var(--ink);
   font-size: 0.625rem;
   font-weight: 700;
   letter-spacing: 0.03em;
-  box-shadow: inset 0 0 0 1px rgba(23, 24, 28, 0.08);
+
+
+  border: 2px solid var(--fill-edge);
 }
 
 .mem-avatar--lg {
@@ -528,7 +515,7 @@
 .mem-you {
   padding: 0.02rem 0.3rem;
   border: 1px solid color-mix(in oklab, var(--accent) 24%, transparent);
-  border-radius: 999px;
+  border-radius: 0;
   background: var(--accent-soft);
   font-size: 0.5rem;
   font-weight: 700;
@@ -554,8 +541,8 @@
   flex-direction: column;
   width: 11.5rem;
   padding: 0.3rem;
-  border: 1px solid var(--border);
-  border-radius: 0.8rem;
+  border: 2px solid var(--edge);
+  border-radius: 0;
   background: var(--surface);
   box-shadow: var(--shadow-float);
   opacity: 0;
@@ -581,7 +568,7 @@
   width: 100%;
   padding: 0.45rem 0.5rem;
   border: 0;
-  border-radius: 0.5rem;
+  border-radius: 0;
   background: none;
   font: inherit;
   font-size: 0.75rem;
@@ -620,8 +607,8 @@
 
 .mem-staff-card {
   padding: 1.2rem;
-  border: 1px solid var(--border);
-  border-radius: 1.3rem;
+  border: 2px solid var(--edge);
+  border-radius: 0;
   background: var(--surface);
 }
 
@@ -663,7 +650,7 @@
   min-width: 0;
   padding: 0.7rem 0.75rem;
   border: 1px solid var(--border);
-  border-radius: 0.85rem;
+  border-radius: 0;
   background: color-mix(in oklab, var(--surface-2) 42%, var(--surface));
 }
 
@@ -693,23 +680,6 @@
 }
 
 /* ------------------------------------------------------------------ */
-/* Footer                                                              */
-/* ------------------------------------------------------------------ */
-
-.mem-footer {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  margin-top: 0.35rem;
-  padding-top: 0.9rem;
-  border-top: 1px solid var(--border);
-  font-size: 0.625rem;
-  color: var(--faint);
-}
-
-/* ------------------------------------------------------------------ */
 /* Confirmation dialog                                                 */
 /* ------------------------------------------------------------------ */
 
@@ -726,9 +696,7 @@
 .mem-dialog-backdrop {
   position: absolute;
   inset: 0;
-  background: rgb(12 14 19 / 0.48);
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
+  background: var(--scrim);
 }
 
 .mem-dialog {
@@ -739,7 +707,7 @@
   max-height: min(86vh, 40rem);
   overflow-y: auto;
   border: 1px solid var(--border);
-  border-radius: 1.2rem;
+  border-radius: 0;
   background: var(--surface);
   box-shadow: var(--shadow-float);
   animation: mem-dialog-in 0.24s var(--ease-out) both;
@@ -763,7 +731,7 @@
   width: 2.2rem;
   height: 2.2rem;
   border: 1px solid color-mix(in oklab, var(--danger) 28%, transparent);
-  border-radius: 0.7rem;
+  border-radius: 0;
   background: color-mix(in oklab, var(--danger) 12%, transparent);
   color: var(--danger);
 }
@@ -816,9 +784,7 @@
 .mem-sheet-backdrop {
   position: absolute;
   inset: 0;
-  background: rgb(12 14 19 / 0.48);
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
+  background: var(--scrim);
 }
 
 .mem-sheet {
@@ -830,7 +796,7 @@
   overflow: hidden;
   border-left: 1px solid var(--border);
   background: var(--surface);
-  box-shadow: -30px 0 70px -50px rgb(var(--shadow-tint) / 0.8);
+  box-shadow: var(--shadow-hard-sm);
   animation: mem-sheet-in 0.3s var(--ease-out) both;
 }
 
@@ -952,7 +918,7 @@
   height: 2.7rem;
   padding: 0 0.8rem;
   border: 1px solid var(--border);
-  border-radius: 0.7rem;
+  border-radius: 0;
   background: var(--surface);
   font: inherit;
   font-size: 0.8125rem;
@@ -971,7 +937,7 @@
 .mem-input:focus {
   outline: none;
   border-color: color-mix(in oklab, var(--accent) 45%, var(--border));
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 14%, transparent);
+  box-shadow: 0 0 0 3px var(--edge);
 }
 
 .mem-input[aria-invalid="true"] {
@@ -997,7 +963,7 @@
   gap: 0.6rem;
   padding: 0.6rem 0.7rem;
   border: 1px solid var(--border);
-  border-radius: 0.75rem;
+  border-radius: 0;
   cursor: pointer;
   transition: border-color 0.16s var(--ease), background-color 0.16s var(--ease);
 }
@@ -1192,7 +1158,7 @@
     gap: 0.5rem 0.6rem;
     padding: 0.7rem 0.75rem;
     border: 1px solid var(--border);
-    border-radius: 0.9rem;
+    border-radius: 0;
     background: color-mix(in oklab, var(--surface-2) 26%, var(--surface));
   }
 

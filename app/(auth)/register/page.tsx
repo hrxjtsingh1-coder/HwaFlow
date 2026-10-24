@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 
 import { AuthExperience } from "@/components/auth/auth-experience";
 import { getViewer } from "@/lib/session";
@@ -11,8 +10,8 @@ export const metadata: Metadata = {
 };
 
 export default async function RegisterPage() {
+  // See the note in `login/page.tsx`: no redirect on a cookie-setting render.
   const user = await getViewer();
-  if (user) redirect("/dashboard");
 
   return <AuthExperience initialMode="sign-up" initialUser={user} />;
 }

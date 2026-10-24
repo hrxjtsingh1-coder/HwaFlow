@@ -46,6 +46,7 @@ import { usePipeline } from "@/lib/use-pipeline";
 import { DashboardRail } from "../dashboard/dashboard-rail";
 import { DashboardTopbar } from "../dashboard/dashboard-topbar";
 import { workspaceLinks } from "../dashboard/workspace-nav";
+import { Isolate } from "../error-boundary";
 import { NotFoundState } from "../not-found-state";
 import {
   AlertCircle,
@@ -63,6 +64,7 @@ import { GlossaryPanel } from "./glossary-panel";
 import { PanelViewer } from "./panel-viewer";
 import type { UploadProgress } from "./panel-dropzone";
 import { RejectChapterDialog } from "./reject-chapter-dialog";
+import { Tooltip } from "../tooltip";
 
 const PREFS_KEY = "hwaflow.workspace.prefs.v1";
 
@@ -277,6 +279,7 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
           />
           <main className="dash-main" id="main">
             <NotFoundState
+              kicker="Not available"
               title="Chapter not found"
               copy="This link may be stale, or you don't have access to it. Ask a Manager or Owner to assign you to the series."
               href="/groups"
@@ -342,17 +345,8 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
   };
 
   const writeStatus = async (next: ChapterStatus, note?: string) => {
-    const result = await setChapterStatusAction({
-      chapterId: chapter.id,
-      next,
-      note: note ?? null,
-    });
-
-    if (!result.ok) {
-      notify("error", result.message);
-      return;
-    }
-
+    // Optimistic: the chip flips on click, and flips back if the server says no.
+    const previous = chapter;
     setChapter((current) =>
       current
         ? {
@@ -367,6 +361,18 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
           }
         : current
     );
+
+    const result = await setChapterStatusAction({
+      chapterId: chapter.id,
+      next,
+      note: note ?? null,
+    });
+
+    if (!result.ok) {
+      setChapter(previous);
+      notify("error", result.message);
+      return;
+    }
 
     if (next === "submitted") notify("success", "Chapter submitted for review.");
     if (next === "approved") notify("success", "Chapter approved.");
@@ -759,12 +765,14 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
                 onTabChange={setTab}
                 glossaryCount={terms.length}
                 glossary={
-                  <GlossaryPanel
-                    seriesId={series.id}
-                    terms={terms}
-                    canEdit={canEdit}
-                    onNotice={notify}
-                  />
+                  <Isolate label="The glossary">
+                    <GlossaryPanel
+                      seriesId={series.id}
+                      terms={terms}
+                      canEdit={canEdit}
+                      onNotice={notify}
+                    />
+                  </Isolate>
                 }
               />
             </aside>
@@ -834,32 +842,36 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
 
                 <div className="ch-header-actions">
                   {canMarkReady ? (
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      onClick={() => writeStatus("ready")}
-                      title="Use this if a run was interrupted by a closed tab."
-                    >
-                      <Check className="h-3.5 w-3.5" />
-                      Mark as ready
-                    </button>
+                    <Tooltip label="Use this if a run was interrupted by a closed tab.">
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => writeStatus("ready")}
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                        Mark as ready
+                      </button>
+                    </Tooltip>
                   ) : null}
 
                   {canSubmit ? (
-                    <button
-                      type="button"
-                      className="btn btn-primary btn-sm"
-                      onClick={() => writeStatus("submitted")}
-                      disabled={!panelsWithText}
-                      title={
+                    <Tooltip
+                      label={
                         panelsWithText
                           ? "Send this chapter to a Manager for review"
                           : "Translate at least one panel before submitting."
                       }
                     >
-                      <Play className="h-3.5 w-3.5" />
-                      Submit
-                    </button>
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        onClick={() => writeStatus("submitted")}
+                        disabled={!panelsWithText}
+                      >
+                        <Play className="h-3.5 w-3.5" />
+                        Submit
+                      </button>
+                    </Tooltip>
                   ) : null}
 
                   {canApprove ? (
@@ -883,15 +895,16 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
                   ) : null}
 
                   {canReopen ? (
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      onClick={() => writeStatus("submitted")}
-                      title="Move this chapter back into review"
-                    >
-                      <Clock className="h-3.5 w-3.5" />
-                      Reopen
-                    </button>
+                    <Tooltip label="Move this chapter back into review">
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => writeStatus("submitted")}
+                      >
+                        <Clock className="h-3.5 w-3.5" />
+                        Reopen
+                      </button>
+                    </Tooltip>
                   ) : null}
                 </div>
               </div>
@@ -915,63 +928,67 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
                 </div>
               ) : null}
 
-              <BlockEditor
-                panel={currentPanel}
-                panelIndex={panelIndex}
-                panelCount={panels.length}
-                blocks={blocks}
-                editable={canEdit}
-                activeBlockId={activeBlockId}
-                onActiveBlock={setHoveredBlockId}
-                onPinBlock={(blockId) =>
-                  setPinnedBlockId((current) =>
-                    current === blockId ? null : blockId
-                  )
-                }
-                onSaveBlock={saveBlock}
-                onPrev={goPrevPanel}
-                onNext={goNextPanel}
-                running={run.running}
-                stageHint={runStageHint}
-                hasPanels={panels.length > 0}
-                panelState={
-                  currentPanel ? run.panels[currentPanel.id] : undefined
-                }
-                onRetry={handleRetry}
-              />
+              <Isolate label="The text editor">
+                <BlockEditor
+                  panel={currentPanel}
+                  panelIndex={panelIndex}
+                  panelCount={panels.length}
+                  blocks={blocks}
+                  editable={canEdit}
+                  activeBlockId={activeBlockId}
+                  onActiveBlock={setHoveredBlockId}
+                  onPinBlock={(blockId) =>
+                    setPinnedBlockId((current) =>
+                      current === blockId ? null : blockId
+                    )
+                  }
+                  onSaveBlock={saveBlock}
+                  onPrev={goPrevPanel}
+                  onNext={goNextPanel}
+                  running={run.running}
+                  stageHint={runStageHint}
+                  hasPanels={panels.length > 0}
+                  panelState={
+                    currentPanel ? run.panels[currentPanel.id] : undefined
+                  }
+                  onRetry={handleRetry}
+                />
+              </Isolate>
             </section>
 
             <aside className="ws-viewer">
-              <PanelViewer
-                panel={currentPanel}
-                panelIndex={panelIndex}
-                panelCount={panels.length}
-                blocks={blocks}
-                activeBlockId={activeBlockId}
-                run={run}
-                canRun={canRun}
-                canRunReason={canRunReason}
-                onRun={handleRun}
-                onCancel={cancelRun}
-                onRetry={handleRetry}
-                onUpload={handleUpload}
-                uploadBusy={uploadBusy}
-                uploadProgress={uploadProgress}
-                showBoxes={showBoxes}
-                onToggleBoxes={(next) => {
-                  setShowBoxes(next);
-                  try {
-                    window.localStorage.setItem(
-                      PREFS_KEY,
-                      JSON.stringify({ showBoxes: next })
-                    );
-                  } catch {
-                    // Preferences are a nicety; ignore a full quota.
-                  }
-                }}
-                onPrevPanel={goPrevPanel}
-                onNextPanel={goNextPanel}
-              />
+              <Isolate label="The panel viewer">
+                <PanelViewer
+                  panel={currentPanel}
+                  panelIndex={panelIndex}
+                  panelCount={panels.length}
+                  blocks={blocks}
+                  activeBlockId={activeBlockId}
+                  run={run}
+                  canRun={canRun}
+                  canRunReason={canRunReason}
+                  onRun={handleRun}
+                  onCancel={cancelRun}
+                  onRetry={handleRetry}
+                  onUpload={handleUpload}
+                  uploadBusy={uploadBusy}
+                  uploadProgress={uploadProgress}
+                  showBoxes={showBoxes}
+                  onToggleBoxes={(next) => {
+                    setShowBoxes(next);
+                    try {
+                      window.localStorage.setItem(
+                        PREFS_KEY,
+                        JSON.stringify({ showBoxes: next })
+                      );
+                    } catch {
+                      // Preferences are a nicety; ignore a full quota.
+                    }
+                  }}
+                  onPrevPanel={goPrevPanel}
+                  onNextPanel={goNextPanel}
+                />
+              </Isolate>
             </aside>
           </div>
         </main>

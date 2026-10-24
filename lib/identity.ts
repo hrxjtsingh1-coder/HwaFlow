@@ -6,12 +6,19 @@
  * in here would drag the wrong runtime along with it.
  */
 
+import { toCurrency } from "./money";
+
 export type AuthUser = {
   id: string;
   username: string;
   displayName: string;
   /** From `profiles.is_platform_admin`, never from a hardcoded username. */
   isPlatformAdmin: boolean;
+  /**
+   * The currency this member reads amounts in, from `profiles.display_currency`.
+   * Independent of any group's pricing currency.
+   */
+  displayCurrency: string;
 };
 
 /** The subset of a profile an invite needs — no email, no flags. */
@@ -25,6 +32,8 @@ export type AuthFailure =
   | "invalid-input"
   | "invalid-credentials"
   | "username-taken"
+  /** Too many attempts from this address or account; `message` carries the wait. */
+  | "rate-limited"
   /**
    * Signup succeeded but there is no session, which means the project still
    * requires email confirmation. No mailbox exists for `<name>@users.internal`,
@@ -81,9 +90,14 @@ export function sleep(ms: number): Promise<void> {
 export function getInitials(displayName: string, username = ""): string {
   const source = displayName.trim() || username;
   if (!source) return "HF";
+
+  // Array.from splits by code point, so an emoji-first name yields the whole
+  // emoji instead of half a surrogate pair (which renders as "�").
+  const first = (value: string) => Array.from(value)[0] ?? "";
+
   const parts = source.split(/\s+/).filter(Boolean);
   if (parts.length >= 2) {
-    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    return `${first(parts[0])}${first(parts[1])}`.toUpperCase();
   }
-  return source.slice(0, 2).toUpperCase();
+  return Array.from(source).slice(0, 2).join("").toUpperCase();
 }

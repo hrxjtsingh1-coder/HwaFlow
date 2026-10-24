@@ -26,15 +26,16 @@ import { workspaceLinks } from "../dashboard/workspace-nav";
 import {
   AlertCircle,
   ArrowLeft,
-  ArrowRight,
   Check,
   Coins,
   Layers,
   Plus,
+  Settings,
   Users,
   X,
 } from "../icons";
 import { GroupAvatar } from "../group-avatar";
+import { NotFoundState } from "../not-found-state";
 import { RoleBadge } from "../role-badge";
 import { CreateSeriesDialog } from "./create-series-dialog";
 import { DayLane } from "./day-lane";
@@ -61,6 +62,8 @@ type GroupDetailViewProps = {
   /** Non-archived series this viewer can read, already filtered by RLS. */
   series: Series[];
   assignments: SeriesAssignment[];
+  /** Approved this month: the whole group for an Owner, otherwise the viewer's. */
+  money: number;
 };
 
 export function GroupDetailView({
@@ -68,6 +71,7 @@ export function GroupDetailView({
   bundle,
   series,
   assignments,
+  money,
 }: GroupDetailViewProps) {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -124,17 +128,15 @@ export function GroupDetailView({
           />
           <main className="dash-main" id="main">
             <div className="dash-content grp-content">
-              <section className="grp-notfound dash-enter">
-                <p className="eyebrow">Groups</p>
-                <h1 className="grp-notfound-title">Group not found</h1>
-                <p className="grp-notfound-copy">
-                  You may not have access, or this group was removed.
-                </p>
-                <Link href="/groups" className="btn btn-ghost btn-sm">
-                  <ArrowLeft className="h-4 w-4" />
-                  Back to your groups
-                </Link>
-              </section>
+              <NotFoundState
+                kicker="Not available"
+                title="Group not found"
+                copy="You may not have access, or this group was removed. The rest of your groups are still here."
+                href="/groups"
+                action="Back to your groups"
+                secondaryHref="/dashboard"
+                secondaryAction="Dashboard"
+              />
             </div>
           </main>
         </div>
@@ -149,8 +151,8 @@ export function GroupDetailView({
 
   const visibleSeries = series;
 
-  // Earnings need approved chapters; they arrive in Phase 3.
-  const money = 0;
+  // Earnings arrive from the page: group-wide for an Owner, otherwise the
+  // viewer's own approved work.
   const moneyNote =
     viewerRole === "owner"
       ? "Group total this month"
@@ -253,6 +255,14 @@ export function GroupDetailView({
                   ) : null}
                 </div>
               </div>
+              <Link
+                href={`/groups/${group.id}/settings`}
+                className="grp-settings-link"
+                aria-label={`${group.name} settings`}
+                title="Group settings"
+              >
+                <Settings className="h-4 w-4" />
+              </Link>
             </section>
 
             <div className="grp-stats dash-enter" data-delay="55">
@@ -284,11 +294,9 @@ export function GroupDetailView({
                   Money earned
                 </span>
                 <p className="grp-stat-value">
-                  {formatMoney(money, group.currency)}
+                  {formatMoney(money, viewer.displayCurrency)}
                 </p>
-                <span className="grp-stat-note">
-                  {moneyNote} · no approved chapters yet
-                </span>
+                <span className="grp-stat-note">{moneyNote}</span>
               </article>
             </div>
 
@@ -355,14 +363,6 @@ export function GroupDetailView({
                 />
               ))}
             </div>
-
-            <footer className="grp-footer">
-              <span>Group and member data syncs with your team.</span>
-              <Link href="/dashboard" className="dash-link">
-                Back to dashboard
-                <ArrowRight className="h-3 w-3" />
-              </Link>
-            </footer>
           </div>
         </main>
       </div>

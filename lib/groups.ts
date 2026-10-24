@@ -182,7 +182,8 @@ export function groupAccent(name: string): GroupAccent {
 
 export function groupMonogram(name: string): string {
   const trimmed = name.trim();
-  return (trimmed[0] ?? "G").toUpperCase();
+  // Code point, not code unit: an emoji-first name must not render as "�".
+  return (Array.from(trimmed)[0] ?? "G").toUpperCase();
 }
 
 export function validateGroupName(value: string): string | null {

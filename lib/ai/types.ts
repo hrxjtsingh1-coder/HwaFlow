@@ -116,6 +116,7 @@ export type ProofreadResponse = {
 export type PipelineFailure =
   | "missing-key"
   | "quota"
+  | "rate-limited"
   | "network"
   | "bad-response"
   | "too-large"
@@ -139,6 +140,7 @@ export const PIPELINE_ERROR_COPY: Record<PipelineFailure, string> = {
   "missing-key":
     "The translation service isn't configured. Add GEMINI_API_KEY to .env.local.",
   quota: "The translation service's free limit was reached. Wait a minute and retry.",
+  "rate-limited": "Too many requests in a row. Wait a few seconds and retry.",
   network: "Couldn't reach the translation service.",
   "bad-response": "The translation service returned something we couldn't read. Retry.",
   "too-large": "That panel is too large. Re-upload a smaller image.",
@@ -161,6 +163,7 @@ export function pipelineErrorMessage(code: string | null | undefined): string {
 const FAILURE_STATUS: Record<PipelineFailure, number> = {
   "missing-key": 503,
   quota: 429,
+  "rate-limited": 429,
   network: 502,
   "bad-response": 502,
   "too-large": 413,

@@ -371,8 +371,8 @@ export function AuthExperience({
 
             <p className="auth-demo">
               <span className="auth-demo-dot" aria-hidden="true" />
-              Early build — accounts are real. Group data still lives in this
-              browser.
+              Early build — accounts are real. Your group&apos;s work is saved
+              as you go.
             </p>
           </div>
 

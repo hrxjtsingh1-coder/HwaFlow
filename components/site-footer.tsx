@@ -1,10 +1,11 @@
 import Link from "next/link";
+import { ArrowUp } from "./icons";
 import { Logo } from "./logo";
 
 const productLinks = [
-  { href: "#product", label: "What it does" },
-  { href: "#pipeline", label: "How it works" },
-  { href: "#team", label: "For teams" },
+  { href: "/#product", label: "What it does" },
+  { href: "/#pipeline", label: "How it works" },
+  { href: "/#team", label: "For teams" },
 ];
 
 const accountLinks = [
@@ -14,48 +15,38 @@ const accountLinks = [
 
 export function SiteFooter() {
   return (
-    <footer className="border-t border-border">
-      <div className="shell py-14">
-        <div className="grid gap-10 sm:grid-cols-2 md:grid-cols-[1.6fr_1fr_1fr]">
-          <div>
+    <footer className="site-footer">
+      <div className="shell">
+        <div className="footer-grid">
+          <div className="footer-brand">
             <Logo />
-            <p className="mt-4 max-w-[17rem] text-[13px] leading-relaxed text-muted">
+            <p>
               Manhwa translation, made simple. Raw panels in, finished text out.
             </p>
-            <p className="mt-4 text-[11px] tracking-[0.04em] text-faint">
+            <p className="footer-langs">
               Korean · Japanese · Chinese → English
             </p>
           </div>
 
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-faint">
-              Explore
-            </p>
-            <ul className="mt-4 space-y-2.5">
+            <p className="footer-kicker">Explore</p>
+            <ul className="footer-links">
               {productLinks.map((link) => (
                 <li key={link.href}>
-                  <a
-                    href={link.href}
-                    className="text-[13px] text-muted transition-colors hover:text-ink"
-                  >
+                  <Link href={link.href} className="footer-link">
                     {link.label}
-                  </a>
+                  </Link>
                 </li>
               ))}
             </ul>
           </div>
 
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-faint">
-              Account
-            </p>
-            <ul className="mt-4 space-y-2.5">
+            <p className="footer-kicker">Account</p>
+            <ul className="footer-links">
               {accountLinks.map((link) => (
                 <li key={link.href}>
-                  <Link
-                    href={link.href}
-                    className="text-[13px] text-muted transition-colors hover:text-ink"
-                  >
+                  <Link href={link.href} className="footer-link">
                     {link.label}
                   </Link>
                 </li>
@@ -64,10 +55,12 @@ export function SiteFooter() {
           </div>
         </div>
 
-        <div className="mt-12 border-t border-border pt-6">
-          <p className="text-[11px] text-faint">
-            © 2026 HwaFlow. Built for scanlation groups.
-          </p>
+        <div className="footer-bottom">
+          <p>© 2026 HwaFlow. Built for scanlation groups.</p>
+          <a href="#top" className="footer-top-link">
+            Back to top
+            <ArrowUp className="h-3 w-3" />
+          </a>
         </div>
       </div>
     </footer>

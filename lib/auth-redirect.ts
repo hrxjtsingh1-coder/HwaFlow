@@ -1,8 +1,8 @@
 /**
  * Route protection decision, kept pure so it can be tested without a request.
  *
- * The proxy's notion of "signed in" is `auth.getUser()`, which only needs a
- * valid session cookie. Every page's notion is `getViewer()`, which also needs
+ * The proxy's notion of "signed in" is `auth.getSession()`, which only needs a
+ * live session cookie. Every page's notion is `getViewer()`, which also needs
  * a readable `profiles` row. When those disagree — a user created before the
  * profile trigger, a deleted profile, or one transient read error — redirecting
  * a signed-in request away from `/login` sent it straight back to `/dashboard`,

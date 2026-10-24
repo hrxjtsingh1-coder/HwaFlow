@@ -6,7 +6,7 @@ describe("needsSignIn", () => {
   it("protects the app surfaces", () => {
     expect(needsSignIn("/dashboard")).toBe(true);
     expect(needsSignIn("/chapters/abc/workspace")).toBe(true);
-    expect(needsSignIn("/settings/members")).toBe(true);
+    expect(needsSignIn("/groups/example")).toBe(true);
   });
 
   it("leaves public routes alone", () => {

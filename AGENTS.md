@@ -11,6 +11,6 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 ## Project docs
 
 - `docs/ARCHITECTURE.md` — single source of truth for architecture, data model, RBAC, design system and page inventory. Read before building anything.
-- `docs/GROUPS-PAGE.md` — locked decisions, permissions, data model and build spec for the groups surfaces (`/admin/groups`, `/admin/groups/[id]`, `/settings/members`). Read before starting that work; do not re-ask the decisions recorded there.
+- `docs/GROUPS-PAGE.md` — locked decisions, permissions, data model and build spec for the groups surfaces (`/admin/groups`, `/admin/groups/[id]`, `/groups/[id]/settings`). Read before starting that work; do not re-ask the decisions recorded there. Section 0 records the 2026-10-24 move away from `/settings/members` (deleted).
 - `docs/context.md` — product intent.
 

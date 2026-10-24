@@ -18,16 +18,9 @@
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background: radial-gradient(
-      48rem 28rem at 82% -8rem,
-      color-mix(in oklab, var(--lavender) 38%, transparent),
-      transparent 70%
-    ),
-    radial-gradient(
-      36rem 24rem at 2% 4rem,
-      color-mix(in oklab, var(--mint) 22%, transparent),
-      transparent 72%
-    );
+
+
+  display: none;
 }
 
 .admin-body {
@@ -50,10 +43,8 @@
   flex-direction: column;
   width: var(--admin-rail);
   padding: 1.2rem 0.8rem 1rem;
-  border-right: 1px solid var(--border);
+  border-right: 2px solid var(--edge);
   background: color-mix(in oklab, var(--surface) 84%, transparent);
-  backdrop-filter: blur(18px) saturate(1.2);
-  -webkit-backdrop-filter: blur(18px) saturate(1.2);
 }
 
 .admin-rail-head {
@@ -97,7 +88,7 @@
   gap: 0.65rem;
   height: 2.45rem;
   padding-inline: 0.55rem;
-  border-radius: 0.7rem;
+  border-radius: 0;
   border: 1px solid transparent;
   font-size: 0.8125rem;
   font-weight: 500;
@@ -124,7 +115,7 @@
   flex-shrink: 0;
   width: 1.7rem;
   height: 1.7rem;
-  border-radius: 0.5rem;
+  border-radius: 0;
   background: color-mix(in oklab, var(--accent) 12%, transparent);
   color: var(--accent-ink);
 }
@@ -148,7 +139,7 @@
   align-items: center;
   gap: 0.45rem;
   padding: 0.45rem 0.5rem;
-  border-radius: 0.6rem;
+  border-radius: 0;
   font-size: 0.7rem;
   font-weight: 600;
   color: var(--muted);
@@ -166,8 +157,8 @@
   gap: 0.55rem;
   margin-top: 0.55rem;
   padding: 0.45rem;
-  border: 1px solid var(--border);
-  border-radius: 0.8rem;
+  border: 2px solid var(--edge);
+  border-radius: 0;
   background: color-mix(in oklab, var(--surface-2) 45%, var(--surface));
 }
 
@@ -178,13 +169,15 @@
   flex-shrink: 0;
   width: 2rem;
   height: 2rem;
-  border-radius: 999px;
-  background: linear-gradient(145deg, #c9efdd 0%, #e7e2fb 58%, #ffe3d1 100%);
-  color: #17181c;
+  border-radius: 0;
+  background: var(--lavender);
+  color: var(--ink);
   font-size: 0.625rem;
   font-weight: 700;
   letter-spacing: 0.03em;
-  box-shadow: inset 0 0 0 1px rgba(23, 24, 28, 0.08);
+
+
+  border: 2px solid var(--fill-edge);
 }
 
 .admin-account-shield {
@@ -198,7 +191,7 @@
   border-radius: 999px;
   background: var(--accent);
   color: var(--surface);
-  box-shadow: 0 0 0 2px var(--surface);
+  box-shadow: 0 0 0 2px var(--bg);
 }
 
 .admin-account-meta {
@@ -233,9 +226,7 @@
   z-index: 50;
   border: 0;
   padding: 0;
-  background: rgb(12 14 19 / 0.45);
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
+  background: var(--scrim);
   opacity: 0;
   visibility: hidden;
   transition: opacity 0.28s var(--ease), visibility 0s linear 0.28s;
@@ -261,10 +252,8 @@
   gap: 1rem;
   height: 4.25rem;
   padding-inline: clamp(1rem, 2.4vw, 1.75rem);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 2px solid var(--edge);
   background: var(--header-bg);
-  backdrop-filter: blur(18px) saturate(1.3);
-  -webkit-backdrop-filter: blur(18px) saturate(1.3);
 }
 
 .admin-topbar-left {
@@ -274,20 +263,28 @@
   min-width: 0;
 }
 
+.admin-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-shrink: 0;
+}
+
 .admin-topbar-badge {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
   flex-shrink: 0;
   padding: 0.3rem 0.6rem;
-  border: 1px solid color-mix(in oklab, var(--accent) 20%, transparent);
-  border-radius: 999px;
-  background: var(--accent-soft);
+  border: 1.5px solid var(--fill-edge);
+  border-radius: 0;
+  background: var(--lavender);
+  font-family: var(--font-mono);
   font-size: 0.5625rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
+  font-weight: 600;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--accent-ink);
+  color: var(--ink);
 }
 
 .admin-crumb {
@@ -322,7 +319,7 @@
 }
 
 .admin-crumb-link {
-  border-radius: 4px;
+  border-radius: 0;
   color: var(--faint);
   transition: color 0.18s var(--ease);
 }
@@ -346,7 +343,7 @@
   flex-shrink: 0;
   width: 2.35rem;
   height: 2.35rem;
-  border-radius: 0.7rem;
+  border-radius: 0;
   border: 1px solid transparent;
   color: var(--muted);
   transition: color 0.2s var(--ease), background-color 0.2s var(--ease),
@@ -402,17 +399,7 @@
   display: grid;
   place-items: center;
   min-height: 100dvh;
-  background: radial-gradient(
-      46rem 30rem at 70% 0%,
-      color-mix(in oklab, var(--lavender) 36%, transparent),
-      transparent 70%
-    ),
-    radial-gradient(
-      36rem 24rem at 10% 100%,
-      color-mix(in oklab, var(--mint) 26%, transparent),
-      transparent 72%
-    ),
-    var(--bg);
+  background: var(--bg);
 }
 
 .admin-loading-inner {
@@ -448,8 +435,8 @@
 .admin-forbidden-panel {
   width: min(30rem, 100%);
   padding: 2rem;
-  border: 1px solid var(--border);
-  border-radius: 1.4rem;
+  border: 2px solid var(--edge);
+  border-radius: 0;
   background: var(--surface);
   box-shadow: var(--shadow-float);
   text-align: center;
@@ -463,7 +450,7 @@
   height: 2.85rem;
   margin: 0 auto 1rem;
   border: 1px solid color-mix(in oklab, var(--accent) 20%, transparent);
-  border-radius: 0.9rem;
+  border-radius: 0;
   background: var(--accent-soft);
   color: var(--accent-ink);
 }
@@ -537,11 +524,9 @@
   gap: 1rem;
   margin-top: 1.5rem;
   padding: 0.9rem 1rem;
-  border: 1px solid var(--border);
-  border-radius: 1.1rem;
+  border: 2px solid var(--edge);
+  border-radius: 0;
   background: color-mix(in oklab, var(--surface) 74%, transparent);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
 }
 
 .admin-search {
@@ -578,8 +563,8 @@
   width: 100%;
   height: 2.7rem;
   padding: 0 2.3rem 0 2.45rem;
-  border: 1px solid var(--border);
-  border-radius: 0.75rem;
+  border: 2px solid var(--edge);
+  border-radius: 0;
   background: var(--surface);
   font: inherit;
   font-size: 0.8125rem;
@@ -594,7 +579,7 @@
 .admin-search-field input:focus {
   outline: none;
   border-color: color-mix(in oklab, var(--accent) 45%, var(--border));
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 14%, transparent);
+  box-shadow: 0 0 0 3px var(--edge);
 }
 
 .admin-search-field input::-webkit-search-cancel-button {
@@ -608,7 +593,7 @@
   place-items: center;
   width: 1.5rem;
   height: 1.5rem;
-  border-radius: 999px;
+  border-radius: 0;
   color: var(--faint);
   transition: color 0.18s var(--ease), background-color 0.18s var(--ease);
 }
@@ -627,8 +612,8 @@
 .admin-select {
   height: 2.7rem;
   padding: 0 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: 0.75rem;
+  border: 2px solid var(--edge);
+  border-radius: 0;
   background: var(--surface);
   font: inherit;
   font-size: 0.8125rem;
@@ -640,7 +625,7 @@
 .admin-select:focus {
   outline: none;
   border-color: color-mix(in oklab, var(--accent) 45%, var(--border));
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 14%, transparent);
+  box-shadow: 0 0 0 3px var(--edge);
 }
 
 .admin-select--compact {
@@ -663,8 +648,8 @@
   position: relative;
   display: flex;
   min-width: 0;
-  border: 1px solid var(--border);
-  border-radius: 1.25rem;
+  border: 2px solid var(--edge);
+  border-radius: 0;
   background: var(--surface);
   animation: admin-card-in 0.45s var(--ease-out) both;
   animation-delay: var(--admin-card-delay, 0ms);
@@ -680,7 +665,7 @@
 
 .admin-group-card[data-new="true"] {
   border-color: color-mix(in oklab, var(--mint-ink) 30%, var(--border));
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--mint) 32%, transparent);
+  box-shadow: 0 0 0 3px var(--edge);
 }
 
 .admin-group-card-link {
@@ -730,13 +715,15 @@
   flex-shrink: 0;
   width: 2rem;
   height: 2rem;
-  border-radius: 999px;
-  background: linear-gradient(145deg, #c9efdd 0%, #e7e2fb 58%, #ffe3d1 100%);
-  color: #17181c;
+  border-radius: 0;
+  background: var(--lavender);
+  color: var(--ink);
   font-size: 0.625rem;
   font-weight: 700;
   letter-spacing: 0.03em;
-  box-shadow: inset 0 0 0 1px rgba(23, 24, 28, 0.08);
+
+
+  border: 2px solid var(--fill-edge);
 }
 
 .admin-avatar--lg {
@@ -788,8 +775,6 @@
   height: 2rem;
   border-color: var(--border);
   background: color-mix(in oklab, var(--surface) 80%, transparent);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.18s var(--ease), color 0.18s var(--ease),
@@ -812,8 +797,8 @@
   flex-direction: column;
   width: 13.5rem;
   padding: 0.35rem;
-  border: 1px solid var(--border);
-  border-radius: 0.85rem;
+  border: 2px solid var(--edge);
+  border-radius: 0;
   background: var(--surface);
   box-shadow: var(--shadow-float);
   opacity: 0;
@@ -839,7 +824,7 @@
   width: 100%;
   padding: 0.5rem 0.55rem;
   border: 0;
-  border-radius: 0.55rem;
+  border-radius: 0;
   background: none;
   font: inherit;
   font-size: 0.75rem;
@@ -863,7 +848,7 @@
   margin-left: auto;
   padding: 0.05rem 0.3rem;
   border: 1px solid var(--border);
-  border-radius: 0.3rem;
+  border-radius: 0;
   background: var(--surface-2);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.5625rem;
@@ -875,7 +860,7 @@
   top: -0.6rem;
   right: 0.9rem;
   z-index: 4;
-  box-shadow: 0 8px 18px -12px rgb(var(--shadow-tint) / 0.7);
+  box-shadow: var(--shadow-hard-sm);
   animation: admin-chip-in 0.35s var(--ease-out) both;
 }
 
@@ -890,8 +875,8 @@
   width: min(34rem, 100%);
   margin: 2.25rem auto 0;
   padding: 2.6rem 1.75rem;
-  border: 1px solid var(--border);
-  border-radius: 1.4rem;
+  border: 2px solid var(--edge);
+  border-radius: 0;
   background: color-mix(in oklab, var(--surface) 88%, transparent);
   text-align: center;
 }
@@ -908,7 +893,7 @@
   height: 3rem;
   margin-bottom: 0.95rem;
   border: 1px solid color-mix(in oklab, var(--accent) 18%, transparent);
-  border-radius: 0.9rem;
+  border-radius: 0;
   background: var(--accent-soft);
   color: var(--accent-ink);
 }
@@ -938,8 +923,8 @@
   gap: 0.7rem;
   min-height: 12rem;
   padding: 1.1rem;
-  border: 1px solid var(--border);
-  border-radius: 1.25rem;
+  border: 2px solid var(--edge);
+  border-radius: 0;
   background: var(--surface);
 }
 
@@ -952,13 +937,8 @@
   display: block;
   height: 0.7rem;
   width: 100%;
-  border-radius: 999px;
-  background: linear-gradient(
-    90deg,
-    var(--surface-2) 0%,
-    color-mix(in oklab, var(--surface-2) 45%, var(--surface)) 50%,
-    var(--surface-2) 100%
-  );
+  border-radius: 0;
+  background: var(--surface-2);
   background-size: 200% 100%;
   animation: admin-shimmer 1.4s linear infinite;
 }
@@ -966,7 +946,7 @@
 .admin-skeleton-line--icon {
   width: 2.6rem;
   height: 2.6rem;
-  border-radius: 0.8rem;
+  border-radius: 0;
 }
 
 .admin-skeleton-line--title {
@@ -1006,9 +986,7 @@
 .admin-sheet-backdrop {
   position: absolute;
   inset: 0;
-  background: rgb(12 14 19 / 0.48);
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
+  background: var(--scrim);
 }
 
 .admin-sheet {
@@ -1020,7 +998,7 @@
   overflow: hidden;
   border-left: 1px solid var(--border);
   background: var(--surface);
-  box-shadow: -30px 0 70px -50px rgb(var(--shadow-tint) / 0.8);
+  box-shadow: var(--shadow-hard-sm);
   animation: admin-sheet-in 0.3s var(--ease-out) both;
 }
 
@@ -1135,8 +1113,8 @@
   width: 100%;
   height: 2.7rem;
   padding: 0 0.8rem;
-  border: 1px solid var(--border);
-  border-radius: 0.7rem;
+  border: 2px solid var(--edge);
+  border-radius: 0;
   background: var(--surface);
   font: inherit;
   font-size: 0.8125rem;
@@ -1152,7 +1130,7 @@
 .admin-select:focus {
   outline: none;
   border-color: color-mix(in oklab, var(--accent) 45%, var(--border));
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 14%, transparent);
+  box-shadow: 0 0 0 3px var(--edge);
 }
 
 .admin-input[aria-invalid="true"] {
@@ -1191,7 +1169,7 @@
 .admin-slug-preview code {
   padding: 0.08rem 0.35rem;
   border: 1px solid var(--border);
-  border-radius: 0.35rem;
+  border-radius: 0;
   background: var(--surface-2);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.625rem;
@@ -1250,7 +1228,7 @@
   gap: 0.85rem;
   padding: 0.7rem;
   border: 1px dashed var(--border-strong);
-  border-radius: 0.9rem;
+  border-radius: 0;
   background: color-mix(in oklab, var(--surface-2) 42%, var(--surface));
   transition: border-color 0.2s var(--ease), background-color 0.2s var(--ease);
 }
@@ -1268,8 +1246,8 @@
   width: 4.25rem;
   height: 4.25rem;
   overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 1rem;
+  border: 2px solid var(--edge);
+  border-radius: 0;
   background: var(--surface);
   transition: border-color 0.18s var(--ease), transform 0.18s var(--ease);
 }
@@ -1296,8 +1274,8 @@
 }
 
 .admin-icon-monogram[data-accent="mint"] {
-  background: color-mix(in oklab, var(--mint) 72%, var(--surface));
-  color: var(--mint-ink);
+  background: var(--mint);
+  color: var(--fill-edge);
 }
 
 .admin-icon-monogram[data-accent="lavender"] {
@@ -1306,13 +1284,13 @@
 }
 
 .admin-icon-monogram[data-accent="peach"] {
-  background: color-mix(in oklab, var(--peach) 68%, var(--surface));
-  color: var(--warning);
+  background: var(--peach);
+  color: var(--fill-edge);
 }
 
 .admin-icon-monogram[data-accent="sky"] {
-  background: color-mix(in oklab, var(--sky) 68%, var(--surface));
-  color: color-mix(in oklab, var(--accent-ink) 70%, var(--text));
+  background: var(--sky);
+  color: var(--fill-edge);
 }
 
 .admin-icon-busy {
@@ -1321,7 +1299,6 @@
   display: grid;
   place-items: center;
   background: color-mix(in oklab, var(--surface) 78%, transparent);
-  backdrop-filter: blur(2px);
 }
 
 .admin-icon-busy .admin-spinner {
@@ -1358,7 +1335,7 @@
   align-self: flex-start;
   margin-bottom: 1rem;
   padding: 0.3rem 0.55rem;
-  border-radius: 999px;
+  border-radius: 0;
   font-size: 0.6875rem;
   font-weight: 600;
   color: var(--muted);
@@ -1376,19 +1353,9 @@
   align-items: center;
   gap: 1rem;
   padding: 1.25rem;
-  border: 1px solid var(--border);
-  border-radius: 1.4rem;
-  background: radial-gradient(
-      52% 90% at 4% 0%,
-      color-mix(in oklab, var(--mint) 34%, transparent),
-      transparent 70%
-    ),
-    radial-gradient(
-      48% 84% at 96% 6%,
-      color-mix(in oklab, var(--lavender) 40%, transparent),
-      transparent 72%
-    ),
-    var(--surface);
+  border: 2px solid var(--edge);
+  border-radius: 0;
+  background: var(--surface);
   box-shadow: var(--shadow-card);
 }
 
@@ -1418,7 +1385,7 @@
 .admin-slug-chip {
   padding: 0.12rem 0.42rem;
   border: 1px solid var(--border);
-  border-radius: 0.4rem;
+  border-radius: 0;
   background: color-mix(in oklab, var(--surface) 65%, transparent);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.625rem;
@@ -1447,8 +1414,8 @@
   gap: 0.25rem;
   min-width: 0;
   padding: 0.95rem 1rem;
-  border: 1px solid var(--border);
-  border-radius: 1rem;
+  border: 2px solid var(--edge);
+  border-radius: 0;
   background: var(--surface);
 }
 
@@ -1494,8 +1461,8 @@
   gap: 1rem;
   margin-top: 1rem;
   padding: 1.1rem 1.2rem;
-  border: 1px solid var(--border);
-  border-radius: 1.2rem;
+  border: 2px solid var(--edge);
+  border-radius: 0;
   background: color-mix(in oklab, var(--accent-soft) 32%, var(--surface));
 }
 
@@ -1551,8 +1518,8 @@
 .admin-panel {
   margin-top: 1rem;
   overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 1.3rem;
+  border: 2px solid var(--edge);
+  border-radius: 0;
   background: var(--surface);
 }
 
@@ -1653,34 +1620,6 @@
   color: var(--faint);
 }
 
-.admin-notfound {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  width: min(32rem, 100%);
-  margin: 2rem auto;
-  padding: 2rem;
-  border: 1px solid var(--border);
-  border-radius: 1.4rem;
-  background: var(--surface);
-  box-shadow: var(--shadow-card);
-}
-
-.admin-notfound-title {
-  margin-top: 0.5rem;
-  font-size: 1.5rem;
-  font-weight: 600;
-  letter-spacing: -0.04em;
-  color: var(--text);
-}
-
-.admin-notfound-copy {
-  margin: 0.55rem 0 1.25rem;
-  font-size: 0.8125rem;
-  line-height: 1.6;
-  color: var(--muted);
-}
-
 /* ------------------------------------------------------------------ */
 /* Dialog                                                              */
 /* ------------------------------------------------------------------ */
@@ -1698,9 +1637,7 @@
 .admin-dialog-backdrop {
   position: absolute;
   inset: 0;
-  background: rgb(12 14 19 / 0.48);
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
+  background: var(--scrim);
 }
 
 .admin-dialog {
@@ -1710,8 +1647,8 @@
   width: min(29rem, 100%);
   max-height: min(86vh, 42rem);
   overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: 1.2rem;
+  border: 2px solid var(--edge);
+  border-radius: 0;
   background: var(--surface);
   box-shadow: var(--shadow-float);
   animation: admin-dialog-in 0.24s var(--ease-out) both;
@@ -1767,7 +1704,7 @@
   gap: 0.45rem;
   padding: 0.7rem 0.8rem;
   border: 1px solid color-mix(in oklab, var(--accent) 16%, var(--border));
-  border-radius: 0.7rem;
+  border-radius: 0;
   background: color-mix(in oklab, var(--accent-soft) 55%, var(--surface));
   font-size: 0.7rem;
   line-height: 1.55;
@@ -1800,7 +1737,7 @@
   gap: 0.6rem;
   padding: 0.5rem 0.6rem;
   border: 1px solid var(--border);
-  border-radius: 0.75rem;
+  border-radius: 0;
   background: var(--surface);
   cursor: pointer;
   transition: border-color 0.16s var(--ease), background-color 0.16s var(--ease);
@@ -1856,7 +1793,7 @@
   gap: 0.6rem;
   padding: 0.6rem 0.7rem;
   border: 1px solid var(--border);
-  border-radius: 0.75rem;
+  border-radius: 0;
   cursor: pointer;
   transition: border-color 0.16s var(--ease), background-color 0.16s var(--ease);
 }

@@ -1,7 +1,9 @@
 "use client";
 
-import type { ComponentType, SVGProps } from "react";
+import Link from "next/link";
+import { useState, type ComponentType, type SVGProps } from "react";
 import { getInitials, type AuthUser } from "@/lib/auth";
+import { AccountDialog } from "../account/account-dialog";
 import { Building, LayoutGrid, LogOut, X } from "../icons";
 import { Logo } from "../logo";
 
@@ -43,6 +45,7 @@ export function DashboardRail({
   collapsed = false,
 }: DashboardRailProps) {
   const admin = user.isPlatformAdmin;
+  const [accountOpen, setAccountOpen] = useState(false);
 
   return (
     <>
@@ -78,7 +81,7 @@ export function DashboardRail({
           <p className="dash-rail-label">{sectionLabel}</p>
           <nav className="dash-nav" aria-label={sectionLabel}>
             {links.map((link) => (
-              <a
+              <Link
                 key={link.key}
                 href={link.href}
                 className="dash-nav-link"
@@ -90,7 +93,7 @@ export function DashboardRail({
               >
                 <link.icon className="h-4 w-4 shrink-0" />
                 <span className="dash-nav-text">{link.label}</span>
-              </a>
+              </Link>
             ))}
           </nav>
 
@@ -100,7 +103,7 @@ export function DashboardRail({
                 Platform
               </p>
               <nav className="dash-nav" aria-label="Platform">
-                <a
+                <Link
                   href="/admin/groups"
                   className="dash-nav-link"
                   data-active="false"
@@ -110,20 +113,28 @@ export function DashboardRail({
                 >
                   <Building className="h-4 w-4 shrink-0" />
                   <span className="dash-nav-text">Admin console</span>
-                </a>
+                </Link>
               </nav>
             </>
           ) : null}
         </div>
 
         <div className="dash-user">
-          <span className="dash-user-avatar" aria-hidden="true">
-            {getInitials(user.displayName, user.username)}
-          </span>
-          <span className="dash-user-meta">
-            <span className="dash-user-name">{user.displayName}</span>
-            <span className="dash-user-handle">@{user.username}</span>
-          </span>
+          <button
+            type="button"
+            className="dash-user-profile"
+            onClick={() => setAccountOpen(true)}
+            aria-label="Account settings"
+            title="Account settings"
+          >
+            <span className="dash-user-avatar" aria-hidden="true">
+              {getInitials(user.displayName, user.username)}
+            </span>
+            <span className="dash-user-meta">
+              <span className="dash-user-name">{user.displayName}</span>
+              <span className="dash-user-handle">@{user.username}</span>
+            </span>
+          </button>
           <button
             type="button"
             onClick={onSignOut}
@@ -135,6 +146,12 @@ export function DashboardRail({
           </button>
         </div>
       </aside>
+
+      <AccountDialog
+        user={user}
+        open={accountOpen}
+        onClose={() => setAccountOpen(false)}
+      />
     </>
   );
 }

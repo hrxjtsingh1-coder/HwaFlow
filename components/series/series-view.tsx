@@ -12,6 +12,7 @@ import { type Chapter } from "@/lib/chapters";
 import { formatMoney, formatShortDate } from "@/lib/format";
 import type { Group, GroupMember, GroupRole } from "@/lib/groups";
 import type { AuthUser } from "@/lib/identity";
+import { convert, type Rates } from "@/lib/money";
 import {
   RELEASE_DAY_LABELS,
   canManageSeries,
@@ -21,12 +22,14 @@ import {
 import { DashboardRail } from "../dashboard/dashboard-rail";
 import { DashboardTopbar } from "../dashboard/dashboard-topbar";
 import { workspaceLinks } from "../dashboard/workspace-nav";
+import { NotFoundState } from "../not-found-state";
 import {
   AlertCircle,
   ArrowLeft,
   CalendarDays,
   Check,
   Settings,
+  Trash,
   Users,
   X,
 } from "../icons";
@@ -35,27 +38,26 @@ import { ChapterList } from "../chapters/chapter-list";
 import { DeleteChapterDialog } from "../chapters/delete-chapter-dialog";
 import { ManageAssignmentsDialog } from "../groups/manage-assignments-dialog";
 import { SeriesCover } from "../groups/series-cover";
+import { DeleteSeriesDialog } from "./delete-series-dialog";
 import { EditSeriesDialog } from "./edit-series-dialog";
 
 type Notice = { tone: "success" | "error"; text: string };
 
 function SeriesNotFound({ accessDenied = false }: { accessDenied?: boolean }) {
   return (
-    <section className="sr-notfound dash-enter">
-      <p className="eyebrow">Series</p>
-      <h1 className="sr-notfound-title">
-        {accessDenied ? "No access to this series" : "Series not found"}
-      </h1>
-      <p className="sr-notfound-copy">
-        {accessDenied
+    <NotFoundState
+      kicker={accessDenied ? "403 · No access" : "404 · Missing"}
+      title={accessDenied ? "No access to this series" : "Series not found"}
+      copy={
+        accessDenied
           ? "You don't have access to this series. Ask a Manager or Owner to assign you."
-          : "This link may be stale, or you don't have access to it."}
-      </p>
-      <Link href="/groups" className="btn btn-ghost btn-sm">
-        <ArrowLeft className="h-4 w-4" />
-        Back to your groups
-      </Link>
-    </section>
+          : "This link may be stale, or you don't have access to it. The rest of the group is still here."
+      }
+      href="/groups"
+      action="Back to your groups"
+      secondaryHref="/dashboard"
+      secondaryAction="Dashboard"
+    />
   );
 }
 
@@ -78,18 +80,28 @@ type SeriesViewProps = {
   viewer: AuthUser;
   bundle: SeriesBundle | null;
   chapters: Chapter[];
+  /** USD-based rates, so a group price can be read in the viewer's currency. */
+  rates: Rates;
 };
 
-export function SeriesView({ viewer, bundle, chapters }: SeriesViewProps) {
+export function SeriesView({ viewer, bundle, chapters, rates }: SeriesViewProps) {
   const router = useRouter();
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [deleteSeriesOpen, setDeleteSeriesOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Chapter | null>(null);
   const [creating, setCreating] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const noticeTimer = useRef<number | null>(null);
+
+  /*
+   * Optimistic chapter list: the rail is the only place a deleted chapter is
+   * visible, so it disappears on click and comes back if the server refuses.
+   */
+  const [chapterList, setChapterList] = useState(chapters);
+  useEffect(() => setChapterList(chapters), [chapters]);
 
   const notify = (tone: Notice["tone"], text: string) => {
     setNotice({ tone, text });
@@ -185,11 +197,17 @@ export function SeriesView({ viewer, bundle, chapters }: SeriesViewProps) {
   const handleDeleteChapter = async () => {
     if (!deleteTarget) return;
     const target = deleteTarget;
+    const snapshot = chapterList;
+
+    setDeleteTarget(null);
+    setChapterList((current) =>
+      current.filter((chapter) => chapter.id !== target.id)
+    );
 
     const result = await deleteChapterAction({ chapterId: target.id });
-    setDeleteTarget(null);
 
     if (!result.ok) {
+      setChapterList(snapshot);
       notify("error", result.message);
       return;
     }
@@ -302,6 +320,15 @@ export function SeriesView({ viewer, bundle, chapters }: SeriesViewProps) {
                       <Settings className="h-3.5 w-3.5" />
                       Edit
                     </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => setDeleteSeriesOpen(true)}
+                      title="Delete this series and every chapter in it"
+                    >
+                      <Trash className="h-3.5 w-3.5" />
+                      Delete
+                    </button>
                   </div>
                 ) : null}
 
@@ -331,7 +358,7 @@ export function SeriesView({ viewer, bundle, chapters }: SeriesViewProps) {
                 </section>
 
                 <ChapterList
-                  chapters={chapters}
+                  chapters={chapterList}
                   canManage={canManage}
                   canCreate={canManage || viewerRole === "staff"}
                   creating={creating}
@@ -371,10 +398,21 @@ export function SeriesView({ viewer, bundle, chapters }: SeriesViewProps) {
                     <div>
                       <dt>Rate</dt>
                       <dd>
-                        {formatMoney(series.rateAmount, group.currency)}
+                        {formatMoney(
+                          convert(
+                            series.rateAmount,
+                            group.currency,
+                            viewer.displayCurrency,
+                            rates
+                          ),
+                          viewer.displayCurrency
+                        )}
                         <span className="ch-rate-note">
                           {" "}
                           per approved chapter
+                          {viewer.displayCurrency === group.currency
+                            ? ""
+                            : ` · set in ${group.currency}`}
                         </span>
                       </dd>
                     </div>
@@ -447,14 +485,6 @@ export function SeriesView({ viewer, bundle, chapters }: SeriesViewProps) {
                 </section>
               </aside>
             </div>
-
-            <footer className="grp-footer">
-              <span>Series, assignments and members sync with your team.</span>
-              <Link href={`/groups/${group.id}`} className="dash-link">
-                Back to {group.name}
-                <ArrowLeft className="h-3 w-3" />
-              </Link>
-            </footer>
           </div>
         </main>
       </div>
@@ -494,6 +524,20 @@ export function SeriesView({ viewer, bundle, chapters }: SeriesViewProps) {
           chapter={deleteTarget}
           onClose={() => setDeleteTarget(null)}
           onConfirm={handleDeleteChapter}
+        />
+      ) : null}
+
+      {deleteSeriesOpen ? (
+        <DeleteSeriesDialog
+          series={series}
+          chapterCount={chapterList.length}
+          onClose={() => setDeleteSeriesOpen(false)}
+          onDeleted={() => {
+            setDeleteSeriesOpen(false);
+            notify("success", `${series.title} was deleted.`);
+            router.push(`/groups/${group.id}`);
+            router.refresh();
+          }}
         />
       ) : null}
     </div>

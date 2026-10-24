@@ -2,7 +2,10 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { GroupsView } from "@/components/groups/groups-view";
-import { listGroupsForViewer } from "@/lib/server/groups";
+import {
+  listGroupsForViewer,
+  listReceivedInvites,
+} from "@/lib/server/groups";
 import { getViewer } from "@/lib/session";
 
 export const metadata: Metadata = {
@@ -19,7 +22,10 @@ export default async function GroupsPage() {
   const viewer = await getViewer();
   if (!viewer) redirect("/login");
 
-  const memberships = await listGroupsForViewer(viewer);
+  const [memberships, invites] = await Promise.all([
+    listGroupsForViewer(viewer),
+    listReceivedInvites(viewer),
+  ]);
 
   // Device-local preference wins on the client; this is only the fallback for
   // a browser that has never chosen a group.
@@ -32,6 +38,7 @@ export default async function GroupsPage() {
     <GroupsView
       viewer={viewer}
       memberships={memberships}
+      invites={invites}
       defaultActiveId={defaultActiveId}
     />
   );

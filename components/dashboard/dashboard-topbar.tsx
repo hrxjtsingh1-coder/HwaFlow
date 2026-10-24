@@ -11,6 +11,7 @@ import {
 import type { AppNotification } from "@/lib/notifications";
 import { Bell, ChevronRight, Menu } from "../icons";
 import { Logo } from "../logo";
+import { ThemeToggle } from "../theme-toggle";
 
 export type Crumb = {
   label: string;
@@ -134,6 +135,7 @@ export function DashboardTopbar({
       </div>
 
       <div className="dash-topbar-actions">
+        <ThemeToggle />
         <div className="dash-notif-wrap" ref={wrapRef}>
           <button
             type="button"

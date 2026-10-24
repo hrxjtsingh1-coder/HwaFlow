@@ -1,9 +1,12 @@
-import { Layers, LayoutGrid, Users } from "../icons";
+import { Layers, LayoutGrid } from "../icons";
 import type { RailLink } from "./dashboard-rail";
 
 /**
  * The workspace rail is identical on every signed-in surface. Keeping the list
- * in one place means Groups / Members never drift out of order.
+ * in one place means Dashboard / Groups never drift out of order.
+ *
+ * There is no "Members" entry: member management belongs to one group, so it
+ * lives behind the gear on `/groups/[id]`.
  */
 export function workspaceLinks(): RailLink[] {
   return [
@@ -18,12 +21,6 @@ export function workspaceLinks(): RailLink[] {
       href: "/groups",
       label: "Groups",
       icon: Layers,
-    },
-    {
-      key: "members",
-      href: "/settings/members",
-      label: "Members",
-      icon: Users,
     },
   ];
 }

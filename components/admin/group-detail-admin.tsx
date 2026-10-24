@@ -6,7 +6,7 @@ import { useState } from "react";
 import { getInitials } from "@/lib/auth";
 import { formatShortDate } from "@/lib/format";
 import type { AdminGroupDetail } from "@/lib/server/admin-groups";
-import { ArrowLeft, ArrowUpRight, Crown, Layers, Users } from "../icons";
+import { ArrowLeft, Crown, Layers, Users } from "../icons";
 import { GroupAvatar } from "../group-avatar";
 import { RoleBadge } from "../role-badge";
 import { ChangeOwnerDialog } from "./change-owner-dialog";
@@ -51,14 +51,6 @@ export function GroupDetailAdmin({ detail }: { detail: AdminGroupDetail }) {
             </span>
           </div>
         </div>
-
-        <Link
-          href="/settings/members"
-          className="btn btn-ghost btn-sm admin-detail-action"
-        >
-          Open member settings
-          <ArrowUpRight className="h-3.5 w-3.5" />
-        </Link>
       </section>
 
       <div className="admin-stat-row admin-enter" data-delay="55">
@@ -189,9 +181,8 @@ export function GroupDetailAdmin({ detail }: { detail: AdminGroupDetail }) {
         </div>
 
         <p className="admin-panel-foot-note">
-          Read-only here — the admin console sees metadata only. Role changes
-          and invites live in member settings, owned by the group&apos;s Owner
-          and Managers.
+          Admins see metadata only and cannot change members. Roles and invites
+          are handled by the group&apos;s Owner and Managers.
         </p>
       </section>
 

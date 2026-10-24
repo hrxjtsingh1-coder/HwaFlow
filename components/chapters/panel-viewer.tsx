@@ -13,6 +13,7 @@ import {
 } from "../icons";
 import { PanelDropzone, type UploadProgress } from "./panel-dropzone";
 import { RunProgress } from "./run-progress";
+import { Tooltip } from "../tooltip";
 
 type PanelViewerProps = {
   panel: Panel | null;
@@ -123,16 +124,17 @@ export function PanelViewer({
         <div className="ch-viewer-actions">
           {panelCount > 0 ? (
             <>
-              <button
-                type="button"
-                className="ch-toggle"
-                aria-pressed={showBoxes}
-                onClick={() => onToggleBoxes(!showBoxes)}
-                title="Show every bubble box at once"
-              >
-                <ScanText className="h-3.5 w-3.5" aria-hidden="true" />
-                Boxes
-              </button>
+              <Tooltip label="Show every bubble box at once">
+                <button
+                  type="button"
+                  className="ch-toggle"
+                  aria-pressed={showBoxes}
+                  onClick={() => onToggleBoxes(!showBoxes)}
+                >
+                  <ScanText className="h-3.5 w-3.5" aria-hidden="true" />
+                  Boxes
+                </button>
+              </Tooltip>
               <PanelDropzone
                 variant="button"
                 onFiles={onUpload}
@@ -200,6 +202,8 @@ export function PanelViewer({
                   className="ch-panel-image"
                   src={imageUrl}
                   alt={`Raw panel ${panelIndex + 1}`}
+                  // An expired signed URL fails as a broken image, not a throw.
+                  onError={() => setImageUrl(null)}
                 />
               ) : (
                 <div

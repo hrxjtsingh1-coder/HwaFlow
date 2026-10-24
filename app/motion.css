@@ -1,0 +1,577 @@
+/* ==================================================================== */
+/* Motion layer                                                         */
+/*                                                                      */
+/* Interaction-only motion. Transform + opacity, never layout.          */
+/* Durations stay inside the token scale: 90 / 130 / 160 / 220ms.       */
+/* Every rule is scoped to :root[data-theme] so it wins against route   */
+/* CSS that is bundled after the root layout stylesheet.                */
+/*                                                                      */
+/* Entrances use `backwards` (not `both`) so the animation releases    */
+/* the element afterwards — hover transforms keep working.              */
+/* `prefers-reduced-motion` in globals.css neutralises all of it.      */
+/* ==================================================================== */
+
+:root {
+  --t-pop: 160ms;
+  --t-slow: 220ms;
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+}
+
+/* ------------------------------------------------------------------ */
+/* Theme switch                                                        */
+/* The circle is animated from `lib/theme.ts` because it needs the      */
+/* pressed button's position. Here we only remove the default crossfade */
+/* and stack the incoming snapshot above the outgoing one.              */
+/* ------------------------------------------------------------------ */
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  z-index: 2;
+}
+
+@keyframes motion-rise-sm {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes motion-slide {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+}
+
+@keyframes motion-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+
+@keyframes motion-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes motion-dot {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+@keyframes motion-scan {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Menus and popovers                                                  */
+/* ------------------------------------------------------------------ */
+
+:root[data-theme] .mem-menu,
+:root[data-theme] .admin-menu,
+:root[data-theme] .dash-popover {
+  transform-origin: top right;
+  animation: motion-pop var(--t-pop) var(--ease-out) backwards;
+}
+
+:root[data-theme] .mem-menu-item,
+:root[data-theme] .admin-menu-item {
+  transition: background-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :root[data-theme] .mem-menu-item:hover,
+  :root[data-theme] .admin-menu-item:hover {
+    transform: translateX(2px);
+  }
+}
+
+:root[data-theme] .mem-menu-item:active,
+:root[data-theme] .admin-menu-item:active {
+  transform: translateX(2px) scale(0.99);
+}
+
+/* Mobile rail backdrops */
+
+:root[data-theme] .dash-overlay,
+:root[data-theme] .admin-overlay {
+  animation: motion-fade 140ms var(--ease) backwards;
+}
+
+/* ------------------------------------------------------------------ */
+/* Navigation                                                          */
+/* ------------------------------------------------------------------ */
+
+:root[data-theme] .dash-nav-link,
+:root[data-theme] .admin-nav-link {
+  transition: color var(--t-fast) var(--ease),
+    background-color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :root[data-theme] .dash-nav-link:hover,
+  :root[data-theme] .admin-nav-link:hover {
+    transform: translateX(2px);
+  }
+}
+
+:root[data-theme] .dash-nav-link:active,
+:root[data-theme] .admin-nav-link:active {
+  transform: translateX(2px) scale(0.99);
+}
+
+:root[data-theme] .dash-crumb-link,
+:root[data-theme] .admin-crumb-link {
+  transition: color var(--t-fast) var(--ease),
+    transform var(--t-fast) var(--ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :root[data-theme] .dash-crumb-link:hover,
+  :root[data-theme] .admin-crumb-link:hover {
+    transform: translateX(-1px);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Icon buttons, arrows and small controls                             */
+/* ------------------------------------------------------------------ */
+
+:root[data-theme] .dash-icon-btn,
+:root[data-theme] .admin-icon-btn,
+:root[data-theme] .grp-icon-btn,
+:root[data-theme] .grp-assign-trigger,
+:root[data-theme] .ch-panel-arrow,
+:root[data-theme] .ch-lightbox-arrow,
+:root[data-theme] .ch-rail-delete,
+:root[data-theme] .ch-series-delete,
+:root[data-theme] .ch-series-edit,
+:root[data-theme] .ch-upload-retry,
+:root[data-theme] .ch-lightbox-close {
+  transition: color var(--t-fast) var(--ease),
+    background-color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :root[data-theme] .dash-icon-btn:hover,
+  :root[data-theme] .admin-icon-btn:hover,
+  :root[data-theme] .grp-icon-btn:hover,
+  :root[data-theme] .grp-assign-trigger:hover,
+  :root[data-theme] .ch-panel-arrow:not(:disabled):hover,
+  :root[data-theme] .ch-lightbox-arrow:not(:disabled):hover,
+  :root[data-theme] .ch-rail-delete:hover,
+  :root[data-theme] .ch-series-delete:hover,
+  :root[data-theme] .ch-series-edit:hover,
+  :root[data-theme] .ch-upload-retry:hover,
+  :root[data-theme] .ch-lightbox-close:hover {
+    translate: -1px -1px;
+  }
+}
+
+:root[data-theme] .dash-icon-btn:active,
+:root[data-theme] .admin-icon-btn:active,
+:root[data-theme] .grp-icon-btn:active,
+:root[data-theme] .grp-assign-trigger:active,
+:root[data-theme] .ch-panel-arrow:not(:disabled):active,
+:root[data-theme] .ch-lightbox-arrow:not(:disabled):active,
+:root[data-theme] .ch-rail-delete:active,
+:root[data-theme] .ch-series-delete:active,
+:root[data-theme] .ch-series-edit:active,
+:root[data-theme] .ch-upload-retry:active,
+:root[data-theme] .ch-lightbox-close:active {
+  /* `translate` composes with the arrow's translateY(-50%) centring;
+     `transform` would replace it and drop the arrow half a button. */
+  translate: 1px 1px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Rows and tables                                                     */
+/* ------------------------------------------------------------------ */
+
+:root[data-theme] .dash-notif,
+:root[data-theme] .dash-release-row,
+:root[data-theme] .mem-pending-row,
+:root[data-theme] .mem-invite-card,
+:root[data-theme] .admin-picker-row,
+:root[data-theme] .ch-rail-row,
+:root[data-theme] .ch-series-row,
+:root[data-theme] .ch-term,
+:root[data-theme] .ch-bubble,
+:root[data-theme] .sr-fact-link,
+:root[data-theme] .admin-table tbody tr,
+:root[data-theme] .mem-table tbody tr {
+  transition: background-color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :root[data-theme] .dash-notif:hover,
+  :root[data-theme] .dash-release-row:hover,
+  :root[data-theme] .mem-pending-row:hover,
+  :root[data-theme] .admin-picker-row:hover,
+  :root[data-theme] .ch-rail-row:hover,
+  :root[data-theme] .ch-series-row:hover,
+  :root[data-theme] .sr-fact-link:hover {
+    transform: translateX(2px);
+  }
+}
+
+:root[data-theme] .ch-rail-row:active,
+:root[data-theme] .ch-series-row:active {
+  transform: translateX(2px) scale(0.998);
+}
+
+/* ------------------------------------------------------------------ */
+/* Cards                                                               */
+/* ------------------------------------------------------------------ */
+
+:root[data-theme] .mem-staff-card,
+:root[data-theme] .mem-invite-card {
+  transition: transform var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :root[data-theme] .mem-staff-card:hover,
+  :root[data-theme] .mem-invite-card:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: var(--shadow-hard-sm);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Tabs, filters and toggles                                           */
+/* ------------------------------------------------------------------ */
+
+:root[data-theme] .ch-tab,
+:root[data-theme] .ch-filter-chip,
+:root[data-theme] .ch-toggle,
+:root[data-theme] .ch-zoom,
+:root[data-theme] .ch-undo button {
+  transition: background-color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease),
+    transform var(--t-fast) var(--ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :root[data-theme] .ch-tab:hover:not([data-active="true"]),
+  :root[data-theme] .ch-filter-chip:hover:not([data-active="true"]),
+  :root[data-theme] .ch-toggle:hover:not([aria-pressed="true"]),
+  :root[data-theme] .ch-zoom:not(:disabled):hover {
+    transform: translateY(-1px);
+  }
+}
+
+:root[data-theme] .ch-tab:active,
+:root[data-theme] .ch-filter-chip:active,
+:root[data-theme] .ch-toggle:active,
+:root[data-theme] .ch-zoom:not(:disabled):active {
+  transform: translateY(1px);
+}
+
+/* ------------------------------------------------------------------ */
+/* Chapters — the only surface with no entrance motion                 */
+/* ------------------------------------------------------------------ */
+
+:root[data-theme] .ch-series-panel .sr-panel-head {
+  animation: motion-fade var(--t-pop) var(--ease) backwards;
+}
+
+:root[data-theme] .ch-series-row,
+:root[data-theme] .ch-rail-row {
+  animation: motion-slide var(--t-slow) var(--ease-out) backwards;
+}
+
+:root[data-theme] .ch-series-row:nth-child(2),
+:root[data-theme] .ch-rail-row:nth-child(2) {
+  animation-delay: 30ms;
+}
+
+:root[data-theme] .ch-series-row:nth-child(3),
+:root[data-theme] .ch-rail-row:nth-child(3) {
+  animation-delay: 60ms;
+}
+
+:root[data-theme] .ch-series-row:nth-child(4),
+:root[data-theme] .ch-rail-row:nth-child(4) {
+  animation-delay: 90ms;
+}
+
+:root[data-theme] .ch-series-row:nth-child(5),
+:root[data-theme] .ch-rail-row:nth-child(5) {
+  animation-delay: 120ms;
+}
+
+:root[data-theme] .ch-series-row:nth-child(6),
+:root[data-theme] .ch-rail-row:nth-child(6) {
+  animation-delay: 150ms;
+}
+
+:root[data-theme] .ch-series-row:nth-child(n + 7),
+:root[data-theme] .ch-rail-row:nth-child(n + 7) {
+  animation-delay: 180ms;
+}
+
+:root[data-theme] .ch-term,
+:root[data-theme] .ch-bubble {
+  animation: motion-rise-sm var(--t-pop) var(--ease-out) backwards;
+}
+
+:root[data-theme] .ch-term:nth-child(2),
+:root[data-theme] .ch-bubble:nth-child(2) {
+  animation-delay: 30ms;
+}
+
+:root[data-theme] .ch-term:nth-child(3),
+:root[data-theme] .ch-bubble:nth-child(3) {
+  animation-delay: 60ms;
+}
+
+:root[data-theme] .ch-term:nth-child(n + 4),
+:root[data-theme] .ch-bubble:nth-child(n + 4) {
+  animation-delay: 90ms;
+}
+
+:root[data-theme] .ch-tabs,
+:root[data-theme] .ch-filter {
+  animation: motion-fade var(--t-pop) var(--ease) backwards;
+}
+
+:root[data-theme] .ch-panel-frame {
+  animation: motion-fade var(--t-pop) var(--ease) backwards;
+}
+
+:root[data-theme] .ch-header {
+  animation: motion-rise-sm var(--t-slow) var(--ease-out) backwards;
+}
+
+:root[data-theme] .ch-viewer {
+  animation: motion-fade var(--t-slow) var(--ease) backwards;
+}
+
+:root[data-theme] .ch-editor {
+  animation: motion-fade var(--t-pop) var(--ease) backwards;
+}
+
+:root[data-theme] .ch-lightbox-layer {
+  animation: motion-fade 140ms var(--ease) backwards;
+}
+
+:root[data-theme] .ch-lightbox {
+  animation: motion-pop 180ms var(--ease-out) backwards;
+}
+
+:root[data-theme] .ch-dropzone {
+  transition: background-color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease),
+    transform var(--t-fast) var(--ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :root[data-theme] .ch-dropzone:hover {
+    transform: translate(-1px, -1px);
+  }
+}
+
+:root[data-theme] .ch-stage-fill {
+  transition: width 320ms var(--ease-in-out);
+}
+
+/* ------------------------------------------------------------------ */
+/* Calendar and picker feedback                                        */
+/* ------------------------------------------------------------------ */
+
+:root[data-theme] .dash-cal-day:not(:disabled):active {
+  transform: translate(1px, 1px);
+}
+
+:root[data-theme] .grp-day-option:not(:disabled):active {
+  transform: translate(1px, 1px);
+}
+
+:root[data-theme] .mem-radio-row:active,
+:root[data-theme] .admin-radio-row:active,
+:root[data-theme] .mem-radio:active,
+:root[data-theme] .admin-radio:active {
+  transform: scale(0.997);
+}
+
+:root[data-theme] .mem-radio-row,
+:root[data-theme] .admin-radio-row,
+:root[data-theme] .mem-radio,
+:root[data-theme] .admin-radio {
+  transition: background-color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+}
+
+/* ------------------------------------------------------------------ */
+/* Form fields                                                         */
+/* ------------------------------------------------------------------ */
+
+:root[data-theme] .auth-input,
+:root[data-theme] .admin-input,
+:root[data-theme] .admin-select,
+:root[data-theme] .admin-search-field input,
+:root[data-theme] .grp-input,
+:root[data-theme] .grp-textarea,
+:root[data-theme] .mem-input,
+:root[data-theme] .ch-title-input,
+:root[data-theme] .ch-number-input,
+:root[data-theme] .ch-rate-input,
+:root[data-theme] .grp-assign-search input {
+  transition: border-color var(--t-fast) var(--ease),
+    background-color var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease);
+}
+
+/* ------------------------------------------------------------------ */
+/* Progress and loading                                                */
+/* ------------------------------------------------------------------ */
+
+:root[data-theme] .admin-skeleton-line,
+:root[data-theme] .ch-panel-skeleton {
+  animation: motion-scan 1.5s var(--ease-in-out) infinite;
+}
+
+/* ------------------------------------------------------------------ */
+/* Small shared affordances                                            */
+/* ------------------------------------------------------------------ */
+
+:root[data-theme] .grp-username-chip,
+:root[data-theme] .mem-username-chip,
+:root[data-theme] .admin-slug-chip,
+:root[data-theme] .admin-topbar-badge {
+  animation: motion-pop var(--t-pop) var(--ease-out) backwards;
+}
+
+:root[data-theme] .dash-unread {
+  animation: motion-dot var(--t-pop) var(--ease-out) backwards;
+}
+
+:root[data-theme] .ch-glossary {
+  animation: motion-fade var(--t-pop) var(--ease) backwards;
+}
+
+/* Route entrances that use `both` would pin `transform: none` after they
+   finish and swallow the hover lift. `backwards` looks identical but
+   releases the element once the entrance is over. */
+:root[data-theme] .grp-tile,
+:root[data-theme] .admin-group-card,
+:root[data-theme] .dash-release-row,
+:root[data-theme] .auth-submit {
+  animation-fill-mode: backwards;
+}
+
+:root[data-theme] .grp-chip-remove,
+:root[data-theme] .ch-term-dismiss,
+:root[data-theme] .ch-term-edit {
+  transition: color var(--t-fast) var(--ease),
+    background-color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+}
+
+:root[data-theme] .grp-back-link,
+:root[data-theme] .mem-back-link,
+:root[data-theme] .admin-back-link,
+:root[data-theme] .admin-back-inline {
+  transition: color var(--t-fast) var(--ease),
+    transform var(--t-fast) var(--ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :root[data-theme] .grp-back-link:hover,
+  :root[data-theme] .mem-back-link:hover,
+  :root[data-theme] .admin-back-link:hover,
+  :root[data-theme] .admin-back-inline:hover {
+    transform: translateX(-2px);
+  }
+}
+
+:root[data-theme] .dash-loading-inner,
+:root[data-theme] .admin-loading-inner {
+  animation: motion-fade var(--t-slow) var(--ease) backwards;
+}
+
+/* Secondary controls: colour hovers already exist, this adds the press. */
+
+:root[data-theme] .grp-text-btn,
+:root[data-theme] .mem-text-btn,
+:root[data-theme] .admin-link-btn,
+:root[data-theme] .admin-page-action,
+:root[data-theme] .ch-glossary-add,
+:root[data-theme] .ch-danger-btn,
+:root[data-theme] .mem-danger-btn,
+:root[data-theme] .mem-invite-btn,
+:root[data-theme] .grp-notice-close,
+:root[data-theme] .mem-notice-close,
+:root[data-theme] .admin-search-clear,
+:root[data-theme] .dash-link,
+:root[data-theme] .dash-cal-more,
+:root[data-theme] .ch-mobile-copy,
+:root[data-theme] .grp-assign-option {
+  transition: color var(--t-fast) var(--ease),
+    background-color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :root[data-theme] .dash-link:hover,
+  :root[data-theme] .grp-assign-option:hover {
+    transform: translateX(2px);
+  }
+}
+
+:root[data-theme] .grp-text-btn:active,
+:root[data-theme] .mem-text-btn:active,
+:root[data-theme] .admin-link-btn:active,
+:root[data-theme] .admin-page-action:active,
+:root[data-theme] .ch-glossary-add:active,
+:root[data-theme] .ch-danger-btn:active,
+:root[data-theme] .mem-danger-btn:active,
+:root[data-theme] .mem-invite-btn:active,
+:root[data-theme] .grp-notice-close:active,
+:root[data-theme] .mem-notice-close:active,
+:root[data-theme] .admin-search-clear:active,
+:root[data-theme] .dash-link:active,
+:root[data-theme] .dash-cal-more:active,
+:root[data-theme] .ch-mobile-copy:active,
+:root[data-theme] .grp-assign-option:active {
+  transform: scale(0.98);
+}
+
+:root[data-theme] .role-badge,
+:root[data-theme] .chip {
+  transition: background-color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :root[data-theme] .grp-chip-remove:hover,
+  :root[data-theme] .ch-lightbox-close:hover {
+    transform: scale(1.06);
+  }
+}

@@ -1,5 +1,7 @@
 /** Shared date formatting so every surface reads the same way. */
 
+import { decimalsFor } from "./money";
+
 export function formatShortDate(iso: string | null | undefined): string {
   if (!iso) return "—";
   const date = new Date(iso);
@@ -57,16 +59,21 @@ export function formatRelativeTime(
   return formatShortDate(iso);
 }
 
-/** Money uses the group's currency label; no conversion is performed. */
+/**
+ * Formats an amount in the currency it is already expressed in. Conversion is
+ * `convert()` in `lib/money.ts`; this only decides how many decimals the
+ * currency has, so yen does not get cents.
+ */
 export function formatMoney(amount: number, currency: string): string {
+  const decimals = decimalsFor(currency);
   try {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
     }).format(amount);
   } catch {
-    return `${amount.toFixed(2)} ${currency}`;
+    return `${amount.toFixed(decimals)} ${currency}`;
   }
 }

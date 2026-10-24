@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { Chapter } from "@/lib/chapters";
 import { useDialogA11y } from "@/lib/use-dialog";
 import { AlertCircle, Trash, X } from "../icons";
+import { DangerConfirm, matchesPhrase } from "../danger-confirm";
 
 type DeleteChapterDialogProps = {
   chapter: Chapter;
@@ -22,6 +23,10 @@ export function DeleteChapterDialog({
 }: DeleteChapterDialogProps) {
   const panelRef = useDialogA11y(true, onClose);
   const [busy, setBusy] = useState(false);
+  const [typed, setTyped] = useState("");
+
+  const phrase = chapter.title?.trim() || `Chapter ${chapter.number}`;
+  const ready = matchesPhrase(phrase, typed);
 
   return (
     <div className="grp-dialog-layer">
@@ -41,7 +46,7 @@ export function DeleteChapterDialog({
           <div className="grp-dialog-heading">
             <p className="eyebrow">Delete</p>
             <h2 className="grp-dialog-title" id="delete-chapter-title">
-              Delete Chapter {chapter.number}?
+              Delete {phrase}?
             </h2>
             <p className="grp-dialog-sub">
               This removes its panels and everything you&apos;ve translated. It
@@ -63,6 +68,13 @@ export function DeleteChapterDialog({
           Approved money from this chapter disappears with it.
         </p>
 
+        <DangerConfirm
+          phrase={phrase}
+          value={typed}
+          onChange={setTyped}
+          label="Type"
+        />
+
         <footer className="grp-dialog-foot">
           <button
             type="button"
@@ -76,7 +88,7 @@ export function DeleteChapterDialog({
           <button
             type="button"
             className="btn btn-sm ch-danger-btn"
-            disabled={busy}
+            disabled={busy || !ready}
             onClick={() => {
               setBusy(true);
               onConfirm();

@@ -15,6 +15,8 @@
 import "server-only";
 
 import type { AuthUser } from "./identity";
+import { LIMITS, throttleMessage } from "./rate-limit";
+import { rateLimit } from "./rate-limit-server";
 import { getViewer } from "./session";
 
 export type PipelineAuth =
@@ -42,6 +44,35 @@ export async function requirePipelineViewer(): Promise<PipelineAuth> {
           status: 401,
           // A 401 must never be cached and replayed to the next visitor.
           headers: { "Cache-Control": "no-store" },
+        }
+      ),
+    };
+  }
+
+  /*
+   * Metered per viewer rather than per IP: the browser orchestrator runs
+   * extract → translate → proofread for the same chapter, so an address-based
+   * cap would throttle a whole team behind one office NAT.
+   */
+  const limit = await rateLimit(
+    "pipeline:viewer",
+    viewer.id,
+    LIMITS.pipelinePerViewer
+  );
+  if (!limit.allowed) {
+    return {
+      ok: false,
+      response: Response.json(
+        {
+          error: "rate-limited",
+          message: throttleMessage(limit.retryAfter),
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(limit.retryAfter),
+            "Cache-Control": "no-store",
+          },
         }
       ),
     };

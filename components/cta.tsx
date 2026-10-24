@@ -4,36 +4,38 @@ import { ArrowRight } from "./icons";
 
 export function Cta() {
   return (
-    <section className="pb-20 sm:pb-28">
-      <div className="shell">
-        <Reveal>
-          <div className="cta-panel relative overflow-hidden rounded-[2rem] border border-border px-6 py-16 text-center sm:px-12 sm:py-20">
-            <div className="relative z-10 mx-auto max-w-2xl">
-              <h2 className="text-[clamp(2.1rem,4.8vw,3.5rem)] font-semibold leading-[0.99] tracking-[-0.045em] text-ink">
-                Your next chapter starts here.
-              </h2>
-              <p className="mx-auto mt-5 max-w-xl text-[15px] leading-relaxed text-muted">
-                Create an account, join your group, and let HwaFlow handle the
-                boring part. The first chapter is the hardest; after that it
-                becomes a rhythm.
-              </p>
+    <section className="cta-close">
+      <div className="shell cta-grid">
+        <Reveal className="cta-copy">
+          <p className="cta-kicker">
+            <span aria-hidden="true" className="cta-mark" />
+            Start
+          </p>
+          <h2>
+            Your <span className="display-serif">next chapter</span> starts here.
+          </h2>
+          <p>
+            Create an account, join your group, and let HwaFlow handle the
+            boring part. The first chapter is the hardest; after that it becomes
+            a rhythm.
+          </p>
+          <p className="cta-note">No card. No trial timer. Just the work.</p>
+        </Reveal>
 
-              <div className="mt-8 flex flex-col items-center justify-center gap-2.5 sm:flex-row">
-                <Link
-                  href="/register"
-                  className="btn btn-primary btn-lg w-full sm:w-auto"
-                >
-                  Create your account
-                  <ArrowRight className="btn-icon h-4 w-4" />
-                </Link>
-                <Link
-                  href="/login"
-                  className="btn btn-ghost btn-lg w-full sm:w-auto"
-                >
-                  Sign in
-                </Link>
-              </div>
-            </div>
+        <Reveal delay={80}>
+          <div className="cta-slip">
+            <p className="cta-slip-label">Open a group</p>
+            <Link href="/register" className="btn btn-primary btn-lg">
+              Create your account
+              <ArrowRight className="btn-icon h-4 w-4" />
+            </Link>
+            <Link href="/login" className="btn btn-ghost btn-lg">
+              Sign in
+            </Link>
+            <p className="cta-slip-foot">
+              Free to start. Your group owns the text, the glossary, and the
+              credit.
+            </p>
           </div>
         </Reveal>
       </div>

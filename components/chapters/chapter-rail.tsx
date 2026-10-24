@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRef, type KeyboardEvent, type ReactNode } from "react";
 import type { Chapter } from "@/lib/chapters";
 import { Trash } from "../icons";
+import { Tooltip } from "../tooltip";
 import { ChapterStatusDot } from "./chapter-status-dot";
 
 export type RailTab = "chapters" | "glossary";
@@ -106,6 +107,11 @@ export function ChapterRail({
                   href={`/chapters/${chapter.id}/workspace`}
                   className="ch-rail-link"
                   aria-current={current ? "page" : undefined}
+                  title={
+                    chapter.title
+                      ? `Chapter ${chapter.number} · ${chapter.title}`
+                      : `Chapter ${chapter.number}`
+                  }
                 >
                   <span className="ch-rail-label">
                     Chapter {chapter.number}
@@ -118,15 +124,16 @@ export function ChapterRail({
                 <ChapterStatusDot status={chapter.status} />
 
                 {canDelete ? (
-                  <button
-                    type="button"
-                    className="ch-rail-delete"
-                    onClick={() => onDelete(chapter)}
-                    aria-label={`Delete Chapter ${chapter.number}`}
-                    title={`Delete Chapter ${chapter.number}`}
-                  >
-                    <Trash className="h-3.5 w-3.5" />
-                  </button>
+                  <Tooltip label={`Delete Chapter ${chapter.number}`}>
+                    <button
+                      type="button"
+                      className="ch-rail-delete"
+                      onClick={() => onDelete(chapter)}
+                      aria-label={`Delete Chapter ${chapter.number}`}
+                    >
+                      <Trash className="h-3.5 w-3.5" />
+                    </button>
+                  </Tooltip>
                 ) : null}
               </li>
             );
@@ -143,10 +150,6 @@ export function ChapterRail({
       >
         {glossary}
       </div>
-
-      <p className="ch-rail-footer">
-        Preview build — chapters and translations stay in this browser.
-      </p>
     </div>
   );
 }

@@ -116,7 +116,6 @@
   padding: 0.6rem 0.6rem 0.5rem;
   border-bottom: 1px solid var(--border);
   background: color-mix(in oklab, var(--surface) 92%, transparent);
-  backdrop-filter: blur(10px);
 }
 
 .ch-tab {
@@ -127,7 +126,7 @@
   gap: 0.4rem;
   height: 2rem;
   border: 1px solid transparent;
-  border-radius: 0.6rem;
+  border-radius: 0;
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--muted);
@@ -142,9 +141,9 @@
 .ch-tab-count {
   min-width: 1.15rem;
   padding: 0 0.3rem;
-  border-radius: 999px;
+  border-radius: 0;
   background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--border);
+
   font-size: 0.625rem;
   font-variant-numeric: tabular-nums;
   color: var(--muted);
@@ -180,7 +179,7 @@
   align-items: center;
   gap: 0.35rem;
   padding-right: 0.3rem;
-  border-radius: 0.6rem;
+  border-radius: 0;
   transition: background-color 0.12s var(--ease);
 }
 
@@ -190,7 +189,7 @@
 
 .ch-rail-row[data-current="true"] {
   background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--border);
+
 }
 
 .ch-rail-row[data-current="true"]::before {
@@ -200,7 +199,7 @@
   top: 0.45rem;
   bottom: 0.45rem;
   width: 2px;
-  border-radius: 2px;
+  border-radius: 0;
   background: var(--accent);
 }
 
@@ -231,7 +230,7 @@
   width: 1.5rem;
   height: 1.5rem;
   flex: 0 0 auto;
-  border-radius: 0.4rem;
+  border-radius: 0;
   color: var(--faint);
   opacity: 0;
   transition: opacity 0.12s var(--ease), color 0.12s var(--ease);
@@ -247,14 +246,6 @@
   background: color-mix(in oklab, var(--danger) 10%, transparent);
 }
 
-.ch-rail-footer {
-  padding: 0.6rem 0.75rem 0.75rem;
-  border-top: 1px solid var(--border);
-  font-size: 0.5625rem;
-  line-height: 1.5;
-  color: var(--faint);
-}
-
 /* ------------------------------------------------------------------ */
 /* Status dots + chips                                                 */
 /* ------------------------------------------------------------------ */
@@ -264,7 +255,7 @@
   height: 8px;
   flex: 0 0 auto;
   border-radius: 999px;
-  background: var(--border-strong);
+  background: var(--faint);
 }
 
 .ch-dot[data-status="approved"] {
@@ -277,7 +268,7 @@
 
 .ch-dot[data-status="processing"],
 .ch-dot[data-status="submitted"] {
-  background: #d9a441;
+  background: var(--warning);
 }
 
 .ch-dot[data-status="processing"] {
@@ -287,10 +278,10 @@
 @keyframes ch-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(217, 164, 65, 0.42);
+    opacity: 1;
   }
   50% {
-    box-shadow: 0 0 0 4px rgba(217, 164, 65, 0);
+    opacity: 0.4;
   }
 }
 
@@ -325,7 +316,6 @@
   padding: 0.7rem 1rem;
   border-bottom: 1px solid var(--border);
   background: color-mix(in oklab, var(--surface) 90%, transparent);
-  backdrop-filter: blur(12px);
 }
 
 .ch-header-main {
@@ -356,7 +346,7 @@
   width: 3.5rem;
   padding: 0.1rem 0.25rem;
   border: 1px solid transparent;
-  border-radius: 0.4rem;
+  border-radius: 0;
   background: transparent;
   color: var(--text);
   font: inherit;
@@ -387,7 +377,7 @@
   max-width: 18rem;
   padding: 0.15rem 0.35rem;
   border: 1px solid transparent;
-  border-radius: 0.4rem;
+  border-radius: 0;
   background: transparent;
   color: var(--muted);
   font: inherit;
@@ -423,7 +413,7 @@
   gap: 0.35rem;
   margin-top: 0.35rem;
   padding: 0.3rem 0.5rem;
-  border-radius: 0.5rem;
+  border-radius: 0;
   background: color-mix(in oklab, var(--danger) 8%, var(--surface));
   font-size: 0.6875rem;
   line-height: 1.45;
@@ -471,7 +461,7 @@
   align-items: center;
   gap: 0.3rem;
   padding: 0.18rem 0.5rem;
-  border-radius: 999px;
+  border-radius: 0;
   background: var(--accent-soft);
   color: var(--accent-ink);
   font-size: 0.625rem;
@@ -491,7 +481,7 @@
   min-height: 12rem;
   padding: 2rem 1rem;
   border: 1px dashed var(--border);
-  border-radius: 0.9rem;
+  border-radius: 0;
   color: var(--muted);
   font-size: 0.8125rem;
   text-align: center;
@@ -509,7 +499,7 @@
   margin-bottom: 0.8rem;
   padding: 0.6rem 0.7rem;
   border: 1px solid color-mix(in oklab, var(--danger) 28%, var(--border));
-  border-radius: 0.6rem;
+  border-radius: 0;
   background: color-mix(in oklab, var(--danger) 6%, var(--surface));
   font-size: 0.75rem;
   line-height: 1.5;
@@ -538,7 +528,7 @@
   display: flex;
   gap: 0.65rem;
   padding: 0.5rem 0.5rem 0.55rem 0;
-  border-radius: 0.6rem;
+  border-radius: 0;
   transition: background-color 0.12s var(--ease);
 }
 
@@ -567,8 +557,8 @@
   top: 0.55rem;
   bottom: 0.55rem;
   width: 2px;
-  border-radius: 2px;
-  background: color-mix(in oklab, #d9a441 70%, transparent);
+  border-radius: 0;
+  background: color-mix(in oklab, var(--warning) 70%, transparent);
 }
 
 .ch-bubble-index {
@@ -591,7 +581,7 @@
   width: 100%;
   padding: 0.15rem 0.35rem;
   border: 1px solid transparent;
-  border-radius: 0.45rem;
+  border-radius: 0;
   outline: none;
   background: transparent;
   color: var(--text);
@@ -609,7 +599,7 @@
 .ch-bubble-field:focus-visible {
   border-color: var(--accent);
   background: var(--surface);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 14%, transparent);
+  box-shadow: 0 0 0 3px var(--edge);
 }
 
 .ch-bubble-field::placeholder {
@@ -656,8 +646,8 @@
   place-items: center;
   width: 2.25rem;
   height: 2.25rem;
-  border: 1px solid var(--border);
-  border-radius: 999px;
+  border: 2px solid var(--edge);
+  border-radius: 0;
   background: var(--surface);
   color: var(--text);
   box-shadow: var(--shadow-card);
@@ -705,7 +695,6 @@
   padding: 0.7rem 1rem;
   border-bottom: 1px solid var(--border);
   background: color-mix(in oklab, var(--surface) 90%, transparent);
-  backdrop-filter: blur(12px);
 }
 
 .ch-viewer-count {
@@ -728,8 +717,8 @@
   gap: 0.3rem;
   height: 2.25rem;
   padding-inline: 0.6rem;
-  border: 1px solid var(--border);
-  border-radius: 999px;
+  border: 2px solid var(--edge);
+  border-radius: 0;
   background: var(--surface);
   color: var(--muted);
   font-size: 0.75rem;
@@ -766,8 +755,8 @@
   display: block;
   width: 100%;
   overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  border: 2px solid var(--edge);
+  border-radius: 0;
   background: color-mix(in oklab, var(--lavender) 14%, var(--surface));
 }
 
@@ -785,11 +774,7 @@
   height: 100%;
   min-height: 14rem;
   padding: 1rem;
-  background: repeating-linear-gradient(
-    135deg,
-    var(--surface-2) 0 12px,
-    color-mix(in oklab, var(--surface-2) 60%, var(--surface)) 12px 24px
-  );
+  background: var(--surface-2);
   color: var(--muted);
   font-size: 0.8125rem;
   line-height: 1.5;
@@ -799,7 +784,7 @@
 .ch-bbox {
   position: absolute;
   border: 2px solid color-mix(in oklab, var(--accent) 88%, transparent);
-  border-radius: 6px;
+  border-radius: 0;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.18s var(--ease);
@@ -824,7 +809,7 @@
 
 .ch-panel-frame .ch-bbox[data-active="true"] {
   opacity: 1;
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 16%, transparent);
+  box-shadow: 0 0 0 3px var(--peach);
 }
 
 .ch-panel-frame:has(.ch-bbox[data-active="true"]) .ch-bbox:not([data-active="true"]) {
@@ -857,8 +842,8 @@
 .ch-stage {
   margin-top: 0.85rem;
   padding: 0.6rem 0.7rem;
-  border: 1px solid var(--border);
-  border-radius: 0.75rem;
+  border: 2px solid var(--edge);
+  border-radius: 0;
   background: var(--surface);
 }
 
@@ -894,7 +879,7 @@
   height: 4px;
   margin-top: 0.45rem;
   overflow: hidden;
-  border-radius: 999px;
+  border-radius: 0;
   background: var(--surface-2);
 }
 
@@ -950,7 +935,7 @@
   gap: 0.5rem;
   padding: 1.6rem 1rem;
   border: 1px dashed var(--border-strong);
-  border-radius: 0.9rem;
+  border-radius: 0;
   background: color-mix(in oklab, var(--surface) 60%, transparent);
   text-align: center;
   transition: border-color 0.16s var(--ease), background-color 0.16s var(--ease);
@@ -970,9 +955,9 @@
   place-items: center;
   width: 2.4rem;
   height: 2.4rem;
-  border-radius: 999px;
+  border-radius: 0;
   background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--border);
+
   color: var(--accent);
 }
 
@@ -994,7 +979,7 @@
   margin: 0.6rem 1rem 0;
   padding: 0.5rem 0.6rem;
   border: 1px solid color-mix(in oklab, var(--danger) 25%, var(--border));
-  border-radius: 0.6rem;
+  border-radius: 0;
   background: color-mix(in oklab, var(--danger) 6%, var(--surface));
 }
 
@@ -1027,8 +1012,7 @@
   display: grid;
   place-items: center;
   padding: 2rem;
-  background: rgb(12 14 19 / 0.82);
-  backdrop-filter: blur(4px);
+  background: var(--scrim-strong);
 }
 
 .ch-lightbox {
@@ -1044,7 +1028,7 @@
   display: block;
   max-width: 100%;
   max-height: calc(100dvh - 5rem);
-  border-radius: 12px;
+  border-radius: 0;
   object-fit: contain;
   background: var(--surface);
 }
@@ -1057,7 +1041,7 @@
   place-items: center;
   width: 2rem;
   height: 2rem;
-  border-radius: 999px;
+  border-radius: 0;
   background: rgba(255, 255, 255, 0.14);
   color: #fff;
 }
@@ -1069,7 +1053,7 @@
   place-items: center;
   width: 2.5rem;
   height: 2.5rem;
-  border-radius: 999px;
+  border-radius: 0;
   background: rgba(255, 255, 255, 0.14);
   color: #fff;
   transform: translateY(-50%);
@@ -1108,13 +1092,13 @@
   display: inline-flex;
   gap: 0.15rem;
   padding: 0.15rem;
-  border-radius: 999px;
+  border-radius: 0;
   background: var(--surface-2);
 }
 
 .ch-filter-chip {
   padding: 0.2rem 0.5rem;
-  border-radius: 999px;
+  border-radius: 0;
   font-size: 0.625rem;
   font-weight: 600;
   color: var(--muted);
@@ -1123,7 +1107,7 @@
 .ch-filter-chip[data-active="true"] {
   background: var(--surface);
   color: var(--text);
-  box-shadow: 0 1px 2px rgb(var(--shadow-tint) / 0.08);
+  box-shadow: var(--shadow-hard-sm);
 }
 
 .ch-glossary-add {
@@ -1137,8 +1121,8 @@
   flex-direction: column;
   gap: 0.5rem;
   padding: 0.7rem;
-  border: 1px solid var(--border);
-  border-radius: 0.7rem;
+  border: 2px solid var(--edge);
+  border-radius: 0;
   background: var(--surface);
 }
 
@@ -1181,7 +1165,7 @@
   align-items: center;
   gap: 0.35rem;
   padding: 0.35rem 0.4rem;
-  border-radius: 0.55rem;
+  border-radius: 0;
 }
 
 .ch-term:hover {
@@ -1231,7 +1215,7 @@
   min-width: 0;
   padding: 0.15rem 0.3rem;
   border: 1px solid var(--accent);
-  border-radius: 0.35rem;
+  border-radius: 0;
   background: var(--surface);
   font: inherit;
   font-size: 0.75rem;
@@ -1249,7 +1233,7 @@
   width: 1.25rem;
   height: 1.25rem;
   flex: 0 0 auto;
-  border-radius: 0.35rem;
+  border-radius: 0;
   color: var(--faint);
 }
 
@@ -1275,7 +1259,7 @@
   gap: 0.5rem;
   margin-top: 0.35rem;
   padding: 0.45rem 0.6rem;
-  border-radius: 0.6rem;
+  border-radius: 0;
   background: var(--text);
   color: var(--bg);
   font-size: 0.6875rem;
@@ -1306,7 +1290,7 @@
   gap: 0.4rem;
   margin: 0 1.2rem;
   padding: 0.5rem 0.6rem;
-  border-radius: 0.55rem;
+  border-radius: 0;
   background: color-mix(in oklab, var(--danger) 6%, var(--surface));
   font-size: 0.6875rem;
   line-height: 1.5;
@@ -1316,7 +1300,7 @@
 .ch-danger-btn {
   border-color: transparent;
   background: var(--danger);
-  color: #fff;
+  color: var(--on-danger);
 }
 
 .ch-danger-btn:hover:not(:disabled) {
@@ -1339,7 +1323,7 @@
   height: 2.5rem;
   padding-inline: 0.6rem;
   border: 1px solid var(--border);
-  border-radius: 0.6rem;
+  border-radius: 0;
   background: var(--surface-2);
   font-size: 0.6875rem;
   font-weight: 650;
@@ -1356,8 +1340,8 @@
 
 .ch-series-panel {
   padding: 1.15rem 1.25rem 1.25rem;
-  border: 1px solid var(--border);
-  border-radius: 1rem;
+  border: 2px solid var(--edge);
+  border-radius: 0;
   background: var(--surface);
   box-shadow: var(--shadow-card);
 }
@@ -1375,7 +1359,7 @@
   gap: 0.45rem;
   padding: 1.6rem 1rem;
   border: 1px dashed var(--border);
-  border-radius: 0.8rem;
+  border-radius: 0;
   text-align: center;
 }
 
@@ -1460,7 +1444,7 @@
   width: 1.75rem;
   height: 1.75rem;
   flex: 0 0 auto;
-  border-radius: 0.45rem;
+  border-radius: 0;
   color: var(--faint);
   opacity: 0;
   transition: opacity 0.12s var(--ease), color 0.12s var(--ease);
@@ -1477,6 +1461,9 @@
 }
 
 .ch-series-edit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
   margin-top: 0.5rem;
 }
 
@@ -1499,19 +1486,19 @@
   gap: 0.45rem;
   max-width: min(30rem, calc(100vw - 2rem));
   padding: 0.6rem 0.85rem;
-  border-radius: 0.7rem;
+  border-radius: 0;
   background: var(--text);
   color: var(--bg);
   font-size: 0.75rem;
   line-height: 1.45;
-  box-shadow: 0 18px 40px -22px rgb(var(--shadow-tint) / 0.8);
+  box-shadow: var(--shadow-hard-sm);
   transform: translateX(-50%);
   animation: ch-notice-in 0.24s var(--ease-out);
 }
 
 .ch-notice[data-tone="error"] {
   background: var(--danger);
-  color: #fff;
+  color: var(--on-danger);
 }
 
 @keyframes ch-notice-in {
@@ -1525,32 +1512,6 @@
   }
 }
 
-.ch-notfound {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.6rem;
-  max-width: 34rem;
-  margin: 4rem auto;
-  padding: 1.6rem;
-  border: 1px solid var(--border);
-  border-radius: 1rem;
-  background: var(--surface);
-  box-shadow: var(--shadow-card);
-}
-
-.ch-notfound-title {
-  font-size: 1.35rem;
-  font-weight: 650;
-  letter-spacing: -0.02em;
-}
-
-.ch-notfound-copy {
-  font-size: 0.8125rem;
-  line-height: 1.55;
-  color: var(--muted);
-}
-
 .ch-mobile-notice {
   display: none;
   flex-direction: column;
@@ -1559,8 +1520,8 @@
   max-width: 34rem;
   margin: 3rem auto;
   padding: 1.5rem;
-  border: 1px solid var(--border);
-  border-radius: 1rem;
+  border: 2px solid var(--edge);
+  border-radius: 0;
   background: var(--surface);
 }
 

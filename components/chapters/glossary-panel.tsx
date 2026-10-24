@@ -15,6 +15,7 @@ import {
   type GlossaryTerm,
 } from "@/lib/glossary";
 import { AlertCircle, Plus, X } from "../icons";
+import { Tooltip } from "../tooltip";
 
 type Filter = "all" | "auto" | "manual";
 
@@ -308,15 +309,16 @@ export function GlossaryPanel({
               </span>
 
               {canEdit && term.origin === "auto" ? (
-                <button
-                  type="button"
-                  className="ch-term-dismiss"
-                  onClick={() => handleDismiss(term)}
-                  aria-label={`Dismiss ${term.sourceTerm}`}
-                  title="Dismiss this auto term"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
+                <Tooltip label="Dismiss this auto term">
+                  <button
+                    type="button"
+                    className="ch-term-dismiss"
+                    onClick={() => handleDismiss(term)}
+                    aria-label={`Dismiss ${term.sourceTerm}`}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </Tooltip>
               ) : null}
             </li>
           ))}

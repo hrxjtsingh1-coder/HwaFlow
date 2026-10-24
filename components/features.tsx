@@ -1,245 +1,177 @@
-import type { ComponentType, ReactNode, SVGProps } from "react";
+import type { ReactNode } from "react";
+import { TranslationStrip } from "./landing/translation-strip";
+import { Check } from "./icons";
 import { Reveal } from "./reveal";
-import { SectionIntro } from "./section-intro";
-import { PanelArt } from "./panel-art";
-import { Check, Coins, Glossary, Languages, ScanText } from "./icons";
+import { SectionHead } from "./section-head";
 
-type IconType = ComponentType<SVGProps<SVGSVGElement>>;
-
-function FeatureCard({
-  tone,
-  className = "",
-  children,
-}: {
-  tone: "mint" | "lavender" | "peach" | "sky";
-  className?: string;
-  children: ReactNode;
-}) {
-  return (
-    <article data-tone={tone} className={`feature-card h-full p-6 sm:p-7 ${className}`}>
-      {children}
-    </article>
-  );
-}
-
-function CardHead({
-  icon: Icon,
-  title,
-  copy,
-}: {
-  icon: IconType;
+type Proof = {
+  id: string;
+  kicker: string;
   title: string;
   copy: string;
-}) {
-  return (
-    <>
-      <span className="icon-tile">
-        <Icon className="h-[18px] w-[18px]" />
-      </span>
-      <h3 className="mt-5 text-[1.0625rem] font-semibold tracking-[-0.02em] text-ink">
-        {title}
-      </h3>
-      <p className="mt-2 max-w-md text-[13.5px] leading-relaxed text-muted">
-        {copy}
-      </p>
-    </>
-  );
-}
+  tone: string;
+  art: ReactNode;
+};
 
 const glossaryRows = [
-  { source: "언니", target: "sis", category: "name" },
-  { source: "회귀", target: "regression", category: "word" },
-  { source: "폐하", target: "Your Majesty", category: "title" },
+  { source: "언니", target: "sis", origin: "manual" },
+  { source: "회귀", target: "regression", origin: "manual" },
+  { source: "폐하", target: "Your Majesty", origin: "manual" },
 ];
 
 const ledgerRows = [
-  { chapter: "Ch. 42", event: "approved", amount: "+$4.50", tone: "text-ink" },
-  { chapter: "Ch. 41", event: "approved", amount: "+$4.50", tone: "text-ink" },
+  { chapter: "Ch. 42", event: "approved", amount: "+$4.50", reversed: false },
+  { chapter: "Ch. 41", event: "approved", amount: "+$4.50", reversed: false },
   {
     chapter: "Ch. 40",
     event: "approval undone",
     amount: "−$4.50",
-    tone: "text-[var(--danger)]",
+    reversed: true,
+  },
+];
+
+const proofs: Proof[] = [
+  {
+    id: "read",
+    kicker: "Read",
+    title: "Every panel gets read.",
+    copy: "Pages are read in batches, with text kept in reading order, so sentences stay with the panel they belong to. Fancy fonts and vertical text get a fair shot, too.",
+    tone: "sky",
+    art: (
+      <>
+        <TranslationStrip />
+        <div className="proof-caption">
+          <span>38 panels</span>
+          <span>read in batches · source kept</span>
+        </div>
+      </>
+    ),
+  },
+  {
+    id: "translate",
+    kicker: "Translate",
+    title: "Then it gets a second read.",
+    copy: "First it says what’s there. Then it reads again the way an editor would, so the English sounds natural and means the same thing. You can compare both versions.",
+    tone: "lavender",
+    art: (
+      <div className="proof-diff">
+        <div className="proof-diff-row">
+          <span className="proof-diff-label">Source</span>
+          <p className="ko">그만두겠어. 이번이 진짜 마지막이야.</p>
+        </div>
+        <div className="proof-diff-row is-draft">
+          <span className="proof-diff-label">First draft</span>
+          <p>“I will quit. This time is really the last.”</p>
+        </div>
+        <div className="proof-diff-row is-final">
+          <span className="proof-diff-label">Second pass</span>
+          <p>“I’m done. This is really the last time.”</p>
+          <span className="proof-note">
+            <Check className="h-2.5 w-2.5" />
+            Natural
+          </span>
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: "remember",
+    kicker: "Remember",
+    title: "Names that stay the same.",
+    copy: "Keep character names, places, and titles consistent in every chapter. HwaFlow remembers your choices, marks auto-detected terms, and never overwrites a manual decision.",
+    tone: "mint",
+    art: (
+      <div className="proof-ledger">
+        <div className="proof-ledger-head">
+          <span>Term</span>
+          <span>Keep as</span>
+          <span>Origin</span>
+        </div>
+        {glossaryRows.map((row) => (
+          <div key={row.source} className="proof-ledger-row">
+            <span className="ko">{row.source}</span>
+            <span>{row.target}</span>
+            <span className="proof-ledger-type">{row.origin}</span>
+          </div>
+        ))}
+        <div className="proof-ledger-row is-new">
+          <span className="ko">새 이름</span>
+          <span>new name</span>
+          <span className="proof-ledger-type">auto</span>
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: "credit",
+    kicker: "Credit",
+    title: "Credit where it’s due.",
+    copy: "Earnings follow approved chapters. If an approval is undone, the balance updates on its own, and the history stays visible.",
+    tone: "peach",
+    art: (
+      <div className="proof-receipt">
+        <div className="proof-receipt-head">
+          <div>
+            <span className="proof-receipt-label">Earned · October</span>
+            <strong>$184.50</strong>
+          </div>
+          <span className="proof-receipt-chip">+$36.00 this week</span>
+        </div>
+        <div className="proof-receipt-rows">
+          {ledgerRows.map((row) => (
+            <div key={row.chapter} className="proof-receipt-row">
+              <span>{row.chapter}</span>
+              <span>{row.event}</span>
+              <span className={row.reversed ? "is-reversed" : ""}>
+                {row.amount}
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="proof-receipt-foot">
+          <span>32 approved chapters</span>
+          <span>$5.77 average</span>
+        </div>
+      </div>
+    ),
   },
 ];
 
 export function Features() {
   return (
-    <section id="product" className="scroll-mt-24 py-24 sm:py-32">
+    <section id="product" className="proof-section">
       <div className="shell">
         <Reveal>
-          <SectionIntro
+          <SectionHead
+            label="The work"
             title="Everything after the raw upload."
             copy="From a folder of panels to clean English text your typesetter can use. Your team stays in charge of the words; HwaFlow handles the busywork."
           />
         </Reveal>
 
-        <div className="mt-12 grid gap-4 md:grid-cols-2 lg:grid-cols-12">
-          {/* OCR */}
-          <Reveal className="lg:col-span-7" delay={0}>
-            <FeatureCard tone="sky">
-              <CardHead
-                icon={ScanText}
-                title="Every panel gets read."
-                copy="Long manhwa pages are read in careful sections, so sentences don’t get cut in half or counted twice. Fancy fonts and vertical text get a fair shot, too."
-              />
-              <div className="relative mt-6 h-44 overflow-hidden rounded-xl border border-border">
-                <PanelArt
-                  id="ocr-panel"
-                  className="absolute inset-0 h-full w-full"
-                  showFigure={false}
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#12131a]/50 via-transparent to-transparent" />
-                <div className="absolute inset-x-0 top-1/3 border-t border-dashed border-white/45" />
-                <div className="absolute inset-x-0 top-2/3 border-t border-dashed border-white/45" />
-
-                <span className="absolute right-2.5 top-[7%] rounded bg-[#1b1c22]/45 px-1.5 py-0.5 text-[7.5px] font-semibold tracking-[0.14em] text-white/90 backdrop-blur-sm">
-                  PART 01
-                </span>
-                <span className="absolute right-2.5 top-[40%] rounded bg-[#1b1c22]/45 px-1.5 py-0.5 text-[7.5px] font-semibold tracking-[0.14em] text-white/90 backdrop-blur-sm">
-                  PART 02
-                </span>
-                <span className="absolute right-2.5 top-[73%] rounded bg-[#1b1c22]/45 px-1.5 py-0.5 text-[7.5px] font-semibold tracking-[0.14em] text-white/90 backdrop-blur-sm">
-                  PART 03
-                </span>
-
-                <span className="absolute inset-x-3 bottom-3 w-fit rounded-md border border-white/30 bg-black/30 px-2 py-1 text-[9px] font-medium text-white backdrop-blur">
-                  read in parts, put back together
-                </span>
-              </div>
-            </FeatureCard>
-          </Reveal>
-
-          {/* Two-pass */}
-          <Reveal className="lg:col-span-5" delay={70}>
-            <FeatureCard tone="lavender">
-              <CardHead
-                icon={Languages}
-                title="Then it gets a second read."
-                copy="First it translates what’s there. Then it reads again, the way an editor would, so the English sounds natural and still means the same thing. You can compare both versions."
-              />
-              <div className="mt-6 space-y-2">
-                <div className="rounded-xl border border-border bg-surface-2/50 px-3 py-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-faint">
-                      First draft
-                    </span>
-                    <span className="text-[9px] text-faint">word for word</span>
-                  </div>
-                  <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
-                    “I will quit. This time is really the last.”
-                  </p>
-                </div>
-                <div className="relative overflow-hidden rounded-xl border border-[color-mix(in_oklab,var(--accent)_25%,transparent)] bg-[color-mix(in_oklab,var(--accent-soft)_65%,transparent)] px-3 py-2.5">
-                  <div className="relative flex items-center justify-between">
-                    <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--accent-ink)]">
-                      Polished
-                    </span>
-                    <span className="chip chip-mint">Ready</span>
-                  </div>
-                  <p className="relative mt-1.5 text-[12.5px] font-medium leading-relaxed text-ink">
-                    “I’m done. This is really the last time.”
-                  </p>
-                </div>
-                <p className="flex items-center gap-1.5 pt-0.5 text-[10px] text-faint">
-                  <Check className="h-3 w-3 text-[var(--success)]" />
-                  The first draft stays for comparison, and a human edit always
-                  wins.
+        <Reveal className="proof-list">
+          {proofs.map((proof) => (
+            <article key={proof.id} className="proof-row">
+              <div className="proof-copy">
+                <p className="proof-kicker">
+                  <span
+                    aria-hidden="true"
+                    className={`proof-mark proof-mark--${proof.tone}`}
+                  />
+                  {proof.kicker}
                 </p>
+                <h3>{proof.title}</h3>
+                <p>{proof.copy}</p>
               </div>
-            </FeatureCard>
-          </Reveal>
-
-          {/* Glossary */}
-          <Reveal className="lg:col-span-5" delay={0}>
-            <FeatureCard tone="mint">
-              <CardHead
-                icon={Glossary}
-                title="Names that stay the same."
-                copy="Keep character names, places, and titles the same in every chapter. HwaFlow remembers your choices and asks before adding a new one."
-              />
-              <div className="mt-5 space-y-1.5">
-                {glossaryRows.map((row) => (
-                  <div
-                    key={row.source}
-                    className="flex items-center gap-2 rounded-lg border border-border bg-surface-2/40 px-2.5 py-2"
-                  >
-                    <span className="ko text-[11px] font-medium text-ink">
-                      {row.source}
-                    </span>
-                    <span className="text-[10px] text-faint">→</span>
-                    <span className="text-[11px] font-medium text-ink">
-                      {row.target}
-                    </span>
-                    <span className="ml-auto text-[8px] uppercase tracking-[0.1em] text-faint">
-                      {row.category}
-                    </span>
-                  </div>
-                ))}
-                <div className="flex items-center gap-2 rounded-lg border border-dashed border-border px-2.5 py-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--warning)]" />
-                  <span className="ko text-[10.5px] text-muted">새 이름</span>
-                  <span className="text-[10px] text-faint">→</span>
-                  <span className="text-[10.5px] text-muted">new name</span>
-                  <span className="ml-auto text-[8px] uppercase tracking-[0.1em] text-faint">
-                    check
-                  </span>
-                </div>
+              <div
+                className={`proof-art proof-art--${proof.id}`}
+                aria-hidden="true"
+              >
+                {proof.art}
               </div>
-            </FeatureCard>
-          </Reveal>
-
-          {/* Credits */}
-          <Reveal className="lg:col-span-7" delay={70}>
-            <FeatureCard tone="peach">
-              <CardHead
-                icon={Coins}
-                title="Credit where it’s due."
-                copy="Your earnings are based on chapters that actually get approved. If an approval is undone, the balance updates on its own."
-              />
-              <div className="mt-5 rounded-xl border border-border bg-surface-2/50 p-4">
-                <div className="flex flex-col gap-4 sm:flex-row sm:gap-5">
-                  <div className="sm:w-[52%]">
-                    <span className="block text-[9px] font-semibold uppercase tracking-[0.14em] text-faint">
-                      Earned · October
-                    </span>
-                    <div className="mt-1 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-                      <p className="tnum text-2xl font-semibold tracking-[-0.03em] text-ink">
-                        $184.50
-                      </p>
-                      <span className="chip chip-mint">+$36.00 this week</span>
-                    </div>
-                    <p className="mt-1 text-[10px] leading-relaxed text-faint">
-                      32 approved chapters · $5.77 average
-                    </p>
-                  </div>
-
-                  <div className="border-t border-border pt-3 sm:flex-1 sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0">
-                    <span className="block text-[9px] font-semibold uppercase tracking-[0.14em] text-faint">
-                      Recent
-                    </span>
-                    <ul className="mt-1.5 space-y-1.5">
-                      {ledgerRows.map((row) => (
-                        <li
-                          key={row.chapter}
-                          className="flex items-baseline gap-2 text-[10.5px]"
-                        >
-                          <span className="shrink-0 font-medium text-ink">
-                            {row.chapter}
-                          </span>
-                          <span className="truncate text-faint">{row.event}</span>
-                          <span className={`tnum ml-auto ${row.tone}`}>
-                            {row.amount}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </FeatureCard>
-          </Reveal>
-        </div>
+            </article>
+          ))}
+        </Reveal>
       </div>
     </section>
   );
