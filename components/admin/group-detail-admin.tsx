@@ -1,88 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+
 import { getInitials } from "@/lib/auth";
-import { countChaptersForSeries } from "@/lib/chapters";
 import { formatShortDate } from "@/lib/format";
-import { type GroupMember } from "@/lib/groups";
-import { countSeriesInGroup, listSeriesForGroup } from "@/lib/series";
-import { useAuthSession } from "@/lib/use-auth-session";
-import { useChapters } from "@/lib/use-chapters";
-import { useGroups } from "@/lib/use-groups";
-import { useSeries } from "@/lib/use-series";
-import {
-  ArrowLeft,
-  ArrowUpRight,
-  Crown,
-  Layers,
-  Users,
-} from "../icons";
+import type { AdminGroupDetail } from "@/lib/server/admin-groups";
+import { ArrowLeft, ArrowUpRight, Crown, Layers, Users } from "../icons";
 import { GroupAvatar } from "../group-avatar";
 import { RoleBadge } from "../role-badge";
 import { ChangeOwnerDialog } from "./change-owner-dialog";
 
-function DetailSkeleton() {
-  return (
-    <div className="admin-page" aria-hidden="true">
-      <div className="admin-skeleton-card admin-skeleton-card--detail">
-        <span className="admin-skeleton-line admin-skeleton-line--icon" />
-        <span className="admin-skeleton-line admin-skeleton-line--title" />
-        <span className="admin-skeleton-line" />
-      </div>
-    </div>
-  );
-}
-
-export function GroupDetail({ groupId }: { groupId: string }) {
-  const { user, ready: authReady } = useAuthSession();
-  const { state, ready } = useGroups();
-  const { ready: seriesReady } = useSeries();
-  const { ready: chaptersReady } = useChapters();
+/**
+ * Read-only metadata view for one group. Everything arrives as props from the
+ * server component, so there is no loading state and no second source of truth.
+ */
+export function GroupDetailAdmin({ detail }: { detail: AdminGroupDetail }) {
   const [ownerDialogOpen, setOwnerDialogOpen] = useState(false);
 
-  useEffect(() => {
-    setOwnerDialogOpen(false);
-  }, [groupId]);
-
-  if (!authReady || !ready || !seriesReady || !chaptersReady || !state || !user) {
-    return <DetailSkeleton />;
-  }
-
-  const group = state.groups.find((entry) => entry.id === groupId);
-
-  if (!group) {
-    return (
-      <div className="admin-page">
-        <section className="admin-notfound admin-enter">
-          <p className="eyebrow">Admin / Groups</p>
-          <h1 className="admin-notfound-title">Group not found</h1>
-          <p className="admin-notfound-copy">
-            This link may be stale, or the group was removed from this browser.
-          </p>
-          <Link href="/admin/groups" className="btn btn-ghost btn-sm">
-            <ArrowLeft className="h-4 w-4" />
-            Back to groups
-          </Link>
-        </section>
-      </div>
-    );
-  }
-
-  const members: GroupMember[] = state.members.filter(
-    (member) => member.groupId === group.id
-  );
-  const owner = members.find((member) => member.role === "owner") ?? null;
-  const managers = members.filter((member) => member.role === "manager").length;
-  const series = countSeriesInGroup(group.id);
-  // Chapters live in their own store and never flow back into groups.ts, so the
-  // count is summed here from the group's series.
-  const chapters = listSeriesForGroup(group.id).reduce(
-    (total, entry) => total + countChaptersForSeries(entry.id),
-    0
-  );
-
-  const displayNameFor = (member: GroupMember) => member.displayName;
+  const { group, members, owner } = detail;
 
   const sorted = [...members].sort((a, b) => {
     const rank = { owner: 3, manager: 2, staff: 1 };
@@ -131,31 +67,32 @@ export function GroupDetail({ groupId }: { groupId: string }) {
             <Users className="h-3.5 w-3.5" />
             Members
           </span>
-          <span className="admin-stat-value">{members.length}</span>
+          <span className="admin-stat-value">{detail.memberCount}</span>
         </div>
         <div className="admin-stat">
           <span className="admin-stat-label">
             <Crown className="h-3.5 w-3.5" />
             Managers
           </span>
-          <span className="admin-stat-value">{managers}</span>
+          <span className="admin-stat-value">{detail.managerCount}</span>
         </div>
-        <div className="admin-stat" data-muted="true">
+        <div className="admin-stat">
           <span className="admin-stat-label">
             <Layers className="h-3.5 w-3.5" />
             Series
           </span>
-          <span className="admin-stat-value">{series}</span>
-          <span className="admin-stat-note">Available with the series module</span>
+          <span className="admin-stat-value">{detail.seriesCount}</span>
         </div>
-        <div className="admin-stat" data-muted="true">
+        <div className="admin-stat">
           <span className="admin-stat-label">
             <Layers className="h-3.5 w-3.5" />
             Chapters
           </span>
-          <span className="admin-stat-value">{chapters}</span>
+          <span className="admin-stat-value">{detail.chapterCount}</span>
           <span className="admin-stat-note">
-            {chapters === 0 ? "No chapters yet" : "Across this group's series"}
+            {detail.chapterCount === 0
+              ? "No chapters yet"
+              : "Across this group's series"}
           </span>
         </div>
       </div>
@@ -163,15 +100,12 @@ export function GroupDetail({ groupId }: { groupId: string }) {
       <section className="admin-owner-card admin-enter" data-delay="100">
         <div className="admin-owner-main">
           <span className="admin-avatar admin-avatar--lg" aria-hidden="true">
-            {getInitials(
-              owner ? displayNameFor(owner) : "",
-              owner?.username ?? ""
-            )}
+            {getInitials(owner?.displayName ?? "", owner?.username ?? "")}
           </span>
           <div className="admin-owner-copy">
             <p className="eyebrow">Owner</p>
             <p className="admin-owner-name">
-              {owner ? displayNameFor(owner) : "No Owner assigned"}
+              {owner?.displayName ?? "No Owner assigned"}
             </p>
             <p className="admin-owner-handle">
               {owner ? `@${owner.username}` : "—"}
@@ -208,7 +142,7 @@ export function GroupDetail({ groupId }: { groupId: string }) {
             <p className="eyebrow">Roster</p>
             <h2 className="admin-panel-title">Members</h2>
           </div>
-          <span className="chip">{members.length} total</span>
+          <span className="chip">{detail.memberCount} total</span>
         </div>
 
         <div className="admin-table-wrap">
@@ -227,14 +161,11 @@ export function GroupDetail({ groupId }: { groupId: string }) {
                   <td>
                     <span className="admin-member-cell">
                       <span className="admin-avatar" aria-hidden="true">
-                        {getInitials(
-                          displayNameFor(member),
-                          member.username
-                        )}
+                        {getInitials(member.displayName, member.username)}
                       </span>
                       <span className="admin-member-meta">
                         <span className="admin-member-name">
-                          {displayNameFor(member)}
+                          {member.displayName}
                         </span>
                         <span className="admin-member-handle">
                           @{member.username}
@@ -245,7 +176,9 @@ export function GroupDetail({ groupId }: { groupId: string }) {
                   <td>
                     <RoleBadge role={member.role} />
                   </td>
-                  <td className="admin-table-muted">0</td>
+                  {/* Assignments are per-member content metadata; RLS keeps them
+                      out of the admin console, so a dash is the honest answer. */}
+                  <td className="admin-table-muted">—</td>
                   <td className="admin-table-muted">
                     {formatShortDate(member.joinedAt)}
                   </td>
@@ -266,8 +199,6 @@ export function GroupDetail({ groupId }: { groupId: string }) {
         open={ownerDialogOpen}
         group={group}
         members={members}
-        actor={user.username}
-        actorIsPlatformAdmin={user.isPlatformAdmin}
         onClose={() => setOwnerDialogOpen(false)}
       />
     </div>

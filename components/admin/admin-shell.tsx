@@ -4,7 +4,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { getInitials, signOut } from "@/lib/auth";
 import { useAuthSession } from "@/lib/use-auth-session";
-import { useGroups } from "@/lib/use-groups";
 import { ArrowLeft, LogOut, Menu, ShieldCheck, X } from "../icons";
 import { Logo } from "../logo";
 import { Forbidden } from "./forbidden";
@@ -27,7 +26,6 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { user, ready } = useAuthSession();
-  const { state } = useGroups();
   const [menuOpen, setMenuOpen] = useState(false);
 
   const admin = ready && user ? user.isPlatformAdmin : false;
@@ -73,9 +71,6 @@ export function AdminShell({ children }: { children: ReactNode }) {
     segments[0] === "admin" && segments[1] === "groups" && segments[2]
       ? segments[2]
       : null;
-  const detailGroup = detailId
-    ? state?.groups.find((group) => group.id === detailId)
-    : null;
 
   const handleSignOut = () => {
     void signOut();
@@ -202,7 +197,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
                     /
                   </span>
                   <span className="admin-crumb-current" aria-current="page">
-                    {detailGroup?.name ?? "Group"}
+                    Group details
                   </span>
                 </span>
               ) : null}

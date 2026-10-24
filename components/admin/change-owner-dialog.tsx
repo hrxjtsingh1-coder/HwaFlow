@@ -1,13 +1,10 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { getInitials } from "@/lib/auth";
-import {
-  GroupError,
-  transferOwnership,
-  type Group,
-  type GroupMember,
-} from "@/lib/groups";
+import { transferOwnershipAction } from "@/lib/groups-actions";
+import { type Group, type GroupMember } from "@/lib/groups";
 import { useDialogA11y } from "@/lib/use-dialog";
 import { Crown, X } from "../icons";
 import { RoleBadge } from "../role-badge";
@@ -16,9 +13,6 @@ type ChangeOwnerDialogProps = {
   open: boolean;
   group: Group;
   members: GroupMember[];
-  actor: string;
-  /** Comes from the viewer's profiles.is_platform_admin. */
-  actorIsPlatformAdmin: boolean;
   onClose: () => void;
 };
 
@@ -26,10 +20,9 @@ export function ChangeOwnerDialog({
   open,
   group,
   members,
-  actor,
-  actorIsPlatformAdmin,
   onClose,
 }: ChangeOwnerDialogProps) {
+  const router = useRouter();
   const panelRef = useDialogA11y(open, onClose);
   const [selectedId, setSelectedId] = useState("");
   const [outgoingRole, setOutgoingRole] = useState<"manager" | "staff">(
@@ -53,29 +46,29 @@ export function ChangeOwnerDialog({
 
   const selected = candidates.find((member) => member.userId === selectedId);
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!selected || submitting) return;
 
     setSubmitting(true);
     setError(null);
-    try {
-      transferOwnership({
-        groupId: group.id,
-        newOwnerId: selected.userId,
-        outgoingRole,
-        actor,
-        actorIsPlatformAdmin,
-      });
-      onClose();
-    } catch (caught) {
-      setError(
-        caught instanceof GroupError
-          ? caught.message
-          : "We couldn't transfer ownership. Try again."
-      );
+
+    const result = await transferOwnershipAction({
+      groupId: group.id,
+      userId: selected.userId,
+      outgoingRole,
+    });
+
+    if (!result.ok) {
+      setError(result.message);
       setSubmitting(false);
+      return;
     }
+
+    onClose();
+    // The page is a server component; refresh so the new Owner and the
+    // demoted member's role come from the database, not from this dialog.
+    router.refresh();
   };
 
   return (

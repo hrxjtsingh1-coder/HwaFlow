@@ -189,7 +189,7 @@ export function GroupsView({ cards }: GroupsViewProps) {
               memberCount={card.memberCount}
               seriesCount={card.seriesCount}
               justCreated={card.group.id === justCreatedId}
-              detailHref={null}
+              detailHref={`/admin/groups/${card.group.id}`}
               index={index}
             />
           ))}

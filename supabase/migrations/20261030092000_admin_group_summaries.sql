@@ -47,3 +47,41 @@ $$;
 
 revoke all on function public.admin_group_summaries() from public;
 grant execute on function public.admin_group_summaries() to authenticated;
+
+-- The detail page needs the same three numbers for one group. Kept as a
+-- separate function rather than filtering the set-returning one so the RPC
+-- signature stays simple to call from PostgREST.
+create or replace function public.admin_group_summary(p_group_id uuid)
+returns table (
+  member_count  int,
+  series_count  int,
+  chapter_count int
+)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  if not public.is_platform_admin() then
+    raise exception 'Only the platform admin can read group metadata.'
+      using errcode = 'HF001';
+  end if;
+
+  return query
+    select
+      (select count(*)::int
+         from public.group_members m
+        where m.group_id = p_group_id),
+      (select count(*)::int
+         from public.series s
+        where s.group_id = p_group_id),
+      (select count(*)::int
+         from public.chapters c
+         join public.series s on s.id = c.series_id
+        where s.group_id = p_group_id);
+end;
+$$;
+
+revoke all on function public.admin_group_summary(uuid) from public;
+grant execute on function public.admin_group_summary(uuid) to authenticated;
