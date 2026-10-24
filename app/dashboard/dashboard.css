@@ -135,29 +135,35 @@
   border-top: 1px solid var(--border);
 }
 
+/* A boxed tile, not a pill: the ink edge is what makes this read as a
+   control where there is no pointer to hover with. */
 .dash-user-profile {
   display: flex;
   align-items: center;
   flex: 1;
   gap: 0.55rem;
   min-width: 0;
-  padding: 0.3rem 0.6rem 0.3rem 0.3rem;
-  margin: -0.25rem 0 -0.25rem -0.3rem;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
+  padding: 0.3rem 0.5rem 0.3rem 0.3rem;
+  border: 2px solid var(--edge);
+  border-radius: 0;
+  background: var(--surface);
   text-align: left;
   cursor: pointer;
-  transition: background-color 0.16s var(--ease);
+  transition: transform var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease),
+    background-color var(--t-fast) var(--ease);
 }
 
-/* The pill is the affordance: the whole row is the button, not just the name. */
-.dash-user-profile:hover {
-  background: color-mix(in oklab, var(--surface-2) 72%, transparent);
+@media (hover: hover) and (pointer: fine) {
+  .dash-user-profile:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: var(--shadow-hard-sm);
+  }
 }
 
 .dash-user-profile:active {
-  background: color-mix(in oklab, var(--surface-2) 88%, transparent);
+  transform: translate(2px, 2px);
+  box-shadow: none;
 }
 
 .dash-user-profile:focus-visible {

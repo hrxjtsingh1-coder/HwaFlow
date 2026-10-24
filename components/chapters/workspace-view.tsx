@@ -742,12 +742,17 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
         <main className="dash-main ws-main" id="main">
           <div className="ch-mobile-notice">
             <p className="eyebrow">Workspace</p>
-            <h1 className="ch-mobile-title">Best viewed on desktop</h1>
+            <h1 className="ch-mobile-title">Turn on Desktop mode</h1>
             <p className="ch-mobile-copy">
-              The translation workspace needs three columns — chapters and
-              glossary, English text, raw panels. Open it on a wider screen to
-              edit this chapter.
+              This workspace is three columns — chapters and glossary, English
+              text, raw panels — so it needs a desktop-width screen. On a phone
+              or tablet, turn on Desktop mode and this chapter opens ready to
+              edit. On a computer, widen the window.
             </p>
+            <ul className="ch-mobile-steps">
+              <li>Chrome, Edge, Firefox: menu ⋮ → Desktop site</li>
+              <li>Safari on iPhone or iPad: aA → Request Desktop Website</li>
+            </ul>
             <Link href={`/series/${series.id}`} className="btn btn-ghost btn-sm">
               <ArrowLeft className="h-4 w-4" />
               Back to {series.title}

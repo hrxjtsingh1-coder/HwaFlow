@@ -81,6 +81,11 @@
     padding-inline: 0;
   }
 
+  .ws-shell .dash-user-profile {
+    justify-content: center;
+    padding: 0.3rem;
+  }
+
   .ws-shell .dash-rail[data-collapsed="true"] .dash-nav-text,
   .ws-shell .dash-rail[data-collapsed="true"] .dash-rail-label,
   .ws-shell .dash-rail[data-collapsed="true"] .dash-user-meta {
@@ -244,6 +249,13 @@
 .ch-rail-delete:hover {
   color: var(--danger);
   background: color-mix(in oklab, var(--danger) 10%, transparent);
+}
+
+/* Touch has no hover, so a row's delete button would never become visible. */
+@media (pointer: coarse) {
+  .ch-rail-delete {
+    opacity: 1;
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -1537,6 +1549,22 @@
   color: var(--muted);
 }
 
+.ch-mobile-steps {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.ch-mobile-steps li::before {
+  content: "→ ";
+  color: var(--muted);
+}
+
 .ch-sr-only {
   position: absolute;
   width: 1px;
@@ -1552,8 +1580,10 @@
 /* ------------------------------------------------------------------ */
 /* Mobile: no stacked workspace                                        */
 /* ------------------------------------------------------------------ */
+/* 900px, not 1024px: Desktop mode on a phone reports ~980px, which is   */
+/* the smallest width at which the three columns still fit.              */
 
-@media (max-width: 1023px) {
+@media (max-width: 899.98px) {
   .ws-shell {
     --dash-topbar: 3.9rem;
   }
