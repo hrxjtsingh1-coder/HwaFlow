@@ -28,6 +28,7 @@ import {
   splitIntoBatches,
 } from "./ai/batch";
 import { readingDirectionFor } from "./ai/languages";
+import { missingTranslationKeys } from "./ai/coverage";
 import {
   isPipelineError,
   pipelineErrorMessage,
@@ -401,6 +402,13 @@ async function runExtract(
   return extracted;
 }
 
+/** Copy for a short model response: a retryable stage failure, not a success. */
+function skippedMessage(count: number, stage: "translation" | "proofread"): string {
+  return `The ${stage} service skipped ${count} bubble${
+    count === 1 ? "" : "s"
+  }. Retry the chapter to fill ${count === 1 ? "it" : "them"} in.`;
+}
+
 /**
  * Translate + proofread over every usable panel. Returns true only when both
  * passes succeeded; a failure leaves the chapter editable and retryable.
@@ -491,6 +499,22 @@ async function runTextStages(ctx: PipelineContext): Promise<boolean> {
     }
   }
 
+  // Save what did come back, then refuse to call the stage a success: a short
+  // response would otherwise finish as `ready` with untranslated bubbles.
+  const missingTranslations = missingTranslationKeys(
+    sourcePayload,
+    translations
+  );
+  if (missingTranslations.length > 0) {
+    patch({
+      error: {
+        code: "bad-response",
+        message: skippedMessage(missingTranslations.length, "translation"),
+      },
+    });
+    return false;
+  }
+
   if (cancelRequested) return false;
 
   /* ---- proofread -------------------------------------------------- */
@@ -558,6 +582,17 @@ async function runTextStages(ctx: PipelineContext): Promise<boolean> {
       patch({ running: false, error: toFailure(error) });
       return false;
     }
+  }
+
+  const missingProofreads = missingTranslationKeys(proofPayload, proof.results);
+  if (missingProofreads.length > 0) {
+    patch({
+      error: {
+        code: "bad-response",
+        message: skippedMessage(missingProofreads.length, "proofread"),
+      },
+    });
+    return false;
   }
 
   if (ctx.upsertAutoTerms && proof.terms.length > 0) {
