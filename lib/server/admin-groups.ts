@@ -77,17 +77,23 @@ export async function getGroupDetailForAdmin(
     { p_group_id: groupId }
   );
 
+  // Same degradation as the grid: an unpushed migration must not blank the
+  // page. Member counts still come from the roster we just read.
   if (summaryError) {
-    throw new Error(`[admin-groups:summary] ${summaryError.message}`);
+    console.warn(
+      `[admin-groups] admin_group_summary unavailable, counts read 0: ${summaryError.message}`
+    );
   }
 
-  const summary = (
-    (summaryData ?? []) as unknown as {
-      member_count: number;
-      series_count: number;
-      chapter_count: number;
-    }[]
-  )[0];
+  const summary = summaryError
+    ? undefined
+    : (
+        (summaryData ?? []) as unknown as {
+          member_count: number;
+          series_count: number;
+          chapter_count: number;
+        }[]
+      )[0];
 
   const iconUrl = row.icon_path
     ? (await signedUrlMap(supabase, "group-icons", [row.icon_path])).get(

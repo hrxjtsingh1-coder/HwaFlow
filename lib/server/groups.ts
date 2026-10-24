@@ -491,11 +491,18 @@ export async function listGroupsForAdmin(): Promise<AdminGroupCard[]> {
     "admin_group_summaries"
   );
 
-  if (summaryError) fail("listGroupsForAdmin.summaries", summaryError.message);
+  // Degrade instead of 500 when the migration has not been pushed yet: the
+  // grid is still usable and the log names the missing function. Counts read 0
+  // until then, which is the pre-fix behaviour, not a new one.
+  if (summaryError) {
+    console.warn(
+      `[groups] admin_group_summaries unavailable, counts read 0: ${summaryError.message}`
+    );
+  }
 
   const summaries = new Map(
     (
-      (summaryData ?? []) as unknown as {
+      (summaryError ? [] : summaryData ?? []) as unknown as {
         group_id: string;
         member_count: number;
         series_count: number;
