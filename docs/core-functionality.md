@@ -782,7 +782,7 @@ Chapter 2        ●
 Chapter 3        ●
 ```
 
-- One row per chapter, ascending by `number`.
+- One row per chapter, **descending by `number`** — the newest chapter sits at the top.
 - Label: `Chapter {number}`, plus `· {title}` in muted type when a title exists.
 - Status dot on the right: 8px circle, `--status-dot` primitive.
   - `approved` → mint/green
@@ -801,14 +801,14 @@ Chapter 3        ●
 
 ```
 [+ Add term]
-Name            Auto    지훈 → Jihun
-Place           Manual  서울 → Seoul
-Honorific       Auto    -님 → -nim
+지훈 → Jihun
+서울 → Seoul
+-님 → -nim
 ```
 
 - Header row: `Add term` button (`btn btn-ghost btn-sm` + `Plus`) opening the add form.
-- Each term row: `sourceTerm → targetTerm`, a category chip, and an **`Auto` / `Manual`**
-  provenance chip (Auto = muted, Manual = accent). This distinction is required.
+- Each term row is just `sourceTerm → targetTerm`. Category and provenance are not
+  shown as chips — the filter chips above the list are the provenance control.
 - Owner/Manager and assigned Staff can edit the target inline (click → input → Enter/blur
   saves, Escape cancels).
 - Dismiss action (`X`) on auto terms, with an undo toast affording `Undo` for 5 s. Dismissed
@@ -956,9 +956,10 @@ dimmed backdrop. Centred modal, not a side drawer.
 
 ### 10.2 Delete chapter confirm
 
-Centred dialog, title `Delete Chapter {number}?`, body
-`This removes its panels and everything you've translated. It can't be undone.`
-Buttons: `Cancel` (default focus) and `Delete chapter` (`btn` + danger tone).
+Centred dialog, title `Delete Chapter {number}?`, then the warning note and a typed
+confirmation of the chapter title (or `Chapter {number}`). No warning sentence and no rules
+between the warning and the buttons. Buttons: `Cancel` (default focus) and `Delete chapter`
+(`btn` + danger tone).
 On confirm: `deleteChapter`, delete images, route to the next chapter by number, or to the
 series page if none remain. Success toast `Chapter {n} was deleted.` (reuse the
 `grp-notice` pattern with `ch-` scoping if needed).
@@ -994,7 +995,8 @@ into `rejectionNote` and shows it under the workspace header for the submitter.
 
 - Header actions (Owner/Manager): `Edit` button next to the existing content, opening §10.3.
 - Chapters panel replaces the `Coming soon` placeholder:
-  - Header right: count chip + `New chapter` (`btn btn-primary btn-sm`, `Plus`).
+  - Header right: `New chapter` (`btn btn-primary btn-sm`, `Plus`). The chapter count lives
+    in the panel heading, not beside the button.
   - `New chapter` → `createChapter({ seriesId, actor })` → `router.push('/chapters/{id}/workspace')`.
     No dialog, no confirm. On store error, show the message as a toast and stay put.
   - List rows: `Chapter {number}`, optional title, status dot + chip, submitter, relative

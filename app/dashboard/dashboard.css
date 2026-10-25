@@ -127,16 +127,20 @@
 }
 
 .dash-user {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
   margin-top: 0.85rem;
   padding: 0.5rem 0.45rem 0.35rem;
   border-top: 1px solid var(--border);
 }
 
-/* A boxed tile, not a pill: the ink edge is what makes this read as a
-   control where there is no pointer to hover with. */
+/* One tile holds both account actions; the divider stops short of the edges
+   so the box still reads as a single control. */
+.dash-user-box {
+  display: flex;
+  align-items: stretch;
+  border: 2px solid var(--edge);
+  background: var(--surface);
+}
+
 .dash-user-profile {
   display: flex;
   align-items: center;
@@ -144,31 +148,52 @@
   gap: 0.55rem;
   min-width: 0;
   padding: 0.3rem 0.5rem 0.3rem 0.3rem;
-  border: 2px solid var(--edge);
-  border-radius: 0;
-  background: var(--surface);
   text-align: left;
   cursor: pointer;
-  transition: transform var(--t-fast) var(--ease),
-    box-shadow var(--t-fast) var(--ease),
-    background-color var(--t-fast) var(--ease);
+  transition: background-color var(--t-fast) var(--ease);
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .dash-user-profile:hover {
-    transform: translate(-2px, -2px);
-    box-shadow: var(--shadow-hard-sm);
+  .dash-user-profile:hover,
+  .dash-user-signout:hover {
+    background: var(--surface-2);
+  }
+
+  .dash-user-signout:hover {
+    color: var(--text);
   }
 }
 
-.dash-user-profile:active {
-  transform: translate(2px, 2px);
-  box-shadow: none;
+.dash-user-profile:active,
+.dash-user-signout:active {
+  background: var(--surface-2);
 }
 
-.dash-user-profile:focus-visible {
+.dash-user-profile:focus-visible,
+.dash-user-signout:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline-offset: -2px;
+}
+
+.dash-user-signout {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 2.35rem;
+  color: var(--muted);
+  transition: color var(--t-fast) var(--ease),
+    background-color var(--t-fast) var(--ease);
+}
+
+.dash-user-signout::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.4rem;
+  bottom: 0.4rem;
+  width: 1px;
+  background: var(--border);
 }
 
 .dash-user-avatar {

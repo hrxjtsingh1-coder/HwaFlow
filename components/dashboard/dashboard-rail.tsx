@@ -120,30 +120,32 @@ export function DashboardRail({
         </div>
 
         <div className="dash-user">
-          <button
-            type="button"
-            className="dash-user-profile"
-            onClick={() => setAccountOpen(true)}
-            aria-label="Account settings"
-            title="Account settings"
-          >
-            <span className="dash-user-avatar" aria-hidden="true">
-              {getInitials(user.displayName, user.username)}
-            </span>
-            <span className="dash-user-meta">
-              <span className="dash-user-name">{user.displayName}</span>
-              <span className="dash-user-handle">@{user.username}</span>
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={onSignOut}
-            className="dash-icon-btn"
-            aria-label="Sign out"
-            title="Sign out"
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
+          <div className="dash-user-box">
+            <button
+              type="button"
+              className="dash-user-profile"
+              onClick={() => setAccountOpen(true)}
+              aria-label="Account settings"
+              title="Account settings"
+            >
+              <span className="dash-user-avatar" aria-hidden="true">
+                {getInitials(user.displayName, user.username)}
+              </span>
+              <span className="dash-user-meta">
+                <span className="dash-user-name">{user.displayName}</span>
+                <span className="dash-user-handle">@{user.username}</span>
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={onSignOut}
+              className="dash-user-signout"
+              aria-label="Sign out"
+              title="Sign out"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       </aside>
 

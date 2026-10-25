@@ -20,6 +20,7 @@ import {
   type TextBlock,
 } from "@/lib/chapters";
 import {
+  createChapterAction,
   deleteChapterAction,
   registerPanelsAction,
   setChapterStatusAction,
@@ -121,6 +122,7 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
   const [notice, setNotice] = useState<Notice | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Chapter | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
+  const [creatingChapter, setCreatingChapter] = useState(false);
   const [uploadBusy, setUploadBusy] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress>(null);
   const [uploadErrors, setUploadErrors] = useState<
@@ -295,6 +297,7 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
 
   const canEdit = canEditChapter(member.role, assigned);
   const canManage = canManageSeries(member.role);
+  const canCreate = canManage || member.role === "staff";
   const run = activeRunChapterId() === chapter.id ? live : IDLE_RUN;
   const activeBlockId = hoveredBlockId ?? pinnedBlockId;
 
@@ -600,6 +603,20 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
     if (failures.length > 0) setUploadErrors(failures);
   };
 
+  const handleCreateChapter = async () => {
+    if (creatingChapter) return;
+    setCreatingChapter(true);
+
+    const result = await createChapterAction(series.id);
+    if (!result.ok) {
+      setCreatingChapter(false);
+      notify("error", result.message);
+      return;
+    }
+
+    router.push(`/chapters/${result.data.id}/workspace`);
+  };
+
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
     const target = deleteTarget;
@@ -765,6 +782,9 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
                 chapters={seriesChapters}
                 currentChapterId={chapter.id}
                 canDelete={canManage}
+                canCreate={canCreate}
+                creating={creatingChapter}
+                onCreate={() => void handleCreateChapter()}
                 onDelete={(target) => setDeleteTarget(target)}
                 tab={tab}
                 onTabChange={setTab}

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRef, type KeyboardEvent, type ReactNode } from "react";
 import type { Chapter } from "@/lib/chapters";
-import { Trash } from "../icons";
+import { Plus, Trash } from "../icons";
 import { Tooltip } from "../tooltip";
 import { ChapterStatusDot } from "./chapter-status-dot";
 
@@ -13,6 +13,9 @@ type ChapterRailProps = {
   chapters: Chapter[];
   currentChapterId: string;
   canDelete: boolean;
+  canCreate: boolean;
+  creating: boolean;
+  onCreate: () => void;
   onDelete: (chapter: Chapter) => void;
   tab: RailTab;
   onTabChange: (tab: RailTab) => void;
@@ -30,6 +33,9 @@ export function ChapterRail({
   chapters,
   currentChapterId,
   canDelete,
+  canCreate,
+  creating,
+  onCreate,
   onDelete,
   tab,
   onTabChange,
@@ -38,6 +44,9 @@ export function ChapterRail({
 }: ChapterRailProps) {
   const chaptersTab = useRef<HTMLButtonElement>(null);
   const glossaryTab = useRef<HTMLButtonElement>(null);
+
+  // Newest first: the chapter being translated sits at the top of the rail.
+  const orderedChapters = [...chapters].sort((a, b) => b.number - a.number);
 
   const onTabKey = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
@@ -87,6 +96,20 @@ export function ChapterRail({
         </button>
       </div>
 
+      {tab === "chapters" && canCreate ? (
+        <div className="ch-rail-actions">
+          <button
+            type="button"
+            className="btn btn-primary btn-sm ch-rail-new"
+            onClick={onCreate}
+            disabled={creating}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            {creating ? "Creating…" : "New chapter"}
+          </button>
+        </div>
+      ) : null}
+
       <div
         className="ch-rail-scroll"
         id="ch-panel-chapters"
@@ -95,7 +118,7 @@ export function ChapterRail({
         hidden={tab !== "chapters"}
       >
         <ul className="ch-rail-list">
-          {chapters.map((chapter) => {
+          {orderedChapters.map((chapter) => {
             const current = chapter.id === currentChapterId;
             return (
               <li

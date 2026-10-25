@@ -90,25 +90,27 @@ export function DeleteSeriesDialog({
           </button>
         </header>
 
-        <p className="ch-dialog-note">
-          <AlertCircle className="h-4 w-4" aria-hidden="true" />
-          Sanctioned earnings for its chapters disappear too. Only an Owner or
-          Manager can do this.
-        </p>
-
-        <DangerConfirm
-          phrase={series.title}
-          value={typed}
-          onChange={setTyped}
-          label="Type"
-        />
-
-        {error ? (
-          <p className="grp-form-error" role="alert">
-            <AlertCircle className="h-4 w-4" />
-            {error}
+        <div className="ch-dialog-body">
+          <p className="ch-dialog-note">
+            <AlertCircle className="h-4 w-4" aria-hidden="true" />
+            Sanctioned earnings for its chapters disappear too. Only an Owner or
+            Manager can do this.
           </p>
-        ) : null}
+
+          <DangerConfirm
+            phrase={series.title}
+            value={typed}
+            onChange={setTyped}
+            label="Type"
+          />
+
+          {error ? (
+            <p className="grp-form-error" role="alert">
+              <AlertCircle className="h-4 w-4" />
+              {error}
+            </p>
+          ) : null}
+        </div>
 
         <footer className="grp-dialog-foot">
           <button

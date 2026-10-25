@@ -76,14 +76,30 @@
   }
 
   .ws-shell .dash-user {
-    flex-direction: column;
-    gap: 0.45rem;
     padding-inline: 0;
+  }
+
+  .ws-shell .dash-user-box {
+    flex-direction: column;
   }
 
   .ws-shell .dash-user-profile {
     justify-content: center;
     padding: 0.3rem;
+  }
+
+  .ws-shell .dash-user-signout {
+    width: 100%;
+    height: 2.2rem;
+  }
+
+  .ws-shell .dash-user-signout::before {
+    left: 0.4rem;
+    right: 0.4rem;
+    top: 0;
+    bottom: auto;
+    width: auto;
+    height: 1px;
   }
 
   .ws-shell .dash-rail[data-collapsed="true"] .dash-nav-text,
@@ -167,6 +183,15 @@
 
 .ch-rail-scroll--glossary {
   padding: 0.6rem 0.55rem 1rem;
+}
+
+.ch-rail-actions {
+  padding: 0.5rem 0.45rem 0;
+}
+
+.ch-rail-new {
+  width: 100%;
+  justify-content: center;
 }
 
 .ch-rail-list {
@@ -1184,11 +1209,6 @@
   background: var(--surface-2);
 }
 
-.ch-term-cat {
-  flex: 0 0 auto;
-  font-size: 0.5625rem;
-}
-
 .ch-term-main {
   display: flex;
   flex: 1;
@@ -1232,11 +1252,6 @@
   font: inherit;
   font-size: 0.75rem;
   outline: none;
-}
-
-.ch-term-origin {
-  flex: 0 0 auto;
-  font-size: 0.5625rem;
 }
 
 .ch-term-dismiss {
@@ -1289,6 +1304,29 @@
 
 .ch-dialog {
   max-width: 27rem;
+}
+
+/* Danger dialogs read as one surface: no rules between the header, the
+   warning and the buttons, and the body is inset so the input clears the edge. */
+.ch-dialog--danger .grp-dialog-head {
+  border-bottom: 0;
+}
+
+.ch-dialog--danger .grp-dialog-foot {
+  border-top: 0;
+  padding-top: 0.2rem;
+}
+
+.ch-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 0.4rem 1.2rem 0.2rem;
+}
+
+.ch-dialog-body .ch-dialog-note,
+.ch-dialog-body .danger-confirm {
+  margin: 0;
 }
 
 .ch-dialog-icon--danger {

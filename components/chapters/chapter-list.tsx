@@ -37,6 +37,9 @@ export function ChapterList({
   onCreate,
   onDelete,
 }: ChapterListProps) {
+  // Newest first, matching the workspace rail.
+  const orderedChapters = [...chapters].sort((a, b) => b.number - a.number);
+
   return (
     <section className="sr-panel ch-series-panel" aria-labelledby="chapters-heading">
       <div className="sr-panel-head">
@@ -50,7 +53,6 @@ export function ChapterList({
         </div>
 
         <div className="ch-series-panel-actions">
-          <span className="chip">{chapters.length}</span>
           {canCreate ? (
             <button
               type="button"
@@ -87,7 +89,7 @@ export function ChapterList({
         </div>
       ) : (
         <ul className="ch-series-list">
-          {chapters.map((chapter) => (
+          {orderedChapters.map((chapter) => (
             <li className="ch-series-row" key={chapter.id}>
               <Link
                 href={`/chapters/${chapter.id}/workspace`}

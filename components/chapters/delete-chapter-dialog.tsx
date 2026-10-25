@@ -48,10 +48,6 @@ export function DeleteChapterDialog({
             <h2 className="grp-dialog-title" id="delete-chapter-title">
               Delete {phrase}?
             </h2>
-            <p className="grp-dialog-sub">
-              This removes its panels and everything you&apos;ve translated. It
-              can&apos;t be undone.
-            </p>
           </div>
           <button
             type="button"
@@ -63,17 +59,19 @@ export function DeleteChapterDialog({
           </button>
         </header>
 
-        <p className="ch-dialog-note">
-          <AlertCircle className="h-4 w-4" aria-hidden="true" />
-          Approved money from this chapter disappears with it.
-        </p>
+        <div className="ch-dialog-body">
+          <p className="ch-dialog-note">
+            <AlertCircle className="h-4 w-4" aria-hidden="true" />
+            Approved money from this chapter disappears with it.
+          </p>
 
-        <DangerConfirm
-          phrase={phrase}
-          value={typed}
-          onChange={setTyped}
-          label="Type"
-        />
+          <DangerConfirm
+            phrase={phrase}
+            value={typed}
+            onChange={setTyped}
+            label="Type"
+          />
+        </div>
 
         <footer className="grp-dialog-foot">
           <button

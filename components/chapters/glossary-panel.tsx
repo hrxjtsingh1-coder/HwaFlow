@@ -30,9 +30,9 @@ type GlossaryPanelProps = {
 /**
  * Glossary tab of the chapter rail.
  *
- * Provenance is visible on every row: `Auto` is muted, `Manual` is accent. The
- * pipeline may never overwrite a manual term, and an auto term only stays auto
- * until a person edits it.
+ * The filter chips are the only provenance control: `Auto` and `Manual` split
+ * the list, so rows stay plain `sourceTerm → targetTerm`. An auto term stays
+ * auto until a person edits it.
  */
 export function GlossaryPanel({
   seriesId,
@@ -252,10 +252,6 @@ export function GlossaryPanel({
         <ul className="ch-term-list">
           {visible.map((term) => (
             <li className="ch-term" key={term.id}>
-              <span className="chip ch-term-cat">
-                {GLOSSARY_CATEGORY_LABEL[term.category]}
-              </span>
-
               {editingId === term.id ? (
                 <input
                   className="ch-term-edit"
@@ -299,14 +295,6 @@ export function GlossaryPanel({
                   <span className="ch-term-target">{term.targetTerm}</span>
                 </button>
               )}
-
-              <span
-                className={`chip ch-term-origin${
-                  term.origin === "manual" ? " chip-accent" : ""
-                }`}
-              >
-                {term.origin === "manual" ? "Manual" : "Auto"}
-              </span>
 
               {canEdit && term.origin === "auto" ? (
                 <Tooltip label="Dismiss this auto term">
