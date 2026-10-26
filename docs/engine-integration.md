@@ -217,6 +217,11 @@ named `001.png`, `002.png`, … in page order.
   40-page chapter is typically a few MB.
 - It is chapter-scoped rather than job-scoped on purpose: renders outlive the
   engine job, and so does the ability to hand someone the finished pages.
+- `?page=N` returns a single image as an attachment instead of the archive. The
+  panel's per-page links switch to it once a run is approved, because the
+  Worker's finals expire; during a live run those links keep using the engine's
+  own assets, so a render from an earlier run cannot be mistaken for the current
+  one.
 
 ---
 

@@ -35,7 +35,12 @@ function archiveName(number: number, title: string | null): string {
   return slug ? `${base}-${slug}.zip` : `${base}.zip`;
 }
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+function pageFileName(pageIndex: number, path: string): string {
+  const extension = path.toLowerCase().endsWith(".webp") ? "webp" : "png";
+  return `${String(pageIndex + 1).padStart(3, "0")}.${extension}`;
+}
+
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requirePipelineViewer();
   if (!auth.ok) return auth.response;
 
@@ -93,6 +98,49 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     );
   }
 
+  // One page, straight from the bucket. This is what the panel's per-page links
+  // use once "Save pages" has run, so a download keeps working after the Worker
+  // deletes the run's finals.
+  const requestedPage = new URL(request.url).searchParams.get("page");
+  if (requestedPage !== null) {
+    const oneBased = Number(requestedPage);
+    if (!Number.isInteger(oneBased) || oneBased < 1) {
+      return Response.json(
+        { error: "invalid-request", message: "Page must be a positive whole number." },
+        { status: 400 }
+      );
+    }
+
+    const target = rendered.find((page) => page.page_index === oneBased - 1);
+    if (!target) {
+      return Response.json(
+        {
+          error: "no-render",
+          message: `Page ${oneBased} has no saved finished page. Press Save pages first.`,
+        },
+        { status: 404 }
+      );
+    }
+
+    const { data: blob, error: downloadError } = await supabase.storage
+      .from("renders")
+      .download(target.clean_path);
+    if (downloadError || !blob) {
+      return Response.json(
+        { error: "unavailable", message: `Page ${oneBased} could not be read.` },
+        { status: 502 }
+      );
+    }
+
+    return new Response(blob, {
+      headers: {
+        "content-type": blob.type || "image/png",
+        "content-disposition": `attachment; filename="${pageFileName(target.page_index, target.clean_path)}"`,
+        "cache-control": "no-store",
+      },
+    });
+  }
+
   const entries: ZipEntry[] = [];
   let total = 0;
 
@@ -114,10 +162,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       );
     }
 
-    const extension = page.clean_path.toLowerCase().endsWith(".webp") ? "webp" : "png";
     // Zero-padded so unzip tools and file explorers keep the reading order.
     entries.push({
-      name: `${String(page.page_index + 1).padStart(3, "0")}.${extension}`,
+      name: pageFileName(page.page_index, page.clean_path),
       data,
     });
   }

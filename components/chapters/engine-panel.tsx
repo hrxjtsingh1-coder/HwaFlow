@@ -270,6 +270,12 @@ export function EnginePanel({
   const urls = job?.urls ?? [];
   const current = urls[Math.min(pageIndex, Math.max(0, urls.length - 1))];
 
+  // Once a run is approved the Worker deletes its finals within about a week,
+  // so per-page links fall back to the copies saved in `renders`. During a live
+  // run we keep using the engine's own assets: they are always from this run,
+  // while a render could still be from an earlier one.
+  const storedDownloads = hasRenders && job?.status === "approved";
+
   // Always fetch through our own route: the browser never learns the Worker
   // host, and the Worker's asset URLs may require the server-side token.
   const assetUrl = (kind: "raw" | "final" | "approved", index: number) =>
@@ -406,7 +412,11 @@ export function EnginePanel({
               <a
                 key={page.index}
                 style={{ ...S.button, textDecoration: "none" }}
-                href={assetUrl(job?.status === "approved" ? "approved" : "final", page.index)}
+                href={
+                  storedDownloads
+                    ? `/api/chapters/${chapterId}/download?page=${page.index + 1}`
+                    : assetUrl(job?.status === "approved" ? "approved" : "final", page.index)
+                }
                 download={`page-${String(page.index + 1).padStart(3, "0")}.png`}
               >
                 ↓ Page {page.index + 1}
