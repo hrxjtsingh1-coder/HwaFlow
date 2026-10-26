@@ -12,7 +12,7 @@
 
 import { requirePipelineViewer } from "@/lib/pipeline-auth";
 import { createClient } from "@/lib/supabase/server";
-import { getEngineJob, proxyEngineAsset } from "@/lib/engine";
+import { getEngineJob, proxyEngineAsset, engineFailureResponse } from "@/lib/engine";
 import { assertEngineJobAccess } from "@/lib/engine-access";
 import { normaliseEngineRegions } from "@/lib/engine-regions";
 
@@ -180,9 +180,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     return Response.json(summary, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    return Response.json(
-      { error: "engine", message: error instanceof Error ? error.message : "Unknown engine error." },
-      { status: 502 }
-    );
+    return engineFailureResponse(error);
   }
 }

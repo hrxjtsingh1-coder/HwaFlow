@@ -8,7 +8,11 @@
 
 import { requirePipelineViewer } from "@/lib/pipeline-auth";
 import { createClient } from "@/lib/supabase/server";
-import { createEngineJob } from "@/lib/engine";
+import {
+  assertEngineConfigured,
+  createEngineJob,
+  engineFailureResponse,
+} from "@/lib/engine";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -114,6 +118,10 @@ export async function POST(request: Request) {
   }
 
   try {
+    // Before downloading up to 80 MB of pages: a server without the two engine
+    // variables should say so in milliseconds, not after the upload work.
+    assertEngineConfigured();
+
     const pages: Array<{ blob: Blob; mimeType: string }> = [];
     for (const row of stored) {
       const { data: blob, error } = await supabase.storage.from("pages").download(row.original_path);
@@ -177,7 +185,6 @@ export async function POST(request: Request) {
 
     return Response.json(job, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown engine error.";
-    return Response.json({ error: "engine", message }, { status: 502 });
+    return engineFailureResponse(error);
   }
 }

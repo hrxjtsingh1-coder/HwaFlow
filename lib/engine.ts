@@ -10,15 +10,41 @@ import "server-only";
 
 import { retryDelaysMs, sleep } from "./async/retry";
 
+/** Missing configuration is not the engine failing; callers answer 503, not 502. */
+export class EngineConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "EngineConfigError";
+  }
+}
+
 function config() {
   const apiUrl = (process.env.ENGINE_API_URL || "").replace(/\/$/, "");
   const token = process.env.ENGINE_WEB_TOKEN || "";
   if (!apiUrl || !token) {
-    throw new Error(
-      "Image engine is not configured. Set ENGINE_API_URL and ENGINE_WEB_TOKEN in .env.local / Cloudflare secrets."
+    throw new EngineConfigError(
+      "The image engine isn't configured on this server. Set ENGINE_API_URL and ENGINE_WEB_TOKEN in .env.local (or the hosting dashboard), then restart. Open /api/health/engine to see which one is missing."
     );
   }
   return { apiUrl, token };
+}
+
+/** Fails before any page is downloaded, so a misconfigured server costs one query. */
+export function assertEngineConfigured(): void {
+  config();
+}
+
+/**
+ * One shape for every route that talks to the Worker, so a missing variable
+ * cannot look like a Worker outage.
+ */
+export function engineFailureResponse(error: unknown, status = 502): Response {
+  const message = error instanceof Error ? error.message : "Unknown engine error.";
+  const misconfigured = error instanceof EngineConfigError;
+  return Response.json(
+    { error: misconfigured ? "not-configured" : "engine", message },
+    { status: misconfigured ? 503 : status, headers: { "Cache-Control": "no-store" } }
+  );
 }
 
 export type EnginePage = {

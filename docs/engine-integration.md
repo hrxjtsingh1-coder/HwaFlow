@@ -69,6 +69,10 @@ Worker answers and accepts the token (a `404` for a made-up job id is the pass â
 it proves the bearer token was accepted). It never echoes the token, and in
 production it returns only `{ ok }`.
 
+If a route is called without them it answers `503 { error: "not-configured" }`,
+not a `502`, and the panel shows that message. `.env.local` is read at boot, so a
+running dev server keeps the old values until it is restarted.
+
 `ENGINE_PURGE_SUPABASE_ORIGINALS` is **off by default**. When it is `1` *and* the
 migration has been pushed, Approve also deletes the user's original WebPs from
 the Supabase `pages` bucket and flips those `chapter_pages` rows to `purged` â€”

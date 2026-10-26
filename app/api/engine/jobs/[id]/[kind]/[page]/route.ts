@@ -6,7 +6,7 @@
  */
 
 import { getViewer } from "@/lib/session";
-import { proxyEngineAsset } from "@/lib/engine";
+import { proxyEngineAsset, engineFailureResponse } from "@/lib/engine";
 import { assertEngineJobAccess } from "@/lib/engine-access";
 
 export const runtime = "nodejs";
@@ -38,9 +38,6 @@ export async function GET(
   try {
     return await proxyEngineAsset(id, kind as Kind, Number(page));
   } catch (error) {
-    return Response.json(
-      { error: "engine", message: error instanceof Error ? error.message : "Unknown engine error." },
-      { status: 502 }
-    );
+    return engineFailureResponse(error);
   }
 }
