@@ -26,6 +26,7 @@ way a chapter gets its text.
 | `app/api/engine/jobs/[id]/import/route.ts` | `POST` — writes the engine's regions into `text_blocks` (§5). |
 | `app/api/engine/jobs/[id]/render/route.ts` | `POST` — copies the finished pages into the `renders` bucket and points `chapter_pages.clean_path` at them (§6). |
 | `app/api/chapters/[id]/download/route.ts` | `GET` — zips every saved finished page for a chapter (§6). |
+| `app/api/health/engine/route.ts` | `GET` — env + Worker/token probe (§2). |
 | `components/chapters/engine-panel.tsx` | The panel in the chapter workspace. Self-contained inline styles, no new dependency, no CSS file. |
 | `supabase/migrations/20261105000000_engine_purge.sql` | Optional `purge_chapter_originals(uuid)` RPC. Inert unless `ENGINE_PURGE_SUPABASE_ORIGINALS=1`. |
 | `supabase/migrations/20261106000000_engine_renders.sql` | `renders` bucket + policies, `chapter_pages.clean_path`, and the `set_chapter_page_render(uuid, text)` RPC. |
@@ -61,6 +62,12 @@ ENGINE_PURGE_SUPABASE_ORIGINALS=1   # optional; needs the migration pushed
 
 `ENGINE_WEB_TOKEN` is read only inside `lib/engine.ts`, which is `server-only`.
 Never give it a `NEXT_PUBLIC_` prefix.
+
+`GET /api/health/engine` checks all of this in one request: whether the two
+variables are present, whether a `NEXT_PUBLIC_` copy leaked, and whether the
+Worker answers and accepts the token (a `404` for a made-up job id is the pass —
+it proves the bearer token was accepted). It never echoes the token, and in
+production it returns only `{ ok }`.
 
 `ENGINE_PURGE_SUPABASE_ORIGINALS` is **off by default**. When it is `1` *and* the
 migration has been pushed, Approve also deletes the user's original WebPs from

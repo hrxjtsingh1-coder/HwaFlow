@@ -771,5 +771,8 @@ originals are only purged when the env flag and the migration are both present.
 
 Environment variables (all empty in `.env.example`, never `NEXT_PUBLIC_`):
 `ENGINE_API_URL`, `ENGINE_WEB_TOKEN`, `ENGINE_PURGE_SUPABASE_ORIGINALS`.
+`GET /api/health/engine` reports whether they are set, whether a `NEXT_PUBLIC_`
+copy leaked, and whether the Worker accepts the token — the same shape as
+`/api/health/supabase`.
 `GEMINI_API_KEY` and `MOCK_PIPELINE` belong to the existing text pipeline and
 are unrelated to the engine's own Gemini key (which lives as a Worker secret).
