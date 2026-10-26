@@ -1251,3 +1251,17 @@ No test runner exists. Verify with `npx tsc --noEmit`, `npm run build`, then:
 deterministic fake bubbles, boxes and terms — no network call, no quota spent. This is
 how the workspace was built and how §15 steps 19–20 are checked without an API key.
 `.env.example` is the committed template; `.env.local` is gitignored.
+
+---
+
+## Appendix — image engine bridge (added 2026-10-26)
+
+The chapter workspace also has an optional **image engine** path (XianScan) that
+detects, erases, translates and typesets panels from the originals already in
+`chapter_pages`. It is additive: the OCR → translate → proofread pipeline above
+is unchanged and remains the default. Approving an engine run keeps the final
+PNGs for about seven days and deletes the raws — in B2 immediately, and in the
+Supabase `pages` bucket only when `ENGINE_PURGE_SUPABASE_ORIGINALS=1` and the
+`20261105000000_engine_purge.sql` migration are both in place. See
+`docs/engine-integration.md` for the routes, the 40-page / 80 MB ceiling and the
+`can_view_chapter` / `can_manage_chapter` checks.

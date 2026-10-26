@@ -58,6 +58,7 @@ import {
   Stamp,
 } from "../icons";
 import { BlockEditor } from "./block-editor";
+import { EnginePanel } from "./engine-panel";
 import { ChapterRail, type RailTab } from "./chapter-rail";
 import { ChapterStatusChip } from "./chapter-status-dot";
 import { DeleteChapterDialog } from "./delete-chapter-dialog";
@@ -933,6 +934,8 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
                   ) : null}
                 </div>
               </div>
+
+              <EnginePanel chapterId={chapter.id} canApprove={canManage} />
 
               {uploadErrors.length > 0 ? (
                 <div className="ch-upload-errors" role="alert">

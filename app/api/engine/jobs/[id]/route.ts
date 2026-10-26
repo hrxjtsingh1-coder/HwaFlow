@@ -1,0 +1,27 @@
+/** GET /api/engine/jobs/:id — status + page URLs for the workspace UI. */
+
+import { requirePipelineViewer } from "@/lib/pipeline-auth";
+import { getEngineJob } from "@/lib/engine";
+import { assertEngineJobAccess } from "@/lib/engine-access";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requirePipelineViewer();
+  if (!auth.ok) return auth.response;
+
+  const { id } = await params;
+  try {
+    const access = await assertEngineJobAccess(id, "view");
+    if (!access.ok) return access.response;
+
+    const job = await getEngineJob(id);
+    return Response.json(job, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    return Response.json(
+      { error: "engine", message: error instanceof Error ? error.message : "Unknown engine error." },
+      { status: 502 }
+    );
+  }
+}

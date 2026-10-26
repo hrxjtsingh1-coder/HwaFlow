@@ -712,3 +712,41 @@ failure never shows a blank shell.
   submissions via `/approvals`.
 - **Audit of credit changes** — `chapter_status_events` covers state, but there is no
   explicit ledger of "earning appeared/disappeared" events.
+
+
+---
+
+## 14. Image engine bridge (XianScan)
+
+An **additional** path alongside the existing OCR -> translate -> proofread
+pipeline. Nothing in that pipeline changes.
+
+- `lib/engine.ts` — `server-only` client for the deployed Cloudflare Worker.
+  Reads `ENGINE_API_URL` and `ENGINE_WEB_TOKEN`. The browser never sees the
+  token and never calls the engine directly.
+- `lib/engine-access.ts` — `server-only` authorization for every job-scoped
+  route. Resolves `jobId -> chapterId` once per job (10-minute memo) and then
+  asks `can_view_chapter` / `can_manage_chapter`, returning `403` on a definite
+  refusal. A job id is a handle, not a permission.
+- `app/api/engine/jobs/**` — five route handlers: create job, get job,
+  approve, reject, and proxy raw/final/approved/clean/regions assets. All use
+  `requirePipelineViewer()` (and `getViewer()` for the high-frequency asset
+  route) and return Web `Response` objects. Route params are Promises (Next 16).
+  Job creation refuses chapters above 40 pages or 80 MB with a `413`, because the
+  whole payload is buffered before it is forwarded.
+- `components/chapters/engine-panel.tsx` — mounted in `workspace-view.tsx`
+  with `<EnginePanel chapterId={chapter.id} canApprove={canManage} />`.
+  Self-contained inline styles, no new dependency.
+- `supabase/migrations/20261105000000_engine_purge.sql` — optional
+  `purge_chapter_originals(uuid)` RPC. It flips `chapter_pages.storage_state`
+  to `purged`, respects `groups.retention_policy = 'keep'`, and reuses
+  `can_manage_chapter(uuid)`. Inert unless `ENGINE_PURGE_SUPABASE_ORIGINALS=1`.
+
+On **Approve** the Worker deletes the raw/clean/final objects from its private
+Backblaze B2 bucket immediately and keeps `approved/` for ~7 days. Supabase
+originals are only purged when the env flag and the migration are both present.
+
+Environment variables (all empty in `.env.example`, never `NEXT_PUBLIC_`):
+`ENGINE_API_URL`, `ENGINE_WEB_TOKEN`, `ENGINE_PURGE_SUPABASE_ORIGINALS`.
+`GEMINI_API_KEY` and `MOCK_PIPELINE` belong to the existing text pipeline and
+are unrelated to the engine's own Gemini key (which lives as a Worker secret).

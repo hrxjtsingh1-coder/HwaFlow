@@ -31,3 +31,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 .aider*
+
+# Engine bridge local secrets
+.dev.vars
+.dev.vars.*
+kaggle.json
+*.pem
