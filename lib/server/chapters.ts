@@ -63,6 +63,7 @@ type PageRow = {
   chapter_id: string;
   page_index: number;
   original_path: string;
+  clean_path: string | null;
   width: number;
   height: number;
   byte_size: number;
@@ -108,7 +109,7 @@ type SeriesRow = {
 /* Public shapes                                                       */
 /* ------------------------------------------------------------------ */
 
-export type WorkspacePanel = Panel & { imageUrl: string | null };
+export type WorkspacePanel = Panel & { imageUrl: string | null; previewUrl: string | null };
 
 export type WorkspaceSeries = {
   id: string;
@@ -161,7 +162,11 @@ export function mapChapterRow(row: ChapterRow): Chapter {
   };
 }
 
-function mapPanel(row: PageRow, imageUrl: string | null): WorkspacePanel {
+function mapPanel(
+  row: PageRow,
+  imageUrl: string | null,
+  previewUrl: string | null
+): WorkspacePanel {
   return {
     id: row.id,
     chapterId: row.chapter_id,
@@ -172,6 +177,9 @@ function mapPanel(row: PageRow, imageUrl: string | null): WorkspacePanel {
     storageState: row.storage_state,
     createdAt: row.created_at,
     imageUrl,
+    // The engine's finished page when one exists. `imageUrl` stays the raw
+    // upload on purpose: extraction keeps OCRing the original art.
+    previewUrl: previewUrl ?? imageUrl,
   };
 }
 
@@ -300,7 +308,7 @@ export async function getWorkspaceBundle(
     supabase
       .from("chapter_pages")
       .select(
-        "id, chapter_id, page_index, original_path, width, height, byte_size, storage_state, created_at"
+        "id, chapter_id, page_index, original_path, clean_path, width, height, byte_size, storage_state, created_at"
       )
       .eq("chapter_id", chapterId)
       .order("page_index", { ascending: true }),
@@ -375,13 +383,22 @@ export async function getWorkspaceBundle(
   if (!viewerRow) return null;
 
   const pages = (pageData ?? []) as unknown as PageRow[];
-  const pageUrls = await signedUrlMap(
-    supabase,
-    "pages",
-    pages
-      .filter((page) => page.storage_state === "stored")
-      .map((page) => page.original_path)
-  );
+  const [pageUrls, renderUrls] = await Promise.all([
+    signedUrlMap(
+      supabase,
+      "pages",
+      pages
+        .filter((page) => page.storage_state === "stored")
+        .map((page) => page.original_path)
+    ),
+    // Finished pages survive a purge, so they are signed independently of
+    // `storage_state`.
+    signedUrlMap(
+      supabase,
+      "renders",
+      pages.flatMap((page) => (page.clean_path ? [page.clean_path] : []))
+    ),
+  ]);
 
   return {
     chapter,
@@ -391,7 +408,8 @@ export async function getWorkspaceBundle(
         page,
         page.storage_state === "stored"
           ? pageUrls.get(page.original_path) ?? null
-          : null
+          : null,
+        page.clean_path ? renderUrls.get(page.clean_path) ?? null : null
       )
     ),
     blocks: ((blockData ?? []) as unknown as BlockRow[]).map(mapBlock),

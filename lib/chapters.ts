@@ -71,6 +71,11 @@ export type Panel = {
   createdAt: string;
   /** Short-lived signed URL when the panel still has an object. */
   imageUrl?: string | null;
+  /**
+   * The engine's finished page, when one was saved. Display only — extraction
+   * keeps reading `imageUrl`, which is the raw upload.
+   */
+  previewUrl?: string | null;
 };
 
 export type TextBlock = {

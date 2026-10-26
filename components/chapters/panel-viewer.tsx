@@ -83,13 +83,17 @@ export function PanelViewer({
     setMissing(false);
     if (!panel) return;
 
-    if (!panel.imageUrl) {
+    // The engine's finished page wins; the raw upload is the fallback. A purged
+    // original still has a render, so the panel stays visible.
+    const url = panel.previewUrl ?? panel.imageUrl;
+
+    if (!url) {
       setMissing(panel.storageState !== "purged");
       return;
     }
 
-    setImageUrl(panel.imageUrl);
-  }, [panel?.id, panel?.imageUrl, panel?.storageState]);
+    setImageUrl(url);
+  }, [panel?.id, panel?.imageUrl, panel?.previewUrl, panel?.storageState]);
 
   useEffect(() => {
     if (!lightbox) return;

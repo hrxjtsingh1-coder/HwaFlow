@@ -13,7 +13,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
 const BATCH_SIZE = 100;
 
-export type StorageBucket = "group-icons" | "covers" | "pages";
+export type StorageBucket = "group-icons" | "covers" | "pages" | "renders";
 
 export async function signedUrlFor(
   client: SupabaseClient,

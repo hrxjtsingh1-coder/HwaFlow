@@ -1270,3 +1270,8 @@ Supabase `pages` bucket only when `ENGINE_PURGE_SUPABASE_ORIGINALS=1` and the
 `text_blocks` via `set_panel_blocks`, so they open in the bubble editor exactly
 like pipeline output. It is a merge: empty values never blank existing
 translations, and hand-edited lines survive.
+
+**Save pages** copies the finished PNGs into the private `renders` bucket and
+points `chapter_pages.clean_path` at them, so the workspace shows the typeset
+page — even after the raw uploads are purged. `original_path` is untouched, so
+extraction still reads the original art.

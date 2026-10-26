@@ -728,9 +728,10 @@ pipeline. Nothing in that pipeline changes.
   route. Resolves `jobId -> chapterId` once per job (10-minute memo) and then
   asks `can_view_chapter` / `can_manage_chapter`, returning `403` on a definite
   refusal. A job id is a handle, not a permission.
-- `app/api/engine/jobs/**` — six route handlers: create job, get job,
-  approve, reject, proxy raw/final/approved/clean/regions assets, and import
-  the engine's regions into `text_blocks`. All use
+- `app/api/engine/jobs/**` — seven route handlers: create job, get job,
+  approve, reject, proxy raw/final/approved/clean/regions assets, import the
+  engine's regions into `text_blocks`, and copy the finished pages into the
+  `renders` bucket. All use
   `requirePipelineViewer()` (and `getViewer()` for the high-frequency asset
   route) and return Web `Response` objects. Route params are Promises (Next 16).
   Job creation refuses chapters above 40 pages or 80 MB with a `413`, because the
@@ -739,6 +740,12 @@ pipeline. Nothing in that pipeline changes.
   (`bbox` normalised to 0..1 per panel, source and target text). Import is a
   merge through `set_panel_blocks`, so pipeline translations and hand edits are
   never blanked.
+- `lib/engine-renders.ts` + `20261106000000_engine_renders.sql` — finished pages
+  are copied into a private `renders` bucket (`pages` only accepts WebP) and
+  `chapter_pages.clean_path` points at them through
+  `set_chapter_page_render(uuid, text)`. `original_path` is never rewritten, so
+  extraction keeps OCRing the raw art; `previewUrl` is display-only and survives
+  a purge.
 - `components/chapters/engine-panel.tsx` — mounted in `workspace-view.tsx`
   with `<EnginePanel chapterId={chapter.id} canApprove={canManage} />`.
   Self-contained inline styles, no new dependency.

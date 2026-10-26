@@ -39,6 +39,11 @@ type ImportSummary = {
   skipped: Array<{ page: number; reason: string }>;
 };
 
+type RenderSummary = {
+  pages: number;
+  skipped: Array<{ page: number; reason: string }>;
+};
+
 const S = {
   box: {
     border: "1px solid var(--border, rgba(127,127,127,.28))",
@@ -114,6 +119,7 @@ export function EnginePanel({ chapterId, canApprove = true, onApproved }: Props)
   const [error, setError] = useState<string | null>(null);
   const [pageIndex, setPageIndex] = useState(0);
   const [imported, setImported] = useState<ImportSummary | null>(null);
+  const [rendered, setRendered] = useState<RenderSummary | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const readJob = useCallback(async (id: string) => {
@@ -191,6 +197,29 @@ export function EnginePanel({ chapterId, canApprove = true, onApproved }: Props)
     }
   }
 
+  async function savePages() {
+    if (!jobId) return;
+    setBusy(true);
+    setError(null);
+    setRendered(null);
+    try {
+      const response = await fetch(`/api/engine/jobs/${jobId}/render`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || "Could not save the engine's pages.");
+      setRendered(data as RenderSummary);
+      // The viewer reads the new paths from the server-rendered bundle.
+      router.refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not save the engine's pages.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function decide(kind: "approve" | "reject") {
     if (!jobId) return;
     setBusy(true);
@@ -258,6 +287,11 @@ export function EnginePanel({ chapterId, canApprove = true, onApproved }: Props)
             ⇩ Import text
           </button>
         ) : null}
+        {job && ["done", "approved"].includes(job.status) ? (
+          <button type="button" style={S.button} onClick={() => void savePages()} disabled={busy}>
+            ⇩ Save pages
+          </button>
+        ) : null}
         {job && job.status !== "approved" ? (
           <button type="button" style={S.button} onClick={() => void decide("reject")} disabled={busy}>
             Discard
@@ -274,6 +308,14 @@ export function EnginePanel({ chapterId, canApprove = true, onApproved }: Props)
           {imported.pages === 1 ? "" : "s"}.
           {imported.skipped.length > 0
             ? ` Skipped ${imported.skipped.map((entry) => `p${entry.page} (${entry.reason})`).join(", ")}.`
+            : ""}
+        </p>
+      ) : null}
+      {rendered ? (
+        <p style={S.sub}>
+          Saved {rendered.pages} finished page{rendered.pages === 1 ? "" : "s"} into this chapter.
+          {rendered.skipped.length > 0
+            ? ` Skipped ${rendered.skipped.map((entry) => `p${entry.page} (${entry.reason})`).join(", ")}.`
             : ""}
         </p>
       ) : null}
