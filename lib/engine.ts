@@ -54,7 +54,16 @@ export type EngineJob = {
   urls: Array<{ index: number; raw: string; final: string; approved: string; regions: string }>;
 };
 
-async function engineFetch(path: string, init: RequestInit = {}): Promise<Response> {
+/** Normal JSON calls: a Worker that has not answered in 15s is not about to. */
+const DEFAULT_TIMEOUT_MS = 15_000;
+/** The multipart upload can legitimately take longer on a slow connection. */
+const UPLOAD_TIMEOUT_MS = 120_000;
+
+async function engineFetch(
+  path: string,
+  init: RequestInit = {},
+  timeoutMs = DEFAULT_TIMEOUT_MS
+): Promise<Response> {
   const { apiUrl, token } = config();
   const response = await fetch(`${apiUrl}${path}`, {
     ...init,
@@ -63,12 +72,19 @@ async function engineFetch(path: string, init: RequestInit = {}): Promise<Respon
       ...(init.headers || {}),
     },
     cache: "no-store",
+    // Without this a hung Worker holds the route until `maxDuration`, and the
+    // retry in `engineAssetFetch` never gets a turn.
+    signal: init.signal ?? AbortSignal.timeout(timeoutMs),
   });
   return response;
 }
 
-async function engineJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await engineFetch(path, init);
+async function engineJson<T>(
+  path: string,
+  init?: RequestInit,
+  timeoutMs?: number
+): Promise<T> {
+  const response = await engineFetch(path, init, timeoutMs);
   const text = await response.text();
   if (!response.ok) {
     let message = text;
@@ -115,7 +131,7 @@ export async function createEngineJob(
     form.set(`page-${index}`, page.blob, `${String(index + 1).padStart(3, "0")}.${extension}`);
   });
 
-  return engineJson("/v1/jobs", { method: "POST", body: form });
+  return engineJson("/v1/jobs", { method: "POST", body: form }, UPLOAD_TIMEOUT_MS);
 }
 
 export async function getEngineJob(jobId: string): Promise<EngineJob> {

@@ -119,7 +119,9 @@ and the Worker's asset URLs never need to be publicly readable.
 That proxy retries a 5xx or a dropped connection twice (250 ms, then 1 s) before
 reporting a page missing, so a Worker cold start during a 40-page import does not
 look like lost output. A 4xx is returned immediately — a rejected job should not
-cost a second of retries.
+cost a second of retries. Every Worker call also carries a timeout: 15 s for JSON
+and images, 120 s for the multipart upload. A hung Worker fails the page instead
+of holding the request until `maxDuration`.
 
 ---
 
@@ -310,3 +312,37 @@ curl -X POST -H "cookie: <your session cookie>" \
   and working; this repo only talks to them over HTTP.
 - **Key rotation for the engine's Gemini key.** It is a Worker secret; nothing
   here handles it.
+
+---
+
+## 10. Deploy order
+
+The code is additive, but four migrations change tables that `lib/server/chapters.ts`
+already selects, so push them **before** deploying this branch. Until then the
+chapter workspace fails to load — `clean_path` and `engine_job_id` do not exist.
+
+```bash
+npx supabase link --project-ref <ref>
+npx supabase db push          # applies the four below in timestamp order
+```
+
+| Order | Migration | Adds |
+| --- | --- | --- |
+| 1 | `20261105000000_engine_purge.sql` | `chapter_pages.storage_state`, the approval purge RPC. |
+| 2 | `20261106000000_engine_renders.sql` | `renders` bucket + policies, `chapter_pages.clean_path`, `set_chapter_page_render`. |
+| 3 | `20261107000000_engine_import_prune.sql` | `set_panel_engine_blocks` (Remove stale lines). |
+| 4 | `20261108000000_engine_job_link.sql` | `chapters.engine_job_id`, `set_chapter_engine_job`. |
+
+Then:
+
+1. Set `ENGINE_API_URL` and `ENGINE_WEB_TOKEN` in `.env.local` **and** in the
+   hosting dashboard. They are server-only; a `NEXT_PUBLIC_` prefix is a leak.
+2. Restart the dev server — `.env.local` is read at boot.
+3. Open `/api/health/engine`. `ok: true` means the Worker answered and accepted
+   the token. `probe.status: "locked"` means the token is wrong;
+   `"error"` means the Worker was unreachable.
+4. Run §8 against a real chapter, then use the panel: **Run engine** → review →
+   **Import text** (and **Remove stale lines** only if it reports surplus) →
+   **Save pages** → **Approve**.
+5. Keep `ENGINE_PURGE_SUPABASE_ORIGINALS` unset until migration 1 is pushed and
+   you have decided that approval should delete the author's uploads.
