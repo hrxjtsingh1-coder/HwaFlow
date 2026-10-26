@@ -20,9 +20,15 @@ import { createClient } from "@/lib/supabase/server";
 export type EngineAccessLevel = "view" | "manage";
 
 const CACHE_TTL_MS = 10 * 60 * 1000;
+/* A job with no chapter link is remembered briefly, not for the full window:
+ * the link can appear once the Worker finishes accepting the upload. */
+const MISS_TTL_MS = 60 * 1000;
 const CACHE_MAX_ENTRIES = 500;
 
-const chapterByJob = new Map<string, { chapterId: string; at: number }>();
+const chapterByJob = new Map<
+  string,
+  { chapterId: string | null; at: number }
+>();
 
 export type EngineAccessDecision = "allow" | "deny" | "allow-unverified";
 
@@ -44,19 +50,33 @@ export function decideEngineAccess(
 
 async function chapterForJob(jobId: string): Promise<string | null> {
   const cached = chapterByJob.get(jobId);
-  if (cached && Date.now() - cached.at < CACHE_TTL_MS) return cached.chapterId;
+  if (cached) {
+    const ttl = cached.chapterId ? CACHE_TTL_MS : MISS_TTL_MS;
+    if (Date.now() - cached.at < ttl) return cached.chapterId;
+  }
 
   const job = await getEngineJob(jobId);
-  if (!job.chapterId) return null;
 
   if (chapterByJob.size >= CACHE_MAX_ENTRIES) {
     const now = Date.now();
     for (const [key, entry] of chapterByJob) {
-      if (now - entry.at >= CACHE_TTL_MS) chapterByJob.delete(key);
+      const ttl = entry.chapterId ? CACHE_TTL_MS : MISS_TTL_MS;
+      if (now - entry.at >= ttl) chapterByJob.delete(key);
     }
     // Still full of hot entries: drop them rather than grow without bound in a
     // long-lived server. The only cost is one extra Worker read.
     if (chapterByJob.size >= CACHE_MAX_ENTRIES) chapterByJob.clear();
+  }
+
+  if (!job.chapterId) {
+    // No link means nothing to authorize against, and the asset route is polled
+    // on every preview: without remembering the miss, one unlinked job costs a
+    // Worker read and a warning per image. Remember it briefly and say it once.
+    console.warn(
+      `[engine] job ${jobId} carries no chapterId; access checks are skipped for it`
+    );
+    chapterByJob.set(jobId, { chapterId: null, at: Date.now() });
+    return null;
   }
 
   chapterByJob.set(jobId, { chapterId: job.chapterId, at: Date.now() });
