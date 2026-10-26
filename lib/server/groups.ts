@@ -419,24 +419,36 @@ export async function listGroupsForAdmin(): Promise<AdminGroupCard[]> {
 
   // Paginated: past 1000 memberships an unpaged select silently drops groups,
   // which showed up as cards with no owner and undercounted members.
-  const memberRows = await selectAllPages<GroupMemberRow>(async (from, to) => {
-    const { data, error } = await supabase
-      .from("group_members")
-      .select(
-        "id, group_id, user_id, role, invited_by, joined_at, profiles!group_members_user_id_fkey(username, display_name)"
-      )
-      .order("id", { ascending: true })
-      .range(from, to);
+  //
+  // Members, icons and the count RPC need nothing from each other, so they go
+  // out in one wave instead of three.
+  const [
+    memberRows,
+    iconUrls,
+    { data: summaryData, error: summaryError },
+  ] = await Promise.all([
+    selectAllPages<GroupMemberRow>(async (from, to) => {
+      const { data, error } = await supabase
+        .from("group_members")
+        .select(
+          "id, group_id, user_id, role, invited_by, joined_at, profiles!group_members_user_id_fkey(username, display_name)"
+        )
+        .order("id", { ascending: true })
+        .range(from, to);
 
-    if (error) fail("listGroupsForAdmin.members", error.message);
-    return (data ?? []) as unknown as GroupMemberRow[];
-  });
-
-  const iconUrls = await signedUrlMap(
-    supabase,
-    "group-icons",
-    groupRows.map((row) => row.icon_path)
-  );
+      if (error) fail("listGroupsForAdmin.members", error.message);
+      return (data ?? []) as unknown as GroupMemberRow[];
+    }),
+    signedUrlMap(
+      supabase,
+      "group-icons",
+      groupRows.map((row) => row.icon_path)
+    ),
+    // Counts come from a platform-admin RPC: the admin cannot select from
+    // `series` (RLS scopes it to the group's own staff), so a direct query
+    // would report zero for every group.
+    supabase.rpc("admin_group_summaries"),
+  ]);
 
   const byGroup = new Map<string, GroupMember[]>();
   for (const row of memberRows) {
@@ -444,13 +456,6 @@ export async function listGroupsForAdmin(): Promise<AdminGroupCard[]> {
     list.push(mapGroupMember(row));
     byGroup.set(row.group_id, list);
   }
-
-  // Counts come from a platform-admin RPC: the admin cannot select from
-  // `series` (RLS scopes it to the group's own staff), so a direct query would
-  // report zero for every group.
-  const { data: summaryData, error: summaryError } = await supabase.rpc(
-    "admin_group_summaries"
-  );
 
   // Degrade instead of 500 when the migration has not been pushed yet: the
   // grid is still usable and the log names the missing function. Counts read 0
