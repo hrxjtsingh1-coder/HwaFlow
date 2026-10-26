@@ -58,3 +58,19 @@ export async function listNotifications(
     unread: count ?? 0,
   };
 }
+
+/**
+ * The bell only needs this until it is opened. A HEAD request with a count is
+ * one small round trip instead of fetching twenty rows the user never sees.
+ */
+export async function countUnreadNotifications(): Promise<number> {
+  const supabase = await createClient();
+
+  const { count, error } = await supabase
+    .from("notifications")
+    .select("id", { count: "exact", head: true })
+    .eq("read", false);
+
+  if (error) throw new Error(`[notifications:unread] ${error.message}`);
+  return count ?? 0;
+}

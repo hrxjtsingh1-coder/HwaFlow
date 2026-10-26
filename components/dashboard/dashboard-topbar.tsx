@@ -7,6 +7,7 @@ import {
   listNotificationsAction,
   markAllNotificationsReadAction,
   markNotificationReadAction,
+  unreadNotificationsAction,
 } from "@/lib/notification-actions";
 import type { AppNotification } from "@/lib/notifications";
 import { Bell, ChevronRight, Menu } from "../icons";
@@ -45,9 +46,17 @@ export function DashboardTopbar({
     setUnread(result.data.unread);
   }, []);
 
+  // The badge is all the closed popover shows, so mounting costs one count
+  // instead of twenty rows. The list is fetched when it is actually opened.
+  const loadCount = useCallback(async () => {
+    const result = await unreadNotificationsAction();
+    if (!result.ok) return;
+    setUnread(result.data);
+  }, []);
+
   useEffect(() => {
-    void load();
-  }, [load]);
+    void loadCount();
+  }, [loadCount]);
 
   useEffect(() => {
     if (open) void load();

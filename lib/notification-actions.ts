@@ -6,32 +6,48 @@
  */
 
 import type { AppNotification } from "./notifications";
-import { getViewer } from "./session";
-import { listNotifications } from "./server/notifications";
+import {
+  countUnreadNotifications,
+  listNotifications,
+} from "./server/notifications";
 import { createClient } from "./supabase/server";
 
 export type NotificationActionResult<T> =
   | { ok: true; data: T }
   | { ok: false; message: string };
 
-async function requireViewer() {
-  const viewer = await getViewer();
-  if (!viewer) {
+/**
+ * These actions never read the viewer's profile — RLS already scopes every row
+ * to `auth.uid()`. Validating the session is enough, and it saves the extra
+ * `profiles` round trip that `getViewer()` makes. This runs after every
+ * navigation, so that trip is the difference between a 700 ms and a 400 ms
+ * request.
+ */
+async function requireSession(): Promise<
+  { ok: true } | { ok: false; result: { ok: false; message: string } }
+> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
+  if (error || !user) {
     return {
-      ok: false as const,
+      ok: false,
       result: {
-        ok: false as const,
+        ok: false,
         message: "Your session expired. Sign in again to continue.",
       },
     };
   }
-  return { ok: true as const, viewer };
+  return { ok: true };
 }
 
 export async function listNotificationsAction(): Promise<
   NotificationActionResult<{ items: AppNotification[]; unread: number }>
 > {
-  const auth = await requireViewer();
+  const auth = await requireSession();
   if (!auth.ok) return auth.result;
 
   try {
@@ -42,10 +58,27 @@ export async function listNotificationsAction(): Promise<
   }
 }
 
+/**
+ * Badge-only read. The top bar calls this on mount; the full list is fetched
+ * when the popover opens.
+ */
+export async function unreadNotificationsAction(): Promise<
+  NotificationActionResult<number>
+> {
+  const auth = await requireSession();
+  if (!auth.ok) return auth.result;
+
+  try {
+    return { ok: true, data: await countUnreadNotifications() };
+  } catch {
+    return { ok: false, message: "Couldn't load notifications." };
+  }
+}
+
 export async function markNotificationReadAction(
   id: string
 ): Promise<NotificationActionResult<null>> {
-  const auth = await requireViewer();
+  const auth = await requireSession();
   if (!auth.ok) return auth.result;
 
   const supabase = await createClient();
@@ -70,7 +103,7 @@ export async function markNotificationReadAction(
 export async function markAllNotificationsReadAction(): Promise<
   NotificationActionResult<null>
 > {
-  const auth = await requireViewer();
+  const auth = await requireSession();
   if (!auth.ok) return auth.result;
 
   const supabase = await createClient();
