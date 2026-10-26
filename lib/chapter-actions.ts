@@ -464,7 +464,7 @@ export async function removePanelAction(input: {
   // it likes. Scoping the read to this chapter also proves the panel is ours.
   const { data: panelRow, error: panelError } = await supabase
     .from("chapter_pages")
-    .select("original_path")
+    .select("original_path, clean_path")
     .eq("id", input.panelId)
     .eq("chapter_id", input.chapterId)
     .maybeSingle();
@@ -478,11 +478,28 @@ export async function removePanelAction(input: {
 
   if (error) return fromDbError(error, "Couldn't remove that panel.");
 
-  const originalPath = (panelRow as unknown as { original_path: string } | null)
-    ?.original_path;
+  const row = panelRow as unknown as {
+    original_path: string;
+    clean_path: string | null;
+  } | null;
 
-  if (originalPath) {
-    await supabase.storage.from("pages").remove([originalPath]);
+  if (row?.original_path) {
+    await supabase.storage.from("pages").remove([row.original_path]);
+  }
+
+  // The render lives in a different bucket and is not covered by the `pages`
+  // delete policy once the row is gone, so it goes through the admin client —
+  // same reasoning as deleteChapterAction.
+  if (row?.clean_path) {
+    try {
+      await createAdminClient().storage.from("renders").remove([row.clean_path]);
+    } catch (cause) {
+      console.warn(
+        `[chapters] panel ${input.panelId} removed with an orphaned render: ${
+          cause instanceof Error ? cause.message : "unknown error"
+        }`
+      );
+    }
   }
 
   return { ok: true, data: null };
