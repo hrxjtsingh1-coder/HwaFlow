@@ -36,6 +36,8 @@ type Props = {
 type ImportSummary = {
   pages: number;
   blocks: number;
+  pruned: number;
+  surplus: number;
   skipped: Array<{ page: number; reason: string }>;
 };
 
@@ -174,7 +176,7 @@ export function EnginePanel({ chapterId, canApprove = true, onApproved }: Props)
     }
   }
 
-  async function importText() {
+  async function importText(prune = false) {
     if (!jobId) return;
     setBusy(true);
     setError(null);
@@ -183,7 +185,7 @@ export function EnginePanel({ chapterId, canApprove = true, onApproved }: Props)
       const response = await fetch(`/api/engine/jobs/${jobId}/import`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: "{}",
+        body: JSON.stringify({ prune }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "Could not import the engine text.");
@@ -306,10 +308,24 @@ export function EnginePanel({ chapterId, canApprove = true, onApproved }: Props)
         <p style={S.sub}>
           Imported {imported.blocks} line{imported.blocks === 1 ? "" : "s"} into {imported.pages} page
           {imported.pages === 1 ? "" : "s"}.
+          {imported.pruned > 0
+            ? ` Removed ${imported.pruned} stale line${imported.pruned === 1 ? "" : "s"}.`
+            : ""}
           {imported.skipped.length > 0
             ? ` Skipped ${imported.skipped.map((entry) => `p${entry.page} (${entry.reason})`).join(", ")}.`
             : ""}
         </p>
+      ) : null}
+      {imported && imported.surplus > 0 ? (
+        <div style={{ ...S.row, marginTop: 6 }}>
+          <span style={S.sub}>
+            {imported.surplus} older line{imported.surplus === 1 ? "" : "s"} kept because the
+            engine did not mention {imported.surplus === 1 ? "it" : "them"}.
+          </span>
+          <button type="button" style={S.button} onClick={() => void importText(true)} disabled={busy}>
+            Remove stale lines
+          </button>
+        </div>
       ) : null}
       {rendered ? (
         <p style={S.sub}>

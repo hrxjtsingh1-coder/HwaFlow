@@ -206,16 +206,19 @@ export async function deleteChapterAction(input: {
 
   const { data: pageData, error: pageError } = await supabase
     .from("chapter_pages")
-    .select("original_path")
+    .select("original_path, clean_path")
     .eq("chapter_id", input.chapterId);
 
   if (pageError) {
     return fromDbError(pageError, "We couldn't delete that chapter.");
   }
 
-  const paths = ((pageData ?? []) as Array<{ original_path: string }>).map(
-    (page) => page.original_path
-  );
+  const pageRows = (pageData ?? []) as Array<{
+    original_path: string;
+    clean_path: string | null;
+  }>;
+  const paths = pageRows.map((page) => page.original_path);
+  const renderPaths = pageRows.flatMap((page) => (page.clean_path ? [page.clean_path] : []));
 
   const { error } = await supabase.rpc("delete_chapter", {
     p_chapter_id: input.chapterId,
@@ -249,6 +252,29 @@ export async function deleteChapterAction(input: {
       // A missing secret key must not turn a completed deletion into an error.
       console.warn(
         `[chapters] storage cleanup skipped for ${input.chapterId}: ${
+          cause instanceof Error ? cause.message : "unknown error"
+        }`
+      );
+    }
+  }
+
+  // Engine renders live in their own bucket, so they are not covered by the
+  // `pages` cleanup above. Same reasoning: the row is gone, so the privileged
+  // client does the maintenance, and a failure must not fail the delete.
+  if (renderPaths.length > 0) {
+    try {
+      const { error: renderError } = await createAdminClient()
+        .storage.from("renders")
+        .remove(renderPaths);
+
+      if (renderError) {
+        console.warn(
+          `[chapters] chapter ${input.chapterId} deleted with orphaned renders: ${renderError.message}`
+        );
+      }
+    } catch (cause) {
+      console.warn(
+        `[chapters] render cleanup skipped for ${input.chapterId}: ${
           cause instanceof Error ? cause.message : "unknown error"
         }`
       );

@@ -739,7 +739,10 @@ pipeline. Nothing in that pipeline changes.
 - `lib/engine-regions.ts` — maps `regions.json` onto `text_blocks`
   (`bbox` normalised to 0..1 per panel, source and target text). Import is a
   merge through `set_panel_blocks`, so pipeline translations and hand edits are
-  never blanked.
+  never blanked. The explicit **Remove stale lines** path calls
+  `set_panel_engine_blocks`, which prunes unedited rows the payload omits;
+  pruning is never automatic because a truncated engine response is
+  indistinguishable from a page that lost panels.
 - `lib/engine-renders.ts` + `20261106000000_engine_renders.sql` — finished pages
   are copied into a private `renders` bucket (`pages` only accepts WebP) and
   `chapter_pages.clean_path` points at them through

@@ -23,6 +23,10 @@ export const maxDuration = 120;
 type ImportSummary = {
   pages: number;
   blocks: number;
+  /** Rows deleted by the explicit prune pass. Zero on a plain merge. */
+  pruned: number;
+  /** Older lines the merge kept because the engine did not mention them. */
+  surplus: number;
   skipped: Array<{ page: number; reason: string }>;
 };
 
@@ -32,9 +36,19 @@ type ImportSummary = {
 // delete this block.
 let sampleLogged = false;
 
-export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requirePipelineViewer();
   if (!auth.ok) return auth.response;
+
+  // `prune` is the explicit second step: a plain import merges, and only a
+  // deliberate request removes lines the engine did not mention.
+  let prune = false;
+  try {
+    const body = (await request.json()) as { prune?: unknown };
+    prune = body?.prune === true;
+  } catch {
+    /* empty body means merge */
+  }
 
   const { id } = await params;
   try {
@@ -86,7 +100,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       );
     }
 
-    const summary: ImportSummary = { pages: 0, blocks: 0, skipped: [] };
+    const summary: ImportSummary = { pages: 0, blocks: 0, pruned: 0, surplus: 0, skipped: [] };
+    /** page id -> the block indexes the engine actually produced. */
+    const engineIndexes = new Map<string, Set<number>>();
 
     for (const [index, page] of stored.entries()) {
       let payload: unknown;
@@ -123,18 +139,43 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
         continue;
       }
 
-      const { error } = await supabase.rpc("set_panel_blocks", {
-        p_chapter_id: job.chapterId,
-        p_page_id: page.id,
-        p_blocks: blocks,
-      });
+      const { data: removed, error } = await supabase.rpc(
+        prune ? "set_panel_engine_blocks" : "set_panel_blocks",
+        {
+          p_chapter_id: job.chapterId,
+          p_page_id: page.id,
+          p_blocks: blocks,
+        }
+      );
       if (error) {
         summary.skipped.push({ page: index + 1, reason: error.message });
         continue;
       }
 
+      engineIndexes.set(page.id, new Set(blocks.map((block) => block.index)));
       summary.pages += 1;
       summary.blocks += blocks.length;
+      if (prune) summary.pruned += Number(removed ?? 0);
+    }
+
+    // After a merge, tell the panel how many older lines the engine did not
+    // mention. They are exactly what "Remove stale lines" would prune; counting
+    // them is read-only and cannot delete anything.
+    if (!prune) {
+      const { data: remaining } = await supabase
+        .from("text_blocks")
+        .select("page_id, block_index, base_translation, final_text, is_edited")
+        .eq("chapter_id", job.chapterId);
+
+      for (const row of remaining ?? []) {
+        if (row.is_edited) continue;
+        if (!`${row.base_translation ?? ""}${row.final_text ?? ""}`.trim()) continue;
+        const indexes = engineIndexes.get(row.page_id);
+        // Pages the engine skipped are left untouched, so they are not surplus.
+        if (!indexes) continue;
+        if (indexes.has(row.block_index)) continue;
+        summary.surplus += 1;
+      }
     }
 
     return Response.json(summary, { headers: { "Cache-Control": "no-store" } });

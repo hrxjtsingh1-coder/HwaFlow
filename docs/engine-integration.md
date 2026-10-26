@@ -29,6 +29,7 @@ way a chapter gets its text.
 | `components/chapters/engine-panel.tsx` | The panel in the chapter workspace. Self-contained inline styles, no new dependency, no CSS file. |
 | `supabase/migrations/20261105000000_engine_purge.sql` | Optional `purge_chapter_originals(uuid)` RPC. Inert unless `ENGINE_PURGE_SUPABASE_ORIGINALS=1`. |
 | `supabase/migrations/20261106000000_engine_renders.sql` | `renders` bucket + policies, `chapter_pages.clean_path`, and the `set_chapter_page_render(uuid, text)` RPC. |
+| `supabase/migrations/20261107000000_engine_import_prune.sql` | `set_panel_engine_blocks(uuid, uuid, jsonb)` — the explicit prune path behind **Remove stale lines** (§5). |
 
 Also modified:
 
@@ -132,6 +133,13 @@ It is a **merge**, not a replace:
   surplus old rows keep their text and appear as extra bubbles. There is no
   cleanup pass, because `text_blocks` has a SELECT policy only — replacing
   outright would need a new RPC and a migration.
+
+After a merge the panel reports how many older lines the engine did not mention
+and offers **Remove stale lines**. That re-runs the import with `prune: true`,
+which calls `set_panel_engine_blocks` — it deletes rows absent from the payload
+**only when `is_edited = false`**, then applies the same text-preserving upsert.
+Pruning is never automatic: a truncated engine response looks exactly like a
+page that lost panels, so the call belongs to the person looking at the result.
 
 Two guard rails in the route:
 
@@ -260,11 +268,13 @@ curl -X POST -H "cookie: <your session cookie>" \
   changes the Worker's `/v1/jobs` contract — out of scope for this integration.
   Until then the 40-page / 80 MB guard turns an out-of-memory crash into a clear
   message.
-- **Replacing blocks on import.** Import merges; see §5 for why a cleanup RPC
-  would be needed, and what it would cost.
-- **Deleting renders.** Removing a panel row or a chapter leaves the object in
-  `renders`; there is no sweeper yet. The bucket is private and small (one
-  object per page), so this is housekeeping, not a correctness problem.
+- **Automatic pruning on import.** Import merges; removing the leftover rows is
+  an explicit second click (§5), because a short engine response is
+  indistinguishable from a page that lost panels.
+- **Deleting renders.** Deleting a chapter removes its renders through the
+  admin client (`deleteChapterAction`). Rows deleted outside the app — a manual
+  `delete from chapter_pages` in the dashboard — can still orphan an object; the
+  bucket is private and one object per page, so that is housekeeping.
 - **Touching `worker/**`, `kaggle/**` or `engine-bridge/**`.** Those are deployed
   and working; this repo only talks to them over HTTP.
 - **Key rotation for the engine's Gemini key.** It is a Worker secret; nothing
