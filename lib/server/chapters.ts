@@ -248,6 +248,19 @@ const CHAPTER_COLUMNS = `
   series!inner(group_id)
 `;
 
+/**
+ * The workspace needs the series row anyway, and `series!inner` already decides
+ * whether the chapter is visible, so its columns ride along with the chapter
+ * instead of costing a second, dependent request.
+ */
+const WORKSPACE_CHAPTER_COLUMNS = `
+  id, series_id, number, title, status, rate_snapshot, submitted_by,
+  submitted_at, approved_by, approved_at, rejection_note, engine_job_id,
+  created_by, created_at, updated_at,
+  submitter:profiles!chapters_submitted_by_fkey(username, display_name),
+  series!inner(id, group_id, title, source_language, rate_amount, archived)
+`;
+
 export async function listChaptersForSeries(
   seriesId: string
 ): Promise<Chapter[]> {
@@ -291,28 +304,31 @@ export async function getWorkspaceBundle(
 
   const { data: chapterData, error: chapterError } = await supabase
     .from("chapters")
-    .select(CHAPTER_COLUMNS)
+    .select(WORKSPACE_CHAPTER_COLUMNS)
     .eq("id", chapterId)
     .maybeSingle();
 
   if (chapterError) fail("workspace.chapter", chapterError.message);
   if (!chapterData) return null;
 
-  const chapterRow = chapterData as unknown as ChapterRow;
+  const chapterRow = chapterData as unknown as ChapterRow & { series: SeriesRow };
+  if (!chapterRow.series) return null;
+
+  const seriesRow = chapterRow.series;
   const chapter = mapChapterRow(chapterRow);
 
+  // One wave: everything below depends only on ids we already have. The block
+  // read is paged and can run here too — it used to wait for the series query
+  // even though it only needs the chapter id.
   const [
-    { data: seriesData, error: seriesError },
     { data: pageData, error: pageError },
     { data: eventData, error: eventError },
     { data: siblingData, error: siblingError },
     { data: glossaryData, error: glossaryError },
+    blockData,
+    { data: groupData, error: groupError },
+    { data: memberData, error: memberError },
   ] = await Promise.all([
-    supabase
-      .from("series")
-      .select("id, group_id, title, source_language, rate_amount, archived")
-      .eq("id", chapterRow.series_id)
-      .maybeSingle(),
     supabase
       .from("chapter_pages")
       .select(
@@ -338,50 +354,40 @@ export async function getWorkspaceBundle(
       .eq("series_id", chapterRow.series_id)
       .eq("status", "active")
       .order("source_term", { ascending: true }),
+    // A dense chapter can exceed PostgREST's 1000-row cap, which truncates
+    // silently — the workspace would drop its last panels with no error.
+    selectAllPages<BlockRow>(async (from, to) => {
+      const { data, error } = await supabase
+        .from("text_blocks")
+        .select(
+          "id, page_id, chapter_id, block_index, bbox, source_text, base_translation, final_text, confidence, is_edited, edited_by, edited_at"
+        )
+        .eq("chapter_id", chapterId)
+        // Stable across pages: (page_id, block_index) is unique.
+        .order("page_id", { ascending: true })
+        .order("block_index", { ascending: true })
+        .range(from, to);
+
+      if (error) fail("workspace.blocks", error.message);
+      return (data ?? []) as unknown as BlockRow[];
+    }),
+    supabase
+      .from("groups")
+      .select("id, name, currency")
+      .eq("id", seriesRow.group_id)
+      .maybeSingle(),
+    supabase
+      .from("group_members")
+      .select(
+        "id, group_id, user_id, role, invited_by, joined_at, profiles!group_members_user_id_fkey(username, display_name)"
+      )
+      .eq("group_id", seriesRow.group_id),
   ]);
 
-  if (seriesError) fail("workspace.series", seriesError.message);
   if (pageError) fail("workspace.pages", pageError.message);
   if (eventError) fail("workspace.events", eventError.message);
   if (siblingError) fail("workspace.siblings", siblingError.message);
   if (glossaryError) fail("workspace.glossary", glossaryError.message);
-  if (!seriesData) return null;
-
-  // A dense chapter can exceed PostgREST's 1000-row cap, which truncates
-  // silently — the workspace would drop its last panels with no error.
-  const blockData = await selectAllPages<BlockRow>(async (from, to) => {
-    const { data, error } = await supabase
-      .from("text_blocks")
-      .select(
-        "id, page_id, chapter_id, block_index, bbox, source_text, base_translation, final_text, confidence, is_edited, edited_by, edited_at"
-      )
-      .eq("chapter_id", chapterId)
-      // Stable across pages: (page_id, block_index) is unique.
-      .order("page_id", { ascending: true })
-      .order("block_index", { ascending: true })
-      .range(from, to);
-
-    if (error) fail("workspace.blocks", error.message);
-    return (data ?? []) as unknown as BlockRow[];
-  });
-
-  const seriesRow = seriesData as unknown as SeriesRow;
-
-  const [{ data: groupData, error: groupError }, { data: memberData, error: memberError }] =
-    await Promise.all([
-      supabase
-        .from("groups")
-        .select("id, name, currency")
-        .eq("id", seriesRow.group_id)
-        .maybeSingle(),
-      supabase
-        .from("group_members")
-        .select(
-          "id, group_id, user_id, role, invited_by, joined_at, profiles!group_members_user_id_fkey(username, display_name)"
-        )
-        .eq("group_id", seriesRow.group_id),
-    ]);
-
   if (groupError) fail("workspace.group", groupError.message);
   if (memberError) fail("workspace.members", memberError.message);
   if (!groupData) return null;
