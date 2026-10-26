@@ -1275,3 +1275,6 @@ translations, and hand-edited lines survive.
 points `chapter_pages.clean_path` at them, so the workspace shows the typeset
 page — even after the raw uploads are purged. `original_path` is untouched, so
 extraction still reads the original art.
+
+Once renders exist, the header's **Pages** button downloads the whole set as one
+ZIP (`001.png`, `002.png`, …), built by `lib/zip.ts` with no new dependency.

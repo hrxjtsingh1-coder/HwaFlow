@@ -278,6 +278,16 @@ export function ArrowLeft(props: IconProps) {
   );
 }
 
+export function Download(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 4v11" />
+      <path d="m7 10 5 5 5-5" />
+      <path d="M5 20h14" />
+    </Svg>
+  );
+}
+
 export function LogOut(props: IconProps) {
   return (
     <Svg {...props}>

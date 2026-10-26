@@ -109,7 +109,12 @@ type SeriesRow = {
 /* Public shapes                                                       */
 /* ------------------------------------------------------------------ */
 
-export type WorkspacePanel = Panel & { imageUrl: string | null; previewUrl: string | null };
+export type WorkspacePanel = Panel & {
+  imageUrl: string | null;
+  previewUrl: string | null;
+  /** True when an engine render was saved for this page. */
+  hasRender: boolean;
+};
 
 export type WorkspaceSeries = {
   id: string;
@@ -180,6 +185,7 @@ function mapPanel(
     // The engine's finished page when one exists. `imageUrl` stays the raw
     // upload on purpose: extraction keeps OCRing the original art.
     previewUrl: previewUrl ?? imageUrl,
+    hasRender: Boolean(previewUrl),
   };
 }
 

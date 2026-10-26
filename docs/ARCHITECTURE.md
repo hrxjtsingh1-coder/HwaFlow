@@ -746,6 +746,11 @@ pipeline. Nothing in that pipeline changes.
   `set_chapter_page_render(uuid, text)`. `original_path` is never rewritten, so
   extraction keeps OCRing the raw art; `previewUrl` is display-only and survives
   a purge.
+- `app/api/chapters/[id]/download/route.ts` + `lib/zip.ts` — the deliverable:
+  every saved render for a chapter in one ZIP, written directly by a small
+  stored-entry writer (no dependency, no compression). Chapter-scoped because
+  renders outlive the engine job; reads use the viewer's session, so the
+  `renders` policy governs access.
 - `components/chapters/engine-panel.tsx` — mounted in `workspace-view.tsx`
   with `<EnginePanel chapterId={chapter.id} canApprove={canManage} />`.
   Self-contained inline styles, no new dependency.

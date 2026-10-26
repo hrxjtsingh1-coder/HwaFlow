@@ -54,6 +54,7 @@ import {
   ArrowLeft,
   Check,
   Clock,
+  Download,
   Play,
   Stamp,
 } from "../icons";
@@ -867,6 +868,17 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
                 </div>
 
                 <div className="ch-header-actions">
+                  {panels.some((panel) => panel.hasRender) ? (
+                    <a
+                      className="btn btn-ghost btn-sm"
+                      href={`/api/chapters/${chapter.id}/download`}
+                      title="Download every saved finished page as one ZIP"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      Pages
+                    </a>
+                  ) : null}
+
                   {canMarkReady ? (
                     <Tooltip label="Use this if a run was interrupted by a closed tab.">
                       <button

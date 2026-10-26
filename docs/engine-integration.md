@@ -25,6 +25,7 @@ way a chapter gets its text.
 | `app/api/engine/jobs/[id]/[kind]/[page]/route.ts` | `GET` — streams `raw` / `final` / `approved` / `clean` / `regions` through the server. |
 | `app/api/engine/jobs/[id]/import/route.ts` | `POST` — writes the engine's regions into `text_blocks` (§5). |
 | `app/api/engine/jobs/[id]/render/route.ts` | `POST` — copies the finished pages into the `renders` bucket and points `chapter_pages.clean_path` at them (§6). |
+| `app/api/chapters/[id]/download/route.ts` | `GET` — zips every saved finished page for a chapter (§6). |
 | `components/chapters/engine-panel.tsx` | The panel in the chapter workspace. Self-contained inline styles, no new dependency, no CSS file. |
 | `supabase/migrations/20261105000000_engine_purge.sql` | Optional `purge_chapter_originals(uuid)` RPC. Inert unless `ENGINE_PURGE_SUPABASE_ORIGINALS=1`. |
 | `supabase/migrations/20261106000000_engine_renders.sql` | `renders` bucket + policies, `chapter_pages.clean_path`, and the `set_chapter_page_render(uuid, text)` RPC. |
@@ -182,6 +183,21 @@ original page count no longer matches `job.pageCount`. It runs while the job is
 `done` or `approved` (the Worker keeps finals for about a week after approval);
 per-page failures are reported in the response rather than failing the batch.
 
+### Downloading the finished set
+
+Once any page has a render, the workspace header shows **Pages**, which calls
+`GET /api/chapters/:id/download` and returns every saved render as one ZIP,
+named `001.png`, `002.png`, … in page order.
+
+- `lib/zip.ts` writes the archive directly — stored entries, no compression,
+  because PNGs are already deflated. No dependency was added for this.
+- Reads go through the viewer's session, so the `renders` policy decides access;
+  a chapter in another group is a `404`.
+- The archive is buffered, so it is capped at 200 MB (`413` above that). A
+  40-page chapter is typically a few MB.
+- It is chapter-scoped rather than job-scoped on purpose: renders outlive the
+  engine job, and so does the ability to hand someone the finished pages.
+
 ---
 
 ## 7. Authorization and limits
@@ -195,6 +211,7 @@ per-page failures are reported in the response rather than failing the batch.
 | `POST …/reject` | `requirePipelineViewer()` | `can_manage_chapter` |
 | `POST …/import` | `requirePipelineViewer()` | `can_view_chapter` (work access; `set_panel_blocks` re-checks `can_edit_chapter`) |
 | `POST …/render` | `requirePipelineViewer()` | `can_view_chapter` + the `renders` bucket's `can_edit_chapter_path` on upload |
+| `GET /api/chapters/:id/download` | `requirePipelineViewer()` | RLS on `chapters` / `chapter_pages` + `can_view_chapter_path` on each render |
 
 A job id is opaque but it is not a permission. `lib/engine-access.ts` resolves
 the chapter behind it (memoised for 10 minutes per job, so the asset route does
@@ -245,9 +262,6 @@ curl -X POST -H "cookie: <your session cookie>" \
   message.
 - **Replacing blocks on import.** Import merges; see §5 for why a cleanup RPC
   would be needed, and what it would cost.
-- **Exporting the finished set.** Each page is viewable and downloadable one at
-  a time; a chapter-level zip would need a bundler dependency, which this
-  integration deliberately avoids. `renders` is the place to build it from.
 - **Deleting renders.** Removing a panel row or a chapter leaves the object in
   `renders`; there is no sweeper yet. The bucket is private and small (one
   object per page), so this is housekeeping, not a correctness problem.
