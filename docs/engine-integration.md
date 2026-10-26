@@ -16,11 +16,13 @@ way a chapter gets its text.
 | --- | --- |
 | `lib/engine.ts` | `server-only` client for the deployed Cloudflare Worker. Reads `ENGINE_API_URL` / `ENGINE_WEB_TOKEN`; the browser never sees either. |
 | `lib/engine-access.ts` | `server-only` authorization for every job-scoped route: resolves `jobId → chapterId` once per job (10 min memo) and checks `can_view_chapter` / `can_manage_chapter`. |
+| `lib/engine-regions.ts` | Tolerant adapter from the engine's `regions.json` to the `text_blocks` shape: three text spellings, both box conventions, pixel-or-fraction coordinates scaled by the page's real size. |
 | `app/api/engine/jobs/route.ts` | `POST` — reads the chapter's originals + glossary + approved text, forwards them, returns a job id. |
 | `app/api/engine/jobs/[id]/route.ts` | `GET` — status + page URLs for the panel. |
 | `app/api/engine/jobs/[id]/approve/route.ts` | `POST` — approve; keeps finals ~7 days, deletes raws; optionally purges Supabase originals. |
 | `app/api/engine/jobs/[id]/reject/route.ts` | `POST` — discard the run. |
 | `app/api/engine/jobs/[id]/[kind]/[page]/route.ts` | `GET` — streams `raw` / `final` / `approved` / `clean` / `regions` through the server. |
+| `app/api/engine/jobs/[id]/import/route.ts` | `POST` — writes the engine's regions into `text_blocks` (§5). |
 | `components/chapters/engine-panel.tsx` | The panel in the chapter workspace. Self-contained inline styles, no new dependency, no CSS file. |
 | `supabase/migrations/20261105000000_engine_purge.sql` | Optional `purge_chapter_originals(uuid)` RPC. Inert unless `ENGINE_PURGE_SUPABASE_ORIGINALS=1`. |
 
@@ -104,15 +106,48 @@ and the Worker's asset URLs never need to be publicly readable.
 | `can_view_chapter` / `can_manage_chapter` | Route-level authorization (see §5) |
 | `storage_state` + `groups.retention_policy` | Optional purge on approval (§2) |
 
-Nothing here writes to `text_blocks`. If you later want the engine's
-`regions.json` (OCR boxes plus source/target text) in the bubble editor, read
-`GET /api/engine/jobs/:id/regions/:page` and feed it into
-`setPanelBlocksAction` — the shapes already line up (`bbox`,
-`sourceText`/`textSource`, `textTarget`). That is a phase-2 change.
+Imported engine text lands in `text_blocks` through `set_panel_blocks` (§5);
+nothing else in this integration writes there.
 
 ---
 
-## 5. Authorization and limits
+## 5. Importing the engine's text
+
+Pressing **⇩ Import text** (or `POST /api/engine/jobs/:id/import`) copies the
+run's `regions.json` into `text_blocks`, so the bubble editor shows the engine's
+boxes and its English text and proofreading continues as usual.
+
+It is a **merge**, not a replace:
+
+- An empty string means "no opinion" (see
+  `20261030090000_extraction_preserves_text.sql`), so existing `base_translation`
+  and `final_text` are never blanked. Engine OCR overwrites `source_text`,
+  `bbox` and `confidence` for the matching `block_index`.
+- Blocks absent from the payload are deleted only when they hold no text.
+- Consequence: if the engine finds more regions than the pipeline did, the
+  surplus old rows keep their text and appear as extra bubbles. There is no
+  cleanup pass, because `text_blocks` has a SELECT policy only — replacing
+  outright would need a new RPC and a migration.
+
+Two guard rails in the route:
+
+- It only runs while the job is `done`. After Approve the worker has deleted the
+  intermediates, so the message says to run the engine again.
+- It re-reads the chapter's `storage_state = 'stored'` pages and refuses
+  (`409 pages-changed`) if the count no longer matches `job.pageCount`, because
+  the engine's page numbers are upload order and a re-upload would shift them.
+
+The adapter logs the first `regions.json` it ever sees, truncated to 1200 chars,
+as `[engine] regions sample`. That exists because the Worker's serialiser is not
+in this repo and the field names were inferred; delete the log once the shape is
+confirmed.
+
+Imported text follows the same permission as extraction: anyone who can work on
+the series (`can_edit_chapter`, re-checked by `set_panel_blocks`).
+
+---
+
+## 6. Authorization and limits
 
 | Route | Session | Chapter check |
 | --- | --- | --- |
@@ -121,6 +156,7 @@ Nothing here writes to `text_blocks`. If you later want the engine's
 | `GET /api/engine/jobs/:id/:kind/:page` | `getViewer()` (cheap, hot path) | `can_view_chapter` |
 | `POST …/approve` | `requirePipelineViewer()` | `can_manage_chapter` |
 | `POST …/reject` | `requirePipelineViewer()` | `can_manage_chapter` |
+| `POST …/import` | `requirePipelineViewer()` | `can_view_chapter` (work access; `set_panel_blocks` re-checks `can_edit_chapter`) |
 
 A job id is opaque but it is not a permission. `lib/engine-access.ts` resolves
 the chapter behind it (memoised for 10 minutes per job, so the asset route does
@@ -139,7 +175,7 @@ not the norm.
 
 ---
 
-## 6. Test without the UI
+## 7. Test without the UI
 
 ```bash
 npm run dev
@@ -162,14 +198,20 @@ curl -X POST -H "cookie: <your session cookie>" \
 
 ---
 
-## 7. Deliberate non-goals
+## 8. Deliberate non-goals
 
 - **Streaming the upload.** The route buffers the whole chapter. The real fix is
   to post signed Storage URLs and let the Worker pull pages one at a time, which
   changes the Worker's `/v1/jobs` contract — out of scope for this integration.
   Until then the 40-page / 80 MB guard turns an out-of-memory crash into a clear
   message.
-- **Writing engine OCR back into `text_blocks`.** Phase 2, described in §4.
+- **Replacing blocks on import.** Import merges; see §5 for why a cleanup RPC
+  would be needed, and what it would cost.
+- **Swapping the page image for the cleaned PNG.** Approve keeps the finals in
+  the Worker's bucket for about a week; `chapter_pages.original_path` still
+  points at the uploaded WebP. Writing the final back into the `pages` bucket is
+  a separate decision (it changes `storage_state` semantics), not part of the
+  import.
 - **Touching `worker/**`, `kaggle/**` or `engine-bridge/**`.** Those are deployed
   and working; this repo only talks to them over HTTP.
 - **Key rotation for the engine's Gemini key.** It is a Worker secret; nothing

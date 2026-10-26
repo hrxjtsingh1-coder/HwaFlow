@@ -728,12 +728,17 @@ pipeline. Nothing in that pipeline changes.
   route. Resolves `jobId -> chapterId` once per job (10-minute memo) and then
   asks `can_view_chapter` / `can_manage_chapter`, returning `403` on a definite
   refusal. A job id is a handle, not a permission.
-- `app/api/engine/jobs/**` — five route handlers: create job, get job,
-  approve, reject, and proxy raw/final/approved/clean/regions assets. All use
+- `app/api/engine/jobs/**` — six route handlers: create job, get job,
+  approve, reject, proxy raw/final/approved/clean/regions assets, and import
+  the engine's regions into `text_blocks`. All use
   `requirePipelineViewer()` (and `getViewer()` for the high-frequency asset
   route) and return Web `Response` objects. Route params are Promises (Next 16).
   Job creation refuses chapters above 40 pages or 80 MB with a `413`, because the
   whole payload is buffered before it is forwarded.
+- `lib/engine-regions.ts` — maps `regions.json` onto `text_blocks`
+  (`bbox` normalised to 0..1 per panel, source and target text). Import is a
+  merge through `set_panel_blocks`, so pipeline translations and hand edits are
+  never blanked.
 - `components/chapters/engine-panel.tsx` — mounted in `workspace-view.tsx`
   with `<EnginePanel chapterId={chapter.id} canApprove={canManage} />`.
   Self-contained inline styles, no new dependency.

@@ -1265,3 +1265,8 @@ Supabase `pages` bucket only when `ENGINE_PURGE_SUPABASE_ORIGINALS=1` and the
 `20261105000000_engine_purge.sql` migration are both in place. See
 `docs/engine-integration.md` for the routes, the 40-page / 80 MB ceiling and the
 `can_view_chapter` / `can_manage_chapter` checks.
+
+**Import text** on a finished run writes the engine's boxes and translations into
+`text_blocks` via `set_panel_blocks`, so they open in the bubble editor exactly
+like pipeline output. It is a merge: empty values never blank existing
+translations, and hand-edited lines survive.

@@ -11,6 +11,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useRouter } from "next/navigation";
 
 type EnginePage = { index: number; status: string };
 type EngineJob = {
@@ -30,6 +31,12 @@ type Props = {
   canApprove?: boolean;
   /** Optional: let the parent move the chapter to `ready`/`approved` too. */
   onApproved?: (jobId: string) => void | Promise<void>;
+};
+
+type ImportSummary = {
+  pages: number;
+  blocks: number;
+  skipped: Array<{ page: number; reason: string }>;
 };
 
 const S = {
@@ -99,12 +106,14 @@ const STATUS_COPY: Record<EngineJob["status"], string> = {
 };
 
 export function EnginePanel({ chapterId, canApprove = true, onApproved }: Props) {
+  const router = useRouter();
   const storageKey = `hwaflow.engineJob.${chapterId}`;
   const [jobId, setJobId] = useState<string | null>(null);
   const [job, setJob] = useState<EngineJob | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pageIndex, setPageIndex] = useState(0);
+  const [imported, setImported] = useState<ImportSummary | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const readJob = useCallback(async (id: string) => {
@@ -154,6 +163,29 @@ export function EnginePanel({ chapterId, canApprove = true, onApproved }: Props)
       await readJob(data.jobId);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not start the image engine.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function importText() {
+    if (!jobId) return;
+    setBusy(true);
+    setError(null);
+    setImported(null);
+    try {
+      const response = await fetch(`/api/engine/jobs/${jobId}/import`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || "Could not import the engine text.");
+      setImported(data as ImportSummary);
+      // The bubble editor is server-rendered; pull the new blocks in.
+      router.refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not import the engine text.");
     } finally {
       setBusy(false);
     }
@@ -221,6 +253,11 @@ export function EnginePanel({ chapterId, canApprove = true, onApproved }: Props)
             ✓ Approve & clean up
           </button>
         ) : null}
+        {job?.status === "done" ? (
+          <button type="button" style={S.button} onClick={() => void importText()} disabled={busy}>
+            ⇩ Import text
+          </button>
+        ) : null}
         {job && job.status !== "approved" ? (
           <button type="button" style={S.button} onClick={() => void decide("reject")} disabled={busy}>
             Discard
@@ -231,6 +268,15 @@ export function EnginePanel({ chapterId, canApprove = true, onApproved }: Props)
       {job ? <p style={S.sub}>{STATUS_COPY[job.status]}</p> : null}
       {job?.error ? <p style={S.error}>{job.error}</p> : null}
       {error ? <p style={S.error}>{error}</p> : null}
+      {imported ? (
+        <p style={S.sub}>
+          Imported {imported.blocks} line{imported.blocks === 1 ? "" : "s"} into {imported.pages} page
+          {imported.pages === 1 ? "" : "s"}.
+          {imported.skipped.length > 0
+            ? ` Skipped ${imported.skipped.map((entry) => `p${entry.page} (${entry.reason})`).join(", ")}.`
+            : ""}
+        </p>
+      ) : null}
 
       {job?.status === "pending" ? (
         <p style={S.sub}>
