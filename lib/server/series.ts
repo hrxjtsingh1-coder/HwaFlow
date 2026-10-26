@@ -255,20 +255,26 @@ export async function getSeriesBundle(
   const viewerRow = memberRows.find((member) => member.user_id === viewer.id);
   if (!viewerRow) return null;
 
-  const coverUrl = row.cover_path
-    ? (await signedUrlMap(supabase, "covers", [row.cover_path])).get(
-        row.cover_path
-      ) ?? null
-    : null;
+  const groupRow = groupData as unknown as GroupRow;
 
+  // Two unrelated objects, one hop: the cover belongs to the series, the icon to
+  // its group. Signing them together removes a full round trip from the page.
+  const coverPath = row.cover_path;
+  const iconPath = groupRow.icon_path;
+
+  const [coverUrls, iconUrls] = await Promise.all([
+    coverPath
+      ? signedUrlMap(supabase, "covers", [coverPath])
+      : Promise.resolve(new Map<string, string>()),
+    iconPath
+      ? signedUrlMap(supabase, "group-icons", [iconPath])
+      : Promise.resolve(new Map<string, string>()),
+  ]);
+
+  const coverUrl = coverPath ? coverUrls.get(coverPath) ?? null : null;
   // The header shows the owning group's avatar. Signing it here (rather than
   // passing null) is what makes the icon survive the move off the local store.
-  const groupRow = groupData as unknown as GroupRow;
-  const groupIconUrl = groupRow.icon_path
-    ? (await signedUrlMap(supabase, "group-icons", [groupRow.icon_path])).get(
-        groupRow.icon_path
-      ) ?? null
-    : null;
+  const groupIconUrl = iconPath ? iconUrls.get(iconPath) ?? null : null;
 
   const series = mapSeries(row, coverUrl);
   const assignments = (row.series_assignments ?? []).map((assignment) =>
