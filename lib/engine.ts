@@ -8,6 +8,8 @@
 
 import "server-only";
 
+import { retryDelaysMs, sleep } from "./async/retry";
+
 function config() {
   const apiUrl = (process.env.ENGINE_API_URL || "").replace(/\/$/, "");
   const token = process.env.ENGINE_WEB_TOKEN || "";
@@ -137,15 +139,38 @@ export async function rejectEngineJob(jobId: string): Promise<EngineJob> {
   });
 }
 
+/**
+ * A 5xx or a dropped connection is the Worker, not an answer: a cold start or a
+ * restart while a 40-page chapter is being imported would otherwise show up as
+ * "that image is no longer available". 4xx is final and is returned at once — a
+ * rejected job must not cost the caller a second of retries.
+ */
+async function engineAssetFetch(path: string): Promise<Response> {
+  const delays = retryDelaysMs();
+
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      const response = await engineFetch(path);
+      if (response.status < 500 || attempt >= delays.length) return response;
+      // Release the error body before retrying.
+      await response.body?.cancel().catch(() => undefined);
+    } catch (error) {
+      if (attempt >= delays.length) throw error;
+    }
+    await sleep(delays[attempt]);
+  }
+}
+
 /** Streams an image/JSON blob from the Worker so no token ever reaches the browser. */
 export async function proxyEngineAsset(
   jobId: string,
   kind: "raw" | "final" | "approved" | "clean" | "regions",
   page: number
 ): Promise<Response> {
-  const response = await engineFetch(
+  const response = await engineAssetFetch(
     `/v1/jobs/${encodeURIComponent(jobId)}/${kind}/${page}`
   );
+
   if (!response.ok) {
     return Response.json(
       { error: "engine_asset_unavailable", message: `That image is no longer available (${response.status}).` },

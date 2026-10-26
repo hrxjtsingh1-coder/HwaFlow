@@ -116,6 +116,11 @@ All images the panel shows — raw, final and approved — are fetched through
 `/api/engine/jobs/<id>/<kind>/<page>`. The browser never learns the Worker host,
 and the Worker's asset URLs never need to be publicly readable.
 
+That proxy retries a 5xx or a dropped connection twice (250 ms, then 1 s) before
+reporting a page missing, so a Worker cold start during a 40-page import does not
+look like lost output. A 4xx is returned immediately — a rejected job should not
+cost a second of retries.
+
 ---
 
 ## 4. How it plugs into what already exists
@@ -295,10 +300,12 @@ curl -X POST -H "cookie: <your session cookie>" \
 - **Automatic pruning on import.** Import merges; removing the leftover rows is
   an explicit second click (§5), because a short engine response is
   indistinguishable from a page that lost panels.
-- **Deleting renders.** Deleting a chapter removes its renders through the
-  admin client (`deleteChapterAction`). Rows deleted outside the app — a manual
-  `delete from chapter_pages` in the dashboard — can still orphan an object; the
-  bucket is private and one object per page, so that is housekeeping.
+- **Deleting renders.** Deleting a chapter or a single panel removes its renders
+  through the admin client (`deleteChapterAction`, `removePanelAction`), because
+  the `renders` delete policy resolves the chapter from the row that is already
+  gone. Rows deleted outside the app — a manual `delete from chapter_pages` in
+  the dashboard — can still orphan an object; the bucket is private and one
+  object per page, so that is housekeeping.
 - **Touching `worker/**`, `kaggle/**` or `engine-bridge/**`.** Those are deployed
   and working; this repo only talks to them over HTTP.
 - **Key rotation for the engine's Gemini key.** It is a Worker secret; nothing
