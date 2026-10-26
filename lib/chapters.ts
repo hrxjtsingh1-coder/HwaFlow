@@ -55,6 +55,8 @@ export type Chapter = {
   approvedBy: string | null;
   approvedAt: string | null;
   rejectionNote: string | null;
+  /** Latest image-engine run started for this chapter, if any. */
+  engineJobId?: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;

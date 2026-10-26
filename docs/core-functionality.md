@@ -1278,3 +1278,7 @@ extraction still reads the original art.
 
 Once renders exist, the header's **Pages** button downloads the whole set as one
 ZIP (`001.png`, `002.png`, …), built by `lib/zip.ts` with no new dependency.
+
+A run is remembered on the chapter (`chapters.engine_job_id`), not just in the
+browser, so reloading or opening the chapter on another device reattaches to the
+same job and its comparison images.

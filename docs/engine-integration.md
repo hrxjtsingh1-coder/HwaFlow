@@ -30,6 +30,7 @@ way a chapter gets its text.
 | `supabase/migrations/20261105000000_engine_purge.sql` | Optional `purge_chapter_originals(uuid)` RPC. Inert unless `ENGINE_PURGE_SUPABASE_ORIGINALS=1`. |
 | `supabase/migrations/20261106000000_engine_renders.sql` | `renders` bucket + policies, `chapter_pages.clean_path`, and the `set_chapter_page_render(uuid, text)` RPC. |
 | `supabase/migrations/20261107000000_engine_import_prune.sql` | `set_panel_engine_blocks(uuid, uuid, jsonb)` — the explicit prune path behind **Remove stale lines** (§5). |
+| `supabase/migrations/20261108000000_engine_job_link.sql` | `chapters.engine_job_id` + `set_chapter_engine_job(uuid, text)` — the run survives a reload (§3). |
 
 Also modified:
 
@@ -83,7 +84,12 @@ Already mounted in `workspace-view.tsx`:
 ```tsx
 </div>   {/* end .ch-header */}
 
-<EnginePanel chapterId={chapter.id} canApprove={canManage} />
+<EnginePanel
+  chapterId={chapter.id}
+  initialJobId={chapter.engineJobId ?? null}
+  hasRenders={panels.some((panel) => panel.hasRender)}
+  canApprove={canManage}
+/>
 
 {uploadErrors.length > 0 ? (
 ```
@@ -92,6 +98,12 @@ Already mounted in `workspace-view.tsx`:
 `canManage && status === "submitted"`, which would hide the engine's Approve
 button while a chapter is still `ready`. `onApproved` is omitted on purpose, so
 approving images and approving the chapter stay two separate clicks.
+
+The run is remembered on the chapter (`chapters.engine_job_id`, written by
+`set_chapter_engine_job` when a job is created), so a reload, another device or a
+Manager reviewing the chapter sees the same run instead of starting over. The
+chapter row wins over `localStorage`; `localStorage` remains only as a fallback
+for a viewer without edit rights, whose run cannot be linked.
 
 All images the panel shows — raw, final and approved — are fetched through
 `/api/engine/jobs/<id>/<kind>/<page>`. The browser never learns the Worker host,

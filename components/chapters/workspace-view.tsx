@@ -947,7 +947,12 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
                 </div>
               </div>
 
-              <EnginePanel chapterId={chapter.id} canApprove={canManage} />
+              <EnginePanel
+                chapterId={chapter.id}
+                initialJobId={chapter.engineJobId ?? null}
+                hasRenders={panels.some((panel) => panel.hasRender)}
+                canApprove={canManage}
+              />
 
               {uploadErrors.length > 0 ? (
                 <div className="ch-upload-errors" role="alert">

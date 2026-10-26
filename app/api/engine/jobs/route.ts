@@ -163,6 +163,18 @@ export async function POST(request: Request) {
       translations,
     });
 
+    // Remember the run on the chapter so it survives a reload and is visible to
+    // whoever reviews the chapter next. Best effort: a viewer without edit
+    // rights can still start a run, and the panel keeps its own localStorage
+    // fallback.
+    const { error: linkError } = await supabase.rpc("set_chapter_engine_job", {
+      p_chapter_id: body.chapterId,
+      p_job: job.jobId,
+    });
+    if (linkError) {
+      console.warn(`[engine] job ${job.jobId} not linked to chapter: ${linkError.message}`);
+    }
+
     return Response.json(job, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown engine error.";

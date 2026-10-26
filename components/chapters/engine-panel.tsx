@@ -27,6 +27,10 @@ type EngineJob = {
 
 type Props = {
   chapterId: string;
+  /** The run remembered on the chapter row, so a reload or another device finds it. */
+  initialJobId?: string | null;
+  /** Whether any finished page is already saved for this chapter. */
+  hasRenders?: boolean;
   /** Owner/Manager only, matching the rest of HwaFlow's approval flow. */
   canApprove?: boolean;
   /** Optional: let the parent move the chapter to `ready`/`approved` too. */
@@ -112,10 +116,16 @@ const STATUS_COPY: Record<EngineJob["status"], string> = {
   rejected: "Discarded",
 };
 
-export function EnginePanel({ chapterId, canApprove = true, onApproved }: Props) {
+export function EnginePanel({
+  chapterId,
+  initialJobId = null,
+  hasRenders = false,
+  canApprove = true,
+  onApproved,
+}: Props) {
   const router = useRouter();
   const storageKey = `hwaflow.engineJob.${chapterId}`;
-  const [jobId, setJobId] = useState<string | null>(null);
+  const [jobId, setJobId] = useState<string | null>(initialJobId);
   const [job, setJob] = useState<EngineJob | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -138,13 +148,20 @@ export function EnginePanel({ chapterId, canApprove = true, onApproved }: Props)
   }, []);
 
   useEffect(() => {
+    // The chapter row is the source of truth; localStorage only covers a viewer
+    // whose run could not be linked (no edit rights) and browsers that have
+    // been on the page since before the column existed.
     const saved = typeof window !== "undefined" ? localStorage.getItem(storageKey) : null;
-    if (saved) {
-      setJobId(saved);
-      void readJob(saved);
+    const remembered = initialJobId ?? saved;
+    if (remembered) {
+      setJobId(remembered);
+      if (typeof window !== "undefined" && remembered !== saved) {
+        localStorage.setItem(storageKey, remembered);
+      }
+      void readJob(remembered);
     }
     return () => { if (timer.current) clearInterval(timer.current); };
-  }, [storageKey, readJob]);
+  }, [storageKey, readJob, initialJobId]);
 
   // Poll only while the engine is still working. Stops on terminal states.
   useEffect(() => {
@@ -294,7 +311,7 @@ export function EnginePanel({ chapterId, canApprove = true, onApproved }: Props)
             ⇩ Save pages
           </button>
         ) : null}
-        {job && job.status !== "approved" ? (
+        {job && ["pending", "working", "done"].includes(job.status) ? (
           <button type="button" style={S.button} onClick={() => void decide("reject")} disabled={busy}>
             Discard
           </button>

@@ -755,8 +755,11 @@ pipeline. Nothing in that pipeline changes.
   renders outlive the engine job; reads use the viewer's session, so the
   `renders` policy governs access.
 - `components/chapters/engine-panel.tsx` — mounted in `workspace-view.tsx`
-  with `<EnginePanel chapterId={chapter.id} canApprove={canManage} />`.
-  Self-contained inline styles, no new dependency.
+  with `chapterId`, `initialJobId` and `hasRenders`. Self-contained inline
+  styles, no new dependency.
+- `supabase/migrations/20261108000000_engine_job_link.sql` —
+  `chapters.engine_job_id` plus `set_chapter_engine_job(uuid, text)`, so the run
+  is a property of the chapter rather than of one browser tab.
 - `supabase/migrations/20261105000000_engine_purge.sql` — optional
   `purge_chapter_originals(uuid)` RPC. It flips `chapter_pages.storage_state`
   to `purged`, respects `groups.retention_policy = 'keep'`, and reuses

@@ -51,6 +51,7 @@ export type ChapterRow = {
   approved_by: string | null;
   approved_at: string | null;
   rejection_note: string | null;
+  engine_job_id: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -161,6 +162,7 @@ export function mapChapterRow(row: ChapterRow): Chapter {
     approvedBy: row.approved_by,
     approvedAt: row.approved_at,
     rejectionNote: row.rejection_note,
+    engineJobId: row.engine_job_id ?? null,
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -240,8 +242,8 @@ function fail(scope: string, message: string): never {
 
 const CHAPTER_COLUMNS = `
   id, series_id, number, title, status, rate_snapshot, submitted_by,
-  submitted_at, approved_by, approved_at, rejection_note, created_by,
-  created_at, updated_at,
+  submitted_at, approved_by, approved_at, rejection_note, engine_job_id,
+  created_by, created_at, updated_at,
   submitter:profiles!chapters_submitted_by_fkey(username, display_name),
   series!inner(group_id)
 `;
