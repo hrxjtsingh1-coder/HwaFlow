@@ -65,9 +65,10 @@ export function assertTextPayloadSize(
 }
 
 /**
- * Hard cap for one `/api/pipeline/extract` multipart body. Vercel rejects
- * function requests over 4.5 MB, so keep a margin for multipart overhead.
- * Panels are compressed to at most 400 KB, but never assume that held.
+ * Hard cap for one `/api/pipeline/extract` multipart body. Serverless hosts
+ * commonly reject function requests over 4.5 MB, so keep a margin for
+ * multipart overhead. Panels are compressed to at most 400 KB, but never
+ * assume that held.
  */
 export const EXTRACT_BATCH_MAX_BYTES = 3_000_000;
 

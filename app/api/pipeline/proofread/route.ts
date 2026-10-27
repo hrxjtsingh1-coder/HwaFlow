@@ -28,7 +28,7 @@ import { assertTextPayloadSize } from "@/lib/ai/batch";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-/** Gemini can take over a minute on a dense chapter; Vercel defaults lower. */
+/** Gemini can take over a minute on a dense chapter; keep the function alive. */
 export const maxDuration = 300;
 
 type BlockInput = {
