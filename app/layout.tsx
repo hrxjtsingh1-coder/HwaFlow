@@ -4,7 +4,6 @@ import {
   IBM_Plex_Mono,
   Inter,
 } from "next/font/google";
-import { SpeedInsights } from "@vercel/speed-insights/next";
 import { CookieBanner } from "@/components/cookie-banner";
 import { FocusTracker } from "@/components/focus-tracker";
 import { THEME_COLOR, THEME_KEY } from "@/lib/theme-contract";
@@ -113,11 +112,6 @@ export default function RootLayout({
         </a>
         <FocusTracker>{children}</FocusTracker>
         <CookieBanner />
-        {/*
-         * Free on Hobby. Records real p75 numbers per route so a slow surface
-         * can be identified from data instead of guessed at.
-         */}
-        <SpeedInsights />
       </body>
     </html>
   );
