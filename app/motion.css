@@ -36,6 +36,16 @@
 
 ::view-transition-new(root) {
   z-index: 2;
+  /* The circle is clipped on this layer every frame; keep it composited. */
+  will-change: clip-path;
+}
+
+/* Colour transitions would be captured at their old values in the incoming
+   snapshot and would keep recalculating under the reveal, so they wait. */
+:root[data-theme-reveal] *,
+:root[data-theme-reveal] *::before,
+:root[data-theme-reveal] *::after {
+  transition: none !important;
 }
 
 @keyframes motion-rise-sm {

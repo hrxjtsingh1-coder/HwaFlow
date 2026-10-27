@@ -32,8 +32,15 @@ export type ThemeToggleOrigin = {
 
 export const THEME_EVENT = "hwaflow:theme";
 
-const REVEAL_MS = 480;
+// Each frame repaints a full-page snapshot, so the reveal keeps a tight budget.
+const REVEAL_MS = 320;
 const REVEAL_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
+
+/*
+ * Tokens an in-flight reveal. A second toggle owns the screen, so an older
+ * transition must not lift the freeze from under the newer one.
+ */
+let revealToken = 0;
 
 export function getStoredPreference(): ThemePreference {
   if (typeof window === "undefined") return "system";
@@ -179,11 +186,20 @@ export function useTheme() {
       Math.max(origin.y, window.innerHeight - origin.y)
     );
 
+    const root = document.documentElement;
+    const token = ++revealToken;
+    // Freeze colour transitions while the snapshots are taken: otherwise the
+    // incoming snapshot captures their old values and the page pops at the end.
+    root.dataset.themeReveal = "";
+    const unfreeze = () => {
+      if (token === revealToken) delete root.dataset.themeReveal;
+    };
+
     const transition = document.startViewTransition(commit);
 
     // An interrupted transition rejects both promises. The newer toggle owns
     // the screen, so there is nothing to recover.
-    transition.finished.catch(() => {});
+    transition.finished.then(unfreeze, unfreeze);
 
     transition.ready
       .then(() => {
@@ -203,6 +219,7 @@ export function useTheme() {
       })
       .catch(() => {
         // `ready` also rejects when a newer toggle skips this transition.
+        unfreeze();
       });
   };
 

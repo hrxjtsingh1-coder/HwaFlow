@@ -496,7 +496,7 @@ edges, square corners. Depth comes from a 2–6 px offset, never from blur.
   stored preference, so there is no second theme system. Pressing it hands the
   button's viewport centre to `toggle(origin)`, which runs a same-document View
   Transition: the new theme grows out of a `clip-path` circle from behind the
-  button (480 ms, ease-out). Browsers without `startViewTransition`, and
+  button (320 ms, ease-out). Browsers without `startViewTransition`, and
   reduced-motion users, get the instant swap.
 - **Contrast:** all text pairs meet WCAG AA — body 16.9:1, muted 8.0:1, faint
   5.0:1 on paper; ink on every pastel ≥ 11:1; dark body 17.0:1, muted 9.4:1,
