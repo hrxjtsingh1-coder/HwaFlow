@@ -1,14 +1,17 @@
 /**
  * GET /api/health/engine — is the image engine wired up?
  *
- * Checks:
- *   1. ENGINE_API_URL and ENGINE_WEB_TOKEN are present.
- *   2. NEXT_PUBLIC_ENGINE_WEB_TOKEN is not configured.
- *   3. The bridge responds to an authenticated health probe.
+ * Two checks:
  *
- * TEMPORARY DEBUGGING:
- * Production returns diagnostic status without exposing secrets.
- * Remove detailed production diagnostics after resolving the 503.
+ *   1. env — are ENGINE_API_URL and ENGINE_WEB_TOKEN present?
+ *      Both are server-only. A NEXT_PUBLIC_ copy is reported as a leak.
+ *
+ *   2. probe — does the bridge respond, and does it accept the token?
+ *      A 404 for an unknown job is treated as a successful probe.
+ *      A 401/403 means the token was rejected.
+ *
+ * Production returns only { ok }.
+ * Development returns detailed diagnostics.
  */
 
 import { NextResponse } from "next/server";
@@ -38,6 +41,7 @@ export async function GET() {
   const env = {
     apiUrl: Boolean(apiUrl),
     token: Boolean(token),
+    // Detect accidental exposure of the token to browser code.
     tokenLeakedIntoPublicEnv: Boolean(
       process.env.NEXT_PUBLIC_ENGINE_WEB_TOKEN
     ),
@@ -65,10 +69,10 @@ export async function GET() {
           reachable: true,
           status: "locked",
           httpStatus: response.status,
-          message: "The engine rejected ENGINE_WEB_TOKEN.",
+          message: "The engine is reachable but rejected ENGINE_WEB_TOKEN.",
         };
       } else {
-        // A 404 for an unknown job is an expected successful probe.
+        // A 404 for an unknown job is the expected response.
         probe = {
           reachable: true,
           status: "ok",
@@ -90,43 +94,49 @@ export async function GET() {
     !env.tokenLeakedIntoPublicEnv &&
     probe?.status === "ok";
 
+  if (!isDev) {
+    // Production exposes no internal configuration details.
+    return NextResponse.json(
+      { ok },
+      { status: ok ? 200 : 503 }
+    );
+  }
+
   const notes: string[] = [];
 
   if (!env.apiUrl) {
-    notes.push("ENGINE_API_URL is missing.");
+    notes.push(
+      "ENGINE_API_URL is unset — the engine panel will refuse to start a run."
+    );
   }
 
   if (!env.token) {
-    notes.push("ENGINE_WEB_TOKEN is missing.");
+    notes.push(
+      "ENGINE_WEB_TOKEN is unset — the Worker would reject every request."
+    );
   }
 
   if (env.tokenLeakedIntoPublicEnv) {
     notes.push(
-      "NEXT_PUBLIC_ENGINE_WEB_TOKEN exists. Remove it from the environment."
+      "NEXT_PUBLIC_ENGINE_WEB_TOKEN is set. Delete it and restart — that prefix ships to the browser."
     );
   }
 
   if (probe?.status === "locked") {
-    notes.push("The bridge rejected authentication.");
+    notes.push(
+      "The engine is reachable but rejected ENGINE_WEB_TOKEN. Check the configured tokens."
+    );
   }
 
   if (probe?.status === "error") {
-    notes.push("The bridge request failed or timed out.");
+    notes.push(
+      "The Worker did not answer. Check the deployment URL or network connectivity."
+    );
   }
 
   if (ok) {
-    notes.push("The engine probe passed.");
-  }
-
-  if (!probe && env.apiUrl && env.token) {
-    notes.push("The probe did not produce a result.");
-  }
-
-  if (!isDev) {
-    // TEMPORARY: Detailed status only; never return the token or API headers.
-    return NextResponse.json(
-      { ok, env, probe, notes },
-      { status: ok ? 200 : 503 }
+    notes.push(
+      "Engine reachable and authenticated. Starting a run should work."
     );
   }
 
