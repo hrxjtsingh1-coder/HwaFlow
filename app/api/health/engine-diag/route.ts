@@ -20,6 +20,7 @@ export async function GET() {
     cf = {
       available: true,
       keyCount: cfKeys.length,
+      bindingNames: cfKeys.sort(),
       engineKeys: cfKeys.filter((k) => k.startsWith("ENGINE")).sort(),
       engineApiUrlLen: typeof env.ENGINE_API_URL === "string" ? env.ENGINE_API_URL.length : 0,
       engineWebTokenLen: typeof env.ENGINE_WEB_TOKEN === "string" ? env.ENGINE_WEB_TOKEN.length : 0,
@@ -31,9 +32,10 @@ export async function GET() {
 
   return NextResponse.json(
     {
-      stamp: "diag-2026-10-27-1",
+      stamp: "diag-2026-10-27-2",
       nodeEnv: process.env.NODE_ENV ?? null,
       processEnvKeyCount: keys.length,
+      processEnvKeys: keys.sort(),
       engineKeys: keys.filter((k) => k.startsWith("ENGINE")).sort(),
       engineApiUrlLen: (process.env.ENGINE_API_URL || "").length,
       engineWebTokenLen: (process.env.ENGINE_WEB_TOKEN || "").length,
