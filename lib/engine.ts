@@ -9,6 +9,7 @@
 import "server-only";
 
 import { retryDelaysMs, sleep } from "./async/retry";
+import { engineSetting } from "./engine-cloudflare-env";
 
 /** Missing configuration is not the engine failing; callers answer 503, not 502. */
 export class EngineConfigError extends Error {
@@ -18,9 +19,13 @@ export class EngineConfigError extends Error {
   }
 }
 
-function config() {
-  const apiUrl = (process.env.ENGINE_API_URL || "").replace(/\/$/, "");
-  const token = process.env.ENGINE_WEB_TOKEN || "";
+async function config() {
+  const [rawApiUrl, rawToken] = await Promise.all([
+    engineSetting("ENGINE_API_URL"),
+    engineSetting("ENGINE_WEB_TOKEN"),
+  ]);
+  const apiUrl = rawApiUrl.replace(/\/$/, "");
+  const token = rawToken;
   if (!apiUrl || !token) {
     throw new EngineConfigError(
       "The image engine isn't configured on this server. Set ENGINE_API_URL and ENGINE_WEB_TOKEN in .env.local (or the hosting dashboard), then restart. Open /api/health/engine to see which one is missing."
@@ -30,8 +35,8 @@ function config() {
 }
 
 /** Fails before any page is downloaded, so a misconfigured server costs one query. */
-export function assertEngineConfigured(): void {
-  config();
+export async function assertEngineConfigured(): Promise<void> {
+  await config();
 }
 
 /**
@@ -90,7 +95,7 @@ async function engineFetch(
   init: RequestInit = {},
   timeoutMs = DEFAULT_TIMEOUT_MS
 ): Promise<Response> {
-  const { apiUrl, token } = config();
+  const { apiUrl, token } = await config();
   const response = await fetch(`${apiUrl}${path}`, {
     ...init,
     headers: {

@@ -23,6 +23,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { engineEnvSnapshot } from "@/lib/engine-cloudflare-env";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -109,12 +110,11 @@ async function probeOnce(url: string, token: string): Promise<Probe> {
 export async function GET(request: Request) {
   const isDev = process.env.NODE_ENV !== "production";
 
-  const apiUrl = process.env.ENGINE_API_URL?.trim() ?? "";
-  const token = process.env.ENGINE_WEB_TOKEN?.trim() ?? "";
+  const { apiUrl, token, apiUrlSet, tokenSet } = await engineEnvSnapshot();
 
   const env = {
-    apiUrl: Boolean(apiUrl),
-    token: Boolean(token),
+    apiUrl: apiUrlSet,
+    token: tokenSet,
     tokenLeakedIntoPublicEnv: Boolean(process.env.NEXT_PUBLIC_ENGINE_WEB_TOKEN),
     purgeSupabaseOriginals: process.env.ENGINE_PURGE_SUPABASE_ORIGINALS === "1",
     strictAccess: process.env.ENGINE_STRICT_ACCESS === "1",

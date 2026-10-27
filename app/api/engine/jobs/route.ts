@@ -120,7 +120,7 @@ export async function POST(request: Request) {
   try {
     // Before downloading up to 80 MB of pages: a server without the two engine
     // variables should say so in milliseconds, not after the upload work.
-    assertEngineConfigured();
+    await assertEngineConfigured();
 
     const pages: Array<{ blob: Blob; mimeType: string }> = [];
     for (const row of stored) {
