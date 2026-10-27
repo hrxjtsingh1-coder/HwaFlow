@@ -30,11 +30,8 @@ type ImportSummary = {
   skipped: Array<{ page: number; reason: string }>;
 };
 
-// One-off: the real regions.json shape is owned by the Worker, which is not in
-// this repo, so the adapter in lib/engine-regions.ts accepts several spellings.
-// Log the first payload that actually arrives so it can be tightened, then
-// delete this block.
-let sampleLogged = false;
+// The real regions.json shape is owned by the Worker, which is not in this
+// repo, so the adapter in lib/engine-regions.ts accepts several spellings.
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requirePipelineViewer();
@@ -119,15 +116,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           reason: cause instanceof Error ? cause.message : "unreadable regions",
         });
         continue;
-      }
-
-      if (!sampleLogged && payload) {
-        sampleLogged = true;
-        try {
-          console.info("[engine] regions sample", JSON.stringify(payload).slice(0, 1200));
-        } catch {
-          /* unstringifiable payload: nothing worth logging */
-        }
       }
 
       const blocks = normaliseEngineRegions(payload, {

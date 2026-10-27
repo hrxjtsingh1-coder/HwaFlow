@@ -350,3 +350,33 @@ Then:
    **Save pages** → **Approve**.
 5. Keep `ENGINE_PURGE_SUPABASE_ORIGINALS` unset until migration 1 is pushed and
    you have decided that approval should delete the author's uploads.
+
+
+---
+
+## 12. Strict access mode (optional)
+
+`lib/engine-access.ts` resolves `jobId -> chapterId` (memoised 10 minutes) and
+then asks Postgres `can_view_chapter` / `can_manage_chapter`. By default an
+**RPC error** or an **unlinked job** is allowed with a warning, so a transient
+Supabase blip cannot blank the whole review panel. A definite `false` is always
+a 403.
+
+Set `ENGINE_STRICT_ACCESS=1` to require positive proof instead:
+
+| Situation | Default | Strict |
+|---|---|---|
+| RPC returns `true` | allow | allow |
+| RPC returns `false` | **403** | **403** |
+| RPC errors / missing | allow + log | **403** |
+| Job cannot be resolved | allow + log | **403** |
+| Job has no `chapterId` | allow + log | **403** |
+
+Turn it on only **after** `supabase db push` has applied the chapter helpers
+and the job-link migration, otherwise legacy jobs without a chapter link will
+be refused. The decision logic is isolated in `lib/engine-access-policy.ts`
+and covered by `lib/engine-access-policy.test.ts`.
+
+This is about *authorization*. Payload ceilings (40 pages / 80 MB, checked
+from `chapter_pages.byte_size` before any download) and the Worker-side
+80 MB batch guard are separate.

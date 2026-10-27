@@ -16,6 +16,10 @@ import "server-only";
 
 import { getEngineJob } from "@/lib/engine";
 import { createClient } from "@/lib/supabase/server";
+import { decideEngineAccess } from "@/lib/engine-access-policy";
+
+export { decideEngineAccess };
+export type { EngineAccessDecision } from "@/lib/engine-access-policy";
 
 export type EngineAccessLevel = "view" | "manage";
 
@@ -30,24 +34,13 @@ const chapterByJob = new Map<
   { chapterId: string | null; at: number }
 >();
 
-export type EngineAccessDecision = "allow" | "deny" | "allow-unverified";
-
 /**
- * A definite `false` from Postgres is a refusal. Anything else — a missing
- * function, a network blip — would take the whole panel down if we treated it
- * as one, so it allows and logs. That is never weaker than the unguarded
- * routes this replaced, and the destructive step (purging originals) is still
- * refused by `purge_chapter_originals()` in the database itself.
+ * Default policy: a definite `false` from Postgres is a refusal. Anything
+ * else — a missing function, a network blip — allows and logs (see
+ * lib/engine-access-policy.ts). With ENGINE_STRICT_ACCESS=1 the opposite
+ * applies: only a definite `true` is accepted. The destructive step
+ * (purging originals) is always refused by purge_chapter_originals() itself.
  */
-export function decideEngineAccess(
-  allowed: boolean | null,
-  roleError: { message: string } | null
-): EngineAccessDecision {
-  if (roleError) return "allow-unverified";
-  if (allowed === false) return "deny";
-  return "allow";
-}
-
 async function chapterForJob(jobId: string): Promise<string | null> {
   const cached = chapterByJob.get(jobId);
   if (cached) {
@@ -85,6 +78,21 @@ async function chapterForJob(jobId: string): Promise<string | null> {
 
 export type EngineAccess = { ok: true } | { ok: false; response: Response };
 
+function deny(level: EngineAccessLevel, message?: string): EngineAccess {
+  return {
+    ok: false,
+    response: Response.json(
+      {
+        error: "forbidden",
+        message: message ?? (level === "manage"
+          ? "Only an Owner or Manager can approve or discard engine results."
+          : "You don't have access to this chapter."),
+      },
+      { status: 403, headers: { "Cache-Control": "no-store" } }
+    ),
+  };
+}
+
 /**
  * Call after the session check in any route that takes an engine job id.
  * `view` gates GET/asset reads, `manage` gates approve and reject.
@@ -93,18 +101,24 @@ export async function assertEngineJobAccess(
   jobId: string,
   level: EngineAccessLevel
 ): Promise<EngineAccess> {
+  const strict = process.env.ENGINE_STRICT_ACCESS === "1";
+
   let chapterId: string | null;
   try {
     chapterId = await chapterForJob(jobId);
   } catch (cause) {
     // Unknown job, or the Worker is unreachable. There is nothing to authorize
     // yet; the route's own engine call will answer 404/502, which is the honest
-    // status for both cases.
+    // status for both cases. Strict mode refuses instead of guessing.
     console.warn("[engine] access check could not resolve the job:", cause);
+    if (strict) return deny(level, "This engine job could not be verified.");
     return { ok: true };
   }
 
-  if (!chapterId) return { ok: true };
+  if (!chapterId) {
+    if (strict) return deny(level, "This engine job has no linked chapter to authorize against.");
+    return { ok: true };
+  }
 
   try {
     const supabase = await createClient();
@@ -115,31 +129,18 @@ export async function assertEngineJobAccess(
 
     const decision = decideEngineAccess(
       typeof data === "boolean" ? data : null,
-      error ? { message: error.message } : null
+      error ? { message: error.message } : null,
+      strict
     );
 
-    if (decision === "deny") {
-      return {
-        ok: false,
-        response: Response.json(
-          {
-            error: "forbidden",
-            message:
-              level === "manage"
-                ? "Only an Owner or Manager can approve or discard engine results."
-                : "You don't have access to this chapter.",
-          },
-          { status: 403, headers: { "Cache-Control": "no-store" } }
-        ),
-      };
-    }
-
+    if (decision === "deny") return deny(level);
     if (decision === "allow-unverified") {
       console.warn("[engine] chapter access check skipped:", error?.message);
     }
     return { ok: true };
   } catch (cause) {
     console.warn("[engine] chapter access check unavailable:", cause);
+    if (strict) return deny(level, "Chapter access could not be verified.");
     return { ok: true };
   }
 }
