@@ -1737,6 +1737,8 @@
 }
 
 .cs-icon:hover:not(:disabled) {
+  background: var(--mint);
+  color: var(--mint-ink);
   translate: -2px -2px;
   box-shadow: var(--shadow-hard);
 }
@@ -1779,6 +1781,8 @@
 }
 
 .cs-btn:hover:not(:disabled):not([data-disabled="true"]) {
+  background: var(--mint);
+  color: var(--mint-ink);
   translate: -2px -2px;
   box-shadow: var(--shadow-hard);
 }
@@ -1799,6 +1803,11 @@
 .cs-btn[data-primary="true"] {
   background: var(--edge);
   color: var(--paper);
+}
+
+.cs-btn[data-primary="true"]:hover:not(:disabled) {
+  background: var(--mint);
+  color: var(--mint-ink);
 }
 
 .cs-btn[data-primary="true"]:disabled {
@@ -2328,7 +2337,7 @@
 }
 
 .cs-thumb:hover {
-  border-color: var(--edge);
+  border-color: var(--mint);
   background: var(--surface-2);
 }
 
