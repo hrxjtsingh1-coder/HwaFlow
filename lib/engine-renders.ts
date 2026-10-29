@@ -1,10 +1,9 @@
 /**
  * Where a finished engine page lives in the private `renders` bucket.
  *
- * `chapter_pages.original_path` is `{group}/{chapter}/{file}.webp` (see
- * `20261023122000_storage_buckets.sql`), and both the `pages` and `renders`
- * policies authorise on exactly those first two folders. The render therefore
- * has to keep the same prefix — only the file name changes.
+ * Original pages use `{group}/{chapter}/{file}.png` (legacy rows may be WebP),
+ * and both the `pages` and `renders` policies authorize on those first two
+ * folders. The render therefore keeps the same prefix; only its filename changes.
  *
  * The page id, not the original file name, is what makes the object unique:
  * re-uploading a panel can change its `original_path`, but its row id cannot,

@@ -1,6 +1,6 @@
 /** GET /api/engine/jobs/:id — status + page URLs for the workspace UI. */
 
-import { requirePipelineViewer } from "@/lib/pipeline-auth";
+import { requireEngineViewer } from "@/lib/engine-auth";
 import { getEngineJob, engineFailureResponse } from "@/lib/engine";
 import { assertEngineJobAccess } from "@/lib/engine-access";
 
@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requirePipelineViewer();
+  const auth = await requireEngineViewer();
   if (!auth.ok) return auth.response;
 
   const { id } = await params;

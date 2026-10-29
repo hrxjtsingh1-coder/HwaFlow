@@ -5,7 +5,7 @@
  * and deletes the engine's raw uploads + all intermediate images immediately.
  *
  * If ENGINE_PURGE_SUPABASE_ORIGINALS=1, it ALSO deletes the user's original
- * WebPs from the Supabase `pages` bucket and marks those rows purged — closing
+ * full-resolution originals from the Supabase `pages` bucket and marks those rows purged — closing
  * the loop on the "raw must not survive approval" requirement.
  *
  * Owner/Manager only: `assertEngineJobAccess(id, "manage")` reuses the same
@@ -13,7 +13,7 @@
  * use, so a direct URL cannot bypass it.
  */
 
-import { requirePipelineViewer } from "@/lib/pipeline-auth";
+import { requireEngineViewer } from "@/lib/engine-auth";
 import { createClient } from "@/lib/supabase/server";
 import { approveEngineJob, engineFailureResponse } from "@/lib/engine";
 import { assertEngineJobAccess } from "@/lib/engine-access";
@@ -22,7 +22,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requirePipelineViewer();
+  const auth = await requireEngineViewer();
   if (!auth.ok) return auth.response;
 
   const { id } = await params;
@@ -34,8 +34,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
 
     const job = await approveEngineJob(id);
 
-    // Best-effort: engine approval already succeeded, so a purge failure must
-    // never turn this into an error response.
+        // Best-effort: engine approval already succeeded, so a purge failure must
+        // never turn this into an error response.
     if (process.env.ENGINE_PURGE_SUPABASE_ORIGINALS === "1" && job.chapterId) {
       try {
         const supabase = await createClient();

@@ -6,7 +6,7 @@ import {
   SOURCE_LANGUAGES,
   SOURCE_LANGUAGE_LABELS,
   type SourceLanguage,
-} from "@/lib/ai/types";
+} from "@/lib/source-language";
 import {
   MAX_SERIES_DESCRIPTION,
   MAX_SERIES_GENRE,

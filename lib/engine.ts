@@ -10,6 +10,7 @@ import "server-only";
 
 import { retryDelaysMs, sleep } from "./async/retry";
 import { engineSetting } from "./engine-cloudflare-env";
+import { MAX_CHAPTER_PAGES } from "./engine-limits";
 
 /** Missing configuration is not the engine failing; callers answer 503, not 502. */
 export class EngineConfigError extends Error {
@@ -134,8 +135,6 @@ export type CreateEngineJobInput = {
   sourceLang: string;
   targetLang?: string;
   glossary?: Array<{ sourceTerm: string; targetTerm: string; category: string }>;
-  /** translations[enginePageIndex][blockIndex] = approved English text. */
-  translations?: string[][];
 };
 
 /** POST /v1/jobs — one multipart upload containing every page of the chapter. */
@@ -143,7 +142,9 @@ export async function createEngineJob(
   input: CreateEngineJobInput
 ): Promise<{ jobId: string; status: string; pageCount: number }> {
   if (input.pages.length === 0) throw new Error("This chapter has no uploaded pages.");
-  if (input.pages.length > 40) throw new Error("This bridge handles at most 40 pages per chapter.");
+  if (input.pages.length > MAX_CHAPTER_PAGES) {
+    throw new Error(`This bridge handles at most ${MAX_CHAPTER_PAGES} pages per chapter.`);
+  }
 
   const form = new FormData();
   form.set(
@@ -154,11 +155,14 @@ export async function createEngineJob(
       sourceLang: input.sourceLang,
       targetLang: input.targetLang || "en",
       glossary: input.glossary || [],
-      translations: input.translations || [],
+      translationMode: "gemini",
+      allowTranslationFallback: false,
     })
   );
   input.pages.forEach((page, index) => {
-    const extension = page.mimeType === "image/webp" ? "webp" : "png";
+    // Stored originals are PNG now. Only a genuine `.webp` object from an old
+    // chapter gets the legacy extension — everything else is PNG in, PNG out.
+    const extension = /^image\/webp$/i.test(page.mimeType) ? "webp" : "png";
     form.set(`page-${index}`, page.blob, `${String(index + 1).padStart(3, "0")}.${extension}`);
   });
 
@@ -188,16 +192,16 @@ export async function rejectEngineJob(jobId: string): Promise<EngineJob> {
 
 /**
  * A 5xx or a dropped connection is the Worker, not an answer: a cold start or a
- * restart while a 40-page chapter is being imported would otherwise show up as
+ * restart while a 20-page chapter is being imported would otherwise show up as
  * "that image is no longer available". 4xx is final and is returned at once — a
  * rejected job must not cost the caller a second of retries.
  */
-async function engineAssetFetch(path: string): Promise<Response> {
+async function engineAssetFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const delays = retryDelaysMs();
 
   for (let attempt = 0; ; attempt += 1) {
     try {
-      const response = await engineFetch(path);
+      const response = await engineFetch(path, init);
       if (response.status < 500 || attempt >= delays.length) return response;
       // Release the error body before retrying.
       await response.body?.cancel().catch(() => undefined);
@@ -212,11 +216,29 @@ async function engineAssetFetch(path: string): Promise<Response> {
 export async function proxyEngineAsset(
   jobId: string,
   kind: "raw" | "final" | "approved" | "clean" | "regions",
-  page: number
+  page: number,
+  /** Browser conditional headers, so a revalidation can short-circuit to 304. */
+  request?: Request
 ): Promise<Response> {
+  const inm = request?.headers.get("if-none-match");
   const response = await engineAssetFetch(
-    `/v1/jobs/${encodeURIComponent(jobId)}/${kind}/${page}`
+    `/v1/jobs/${encodeURIComponent(jobId)}/${kind}/${page}`,
+    inm ? { headers: { "if-none-match": inm } } : {}
   );
+
+  // A conditional hit still costs one upstream GET (we need the ETag) but
+  // transfers zero bytes to the browser. With `immutable` above, browsers
+  // normally never revalidate at all.
+  if (response.status === 304) {
+    const headers = new Headers();
+    const etag = response.headers.get("etag");
+    if (etag) headers.set("etag", etag);
+    headers.set(
+      "cache-control",
+      kind === "regions" ? "private, max-age=300" : "private, max-age=31536000, immutable"
+    );
+    return new Response(null, { status: 304, headers });
+  }
 
   if (!response.ok) {
     return Response.json(
@@ -227,6 +249,17 @@ export async function proxyEngineAsset(
   const headers = new Headers();
   const contentType = response.headers.get("content-type");
   headers.set("content-type", contentType || (kind === "regions" ? "application/json" : "image/png"));
-  headers.set("cache-control", "private, max-age=300");
+  const etag = response.headers.get("etag");
+  if (etag) headers.set("etag", etag);
+
+  // Engine assets are immutable: the URL is (job id, kind, page index) and the
+  // bytes at that key are written once and never changed. The old 5-minute
+  // `max-age=300` meant a 20-page chapter re-downloaded all 20 full-resolution
+  // PNGs every five minutes — a large part of the B2 Class B bill. Regions JSON
+  // is small and re-read only on import, so it keeps a short TTL.
+  headers.set(
+    "cache-control",
+    kind === "regions" ? "private, max-age=300" : "private, max-age=31536000, immutable"
+  );
   return new Response(await response.arrayBuffer(), { status: 200, headers });
 }

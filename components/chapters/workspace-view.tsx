@@ -13,10 +13,8 @@ import { signOut } from "@/lib/auth";
 import { titlePayload } from "@/lib/chapters-format";
 import {
   canEditChapter,
-  ChapterError,
   type Chapter,
   type ChapterStatus,
-  type IncomingBlock,
   type TextBlock,
 } from "@/lib/chapters";
 import {
@@ -24,26 +22,19 @@ import {
   deleteChapterAction,
   registerPanelsAction,
   setChapterStatusAction,
-  setPanelBlocksAction,
-  updateBlockPipelineTextAction,
   updateBlockTextAction,
   updateChapterDetailsAction,
 } from "@/lib/chapter-actions";
-import { upsertAutoGlossaryTermsAction } from "@/lib/glossary-actions";
-import { compressPanel, PanelImageError } from "@/lib/panel-image";
+import { preparePanel, PanelImageError } from "@/lib/panel-image";
 import {
-  activeRunChapterId,
-  cancelRun,
-  retryFailed,
-  startRun,
-  type PipelineContext,
-  type RunState,
-} from "@/lib/pipeline";
+  limitUploadBatch,
+  pageObjectName,
+  PAGE_MIME_TYPE,
+} from "@/lib/engine-limits";
 import { canManageSeries } from "@/lib/series";
 import type { WorkspaceBundle, WorkspacePanel } from "@/lib/server/chapters";
 import type { AuthUser } from "@/lib/identity";
 import { createClient } from "@/lib/supabase/client";
-import { usePipeline } from "@/lib/use-pipeline";
 import { DashboardRail } from "../dashboard/dashboard-rail";
 import { DashboardTopbar } from "../dashboard/dashboard-topbar";
 import { workspaceLinks } from "../dashboard/workspace-nav";
@@ -58,41 +49,24 @@ import {
   Play,
   Stamp,
 } from "../icons";
-import { BlockEditor } from "./block-editor";
 import { EnginePanel } from "./engine-panel";
 import { ChapterRail, type RailTab } from "./chapter-rail";
 import { ChapterStatusChip } from "./chapter-status-dot";
 import { DeleteChapterDialog } from "./delete-chapter-dialog";
 import { GlossaryPanel } from "./glossary-panel";
-import { PanelViewer } from "./panel-viewer";
 import type { UploadProgress } from "./panel-dropzone";
 import { RejectChapterDialog } from "./reject-chapter-dialog";
+import { TextReview } from "./text-review";
 import { Tooltip } from "../tooltip";
 
 const PREFS_KEY = "hwaflow.workspace.prefs.v1";
 
 type Notice = { tone: "success" | "error"; text: string };
 
-const IDLE_RUN: RunState = {
-  running: false,
-  stage: "done",
-  totalPanels: 0,
-  extracted: 0,
-  batchIndex: 1,
-  batchCount: 1,
-  panels: {},
-  error: null,
-};
-
 /**
- * The chapter workspace.
- *
- * Three columns behind the collapsed main rail: chapters + glossary on the
- * left, the translated text in the middle, the raw art on the right. The
- * pipeline is client-driven; this component is the only place that starts it.
- *
- * The initial snapshot comes from the server; local state mirrors it so edits
- * and a run's progressive text land without a full page refresh.
+ * The chapter workspace: a chapter/glossary rail, a XianScan image studio,
+ * and an editable review of imported text. HwaFlow does not run a separate
+ * translation pipeline; engine text is kept in the editor for human review.
  */
 type WorkspaceViewProps = {
   viewer: AuthUser;
@@ -101,8 +75,6 @@ type WorkspaceViewProps = {
 
 export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
   const router = useRouter();
-  const live = usePipeline();
-
   const [chapter, setChapter] = useState<Chapter | null>(bundle?.chapter ?? null);
   const [seriesChapters, setSeriesChapters] = useState<Chapter[]>(
     bundle?.chapters ?? []
@@ -300,15 +272,14 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
   const canEdit = canEditChapter(member.role, assigned);
   const canManage = canManageSeries(member.role);
   const canCreate = canManage || member.role === "staff";
-  const run = activeRunChapterId() === chapter.id ? live : IDLE_RUN;
   const activeBlockId = hoveredBlockId ?? pinnedBlockId;
 
   const status = chapter.status;
   const canSubmit = canEdit && (status === "ready" || status === "rejected");
   const canApprove = canManage && status === "submitted";
   const canReopen = canManage && status === "approved";
-  const canMarkReady =
-    canEdit && status === "processing" && !run.running;
+  const canMarkReady = canEdit && status === "processing";
+  const canUpload = canEdit && status !== "submitted" && status !== "approved";
 
   const panelsWithText = panels.some((panel) =>
     allBlocks.some(
@@ -317,25 +288,12 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
     )
   );
 
-  let canRunReason: string | null = null;
-  if (!canEdit) canRunReason = "You don't have access to run this chapter.";
-  else if (panels.length === 0) canRunReason = "Upload a panel first.";
-  else if (status === "submitted")
-    canRunReason = "This chapter is awaiting review.";
-  else if (status === "approved")
-    canRunReason = "Reopen this chapter before running it again.";
-
-  const canRun = canRunReason === null && !run.running;
-
-  const runStageHint = run.running
-    ? run.stage === "extract"
-      ? "Extracting…"
-      : run.stage === "translate"
-        ? "Translating…"
-        : run.stage === "proofread"
-          ? "Proofreading…"
-          : null
-    : null;
+  let engineRunReason: string | null = null;
+  if (!canEdit) engineRunReason = "You don't have access to run this chapter.";
+  else if (panels.length === 0) engineRunReason = "Upload a page first.";
+  else if (status === "submitted") engineRunReason = "This chapter is awaiting review.";
+  else if (status === "approved") engineRunReason = "Reopen this chapter before running it again.";
+  const canRunEngine = engineRunReason === null;
 
   const trail = [
     { label: "Workspace" },
@@ -386,223 +344,144 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
     router.refresh();
   };
 
-  const pipelineContext = (): PipelineContext => ({
-    chapter,
-    panels,
-    blocks: allBlocks,
-    series: {
-      title: series.title,
-      description: null,
-      language: series.language,
-    },
-    glossary: terms.map((term) => ({
-      sourceTerm: term.sourceTerm,
-      targetTerm: term.targetTerm,
-      category: term.category,
-    })),
-    readPanelImage: async (panelId) => {
-      const panel = panels.find((entry) => entry.id === panelId);
-      if (!panel?.imageUrl) return null;
-      try {
-        const response = await fetch(panel.imageUrl);
-        return response.ok ? await response.blob() : null;
-      } catch {
-        return null;
-      }
-    },
-    setPanelBlocks: async (panelId, incoming) => {
-      const result = await setPanelBlocksAction({
-        chapterId: chapter.id,
-        panelId,
-        blocks: incoming,
-      });
-      if (!result.ok)
-        throw new ChapterError(
-          result.code === "signed-out" ? "forbidden" : result.code,
-          result.message
-        );
-      setAllBlocks((current) => [
-        ...current.filter((block) => block.panelId !== panelId),
-        ...result.data,
-      ]);
-      return result.data;
-    },
-    updateBlockPipelineText: async (updates) => {
-      const result = await updateBlockPipelineTextAction({
-        chapterId: chapter.id,
-        updates,
-      });
-      if (!result.ok)
-        throw new ChapterError(
-          result.code === "signed-out" ? "forbidden" : result.code,
-          result.message
-        );
-
-      const byId = new Map(updates.map((update) => [update.blockId, update]));
-      setAllBlocks((current) =>
-        current.map((block) => {
-          const update = byId.get(block.id);
-          if (!update) return block;
-          return {
-            ...block,
-            baseTranslation: update.baseTranslation ?? block.baseTranslation,
-            finalText: update.finalText ?? block.finalText,
-          };
-        })
-      );
-    },
-    setChapterStatus: async (next, note) => {
-      const result = await setChapterStatusAction({
-        chapterId: chapter.id,
-        next,
-        note: note ?? null,
-      });
-      if (!result.ok)
-        throw new ChapterError(
-          result.code === "signed-out" ? "forbidden" : result.code,
-          result.message
-        );
-      setChapter((current) =>
-        current ? { ...current, status: next } : current
-      );
-    },
-    upsertAutoTerms: async (detected) => {
-      await upsertAutoGlossaryTermsAction({
-        seriesId: series.id,
-        chapterId: chapter.id,
-        terms: detected,
-      });
-    },
-    onBlocks: (panelId, updated) => {
-      setAllBlocks((current) => [
-        ...current.filter((block) => block.panelId !== panelId),
-        ...updated,
-      ]);
-    },
-  });
-
-  const handleRun = async () => {
-    try {
-      await startRun(pipelineContext());
-      router.refresh();
-    } catch (error) {
-      notify(
-        "error",
-        error instanceof ChapterError
-          ? error.message
-          : "Couldn't start the run."
-      );
-    }
-  };
-
-  const handleRetry = async () => {
-    try {
-      await retryFailed(pipelineContext());
-      router.refresh();
-    } catch (error) {
-      notify(
-        "error",
-        error instanceof ChapterError
-          ? error.message
-          : "Couldn't retry the run."
-      );
-    }
-  };
-
   const handleUpload = async (files: File[]) => {
-    if (uploadBusy || files.length === 0) return;
+    if (!canUpload || uploadBusy || files.length === 0) return;
+
+    const existingBytes = panels.reduce((sum, panel) => sum + panel.byteSize, 0);
+    const intake = limitUploadBatch(
+      files.map((file) => ({ name: file.name, size: file.size })),
+      { pages: panels.length, bytes: existingBytes }
+    );
+    let budgetWarning = intake.reason;
+    const candidates = intake.acceptedIndexes.map((index) => files[index]);
+    if (candidates.length === 0) {
+      if (budgetWarning) notify("error", budgetWarning);
+      return;
+    }
+
     setUploadBusy(true);
     setUploadErrors([]);
-
     const prepared: Array<{
       file: File;
       blob: Blob;
       width: number;
       height: number;
       byteSize: number;
+      mimeType: string;
+      extension: string;
     }> = [];
     const failures: Array<{ file: File; message: string }> = [];
 
-    for (let index = 0; index < files.length; index += 1) {
-      setUploadProgress({ current: index, total: files.length });
-      try {
-        const compressed = await compressPanel(files[index]);
-        prepared.push({ file: files[index], ...compressed });
-      } catch (error) {
-        failures.push({
-          file: files[index],
-          message:
-            error instanceof PanelImageError
-              ? error.message
-              : "We couldn't read that image.",
-        });
+    try {
+      for (let index = 0; index < candidates.length; index += 1) {
+        const file = candidates[index];
+        setUploadProgress({ current: index, total: candidates.length });
+        try {
+          const page = await preparePanel(file);
+          prepared.push({ file, ...page });
+        } catch (error) {
+          failures.push({
+            file,
+            message:
+              error instanceof PanelImageError
+                ? error.message
+                : "We couldn't read that image.",
+          });
+        }
       }
-    }
-    setUploadProgress(null);
 
-    if (prepared.length > 0) {
-      const supabase = createClient();
-      const uploadedPaths: string[] = [];
-      const registered: Array<{
-        id: string;
-        index: number;
-        path: string;
-        width: number;
-        height: number;
-        byteSize: number;
-      }> = [];
+      // JPEG/WebP files become lossless PNGs at the same pixel dimensions. Check
+      // the resulting PNG byte sizes too, before uploading anything to Storage.
+      const preparedBudget = limitUploadBatch(
+        prepared.map((page) => ({ name: page.file.name, size: page.byteSize })),
+        { pages: panels.length, bytes: existingBytes }
+      );
+      if (preparedBudget.reason) {
+        budgetWarning = [budgetWarning, preparedBudget.reason].filter(Boolean).join(" ");
+      }
+      const acceptedPrepared = new Set(preparedBudget.acceptedIndexes);
+      prepared.forEach((page, index) => {
+        if (!acceptedPrepared.has(index)) {
+          failures.push({
+            file: page.file,
+            message: preparedBudget.reason ?? "That page is over the chapter upload limit.",
+          });
+        }
+      });
+      const pagesToUpload = prepared.filter((_page, index) => acceptedPrepared.has(index));
 
-      let nextIndex = panels.length;
+      if (pagesToUpload.length > 0) {
+        const supabase = createClient();
+        const uploadedPaths: string[] = [];
+        const registered: Array<{
+          id: string;
+          index: number;
+          path: string;
+          width: number;
+          height: number;
+          byteSize: number;
+        }> = [];
+        let nextIndex = panels.length;
 
-      for (const panel of prepared) {
-        const id = crypto.randomUUID();
-        const path = `${group.id}/${chapter.id}/${id}.webp`;
-        const { error } = await supabase.storage
-          .from("pages")
-          .upload(path, panel.blob, {
-            contentType: "image/webp",
+        for (const page of pagesToUpload) {
+          const id = crypto.randomUUID();
+          const path = `${group.id}/${chapter.id}/${pageObjectName(id)}`;
+          const { error } = await supabase.storage.from("pages").upload(path, page.blob, {
+            contentType: PAGE_MIME_TYPE,
             upsert: false,
           });
 
-        if (error) {
-          failures.push({ file: panel.file, message: error.message });
-          continue;
+          if (error) {
+            failures.push({ file: page.file, message: error.message });
+            continue;
+          }
+
+          uploadedPaths.push(path);
+          registered.push({
+            id,
+            index: nextIndex,
+            path,
+            width: page.width,
+            height: page.height,
+            byteSize: page.byteSize,
+          });
+          nextIndex += 1;
         }
 
-        uploadedPaths.push(path);
-        registered.push({
-          id,
-          index: nextIndex,
-          path,
-          width: panel.width,
-          height: panel.height,
-          byteSize: panel.byteSize,
-        });
-        nextIndex += 1;
-      }
+        if (registered.length > 0) {
+          const result = await registerPanelsAction({
+            chapterId: chapter.id,
+            panels: registered,
+          });
 
-      if (registered.length > 0) {
-        const result = await registerPanelsAction({
-          chapterId: chapter.id,
-          panels: registered,
-        });
-
-        if (!result.ok) {
-          await supabase.storage.from("pages").remove(uploadedPaths);
-          notify("error", result.message);
-        } else {
-          const added = result.data.registered;
-          notify(
-            "success",
-            `${added} panel${added === 1 ? "" : "s"} added.`
-          );
-          router.refresh();
+          if (!result.ok) {
+            await supabase.storage.from("pages").remove(uploadedPaths);
+            notify("error", result.message);
+          } else {
+            const added = result.data.registered;
+            const detail = budgetWarning ? ` ${budgetWarning}` : "";
+            notify(
+              "success",
+              `${added} page${added === 1 ? "" : "s"} added at full resolution.${detail}`
+            );
+            router.refresh();
+          }
+        } else if (budgetWarning) {
+          notify("error", budgetWarning);
         }
+      } else if (budgetWarning) {
+        notify("error", budgetWarning);
       }
+    } catch (error) {
+      notify(
+        "error",
+        error instanceof Error ? error.message : "Couldn't upload those pages."
+      );
+    } finally {
+      setUploadProgress(null);
+      setUploadBusy(false);
+      if (failures.length > 0) setUploadErrors(failures);
     }
-
-    setUploadBusy(false);
-    if (failures.length > 0) setUploadErrors(failures);
   };
 
   const handleCreateChapter = async () => {
@@ -763,10 +642,10 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
             <p className="eyebrow">Workspace</p>
             <h1 className="ch-mobile-title">Turn on Desktop mode</h1>
             <p className="ch-mobile-copy">
-              This workspace is three columns — chapters and glossary, English
-              text, raw panels — so it needs a desktop-width screen. On a phone
-              or tablet, turn on Desktop mode and this chapter opens ready to
-              edit. On a computer, widen the window.
+              This workspace pairs the chapter rail with a full-size image studio
+              and editable text review, so it needs a desktop-width screen. On a
+              phone or tablet, turn on Desktop mode. On a computer, widen the
+              window for side-by-side page review.
             </p>
             <ul className="ch-mobile-steps">
               <li>Chrome, Edge, Firefox: menu ⋮ → Desktop site</li>
@@ -880,7 +759,7 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
                   ) : null}
 
                   {canMarkReady ? (
-                    <Tooltip label="Use this if a run was interrupted by a closed tab.">
+                    <Tooltip label="Clear a chapter left in the legacy processing state before review.">
                       <button
                         type="button"
                         className="btn btn-ghost btn-sm"
@@ -897,7 +776,7 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
                       label={
                         panelsWithText
                           ? "Send this chapter to a Manager for review"
-                          : "Translate at least one panel before submitting."
+                          : "Import or write at least one line before submitting."
                       }
                     >
                       <button
@@ -947,74 +826,20 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
                 </div>
               </div>
 
-              <EnginePanel
-                chapterId={chapter.id}
-                initialJobId={chapter.engineJobId ?? null}
-                hasRenders={panels.some((panel) => panel.hasRender)}
-                canApprove={canManage}
-              />
-
-              {uploadErrors.length > 0 ? (
-                <div className="ch-upload-errors" role="alert">
-                  {uploadErrors.map((failure) => (
-                    <div className="ch-upload-error" key={failure.file.name}>
-                      <span>
-                        <strong>{failure.file.name}</strong> — {failure.message}
-                      </span>
-                      <button
-                        type="button"
-                        className="ch-upload-retry"
-                        onClick={() => handleUpload([failure.file])}
-                      >
-                        Retry
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-
-              <Isolate label="The text editor">
-                <BlockEditor
-                  panel={currentPanel}
-                  panelIndex={panelIndex}
-                  panelCount={panels.length}
-                  blocks={blocks}
-                  editable={canEdit}
-                  activeBlockId={activeBlockId}
-                  onActiveBlock={setHoveredBlockId}
-                  onPinBlock={(blockId) =>
-                    setPinnedBlockId((current) =>
-                      current === blockId ? null : blockId
-                    )
-                  }
-                  onSaveBlock={saveBlock}
-                  onPrev={goPrevPanel}
-                  onNext={goNextPanel}
-                  running={run.running}
-                  stageHint={runStageHint}
-                  hasPanels={panels.length > 0}
-                  panelState={
-                    currentPanel ? run.panels[currentPanel.id] : undefined
-                  }
-                  onRetry={handleRetry}
-                />
-              </Isolate>
-            </section>
-
-            <aside className="ws-viewer">
-              <Isolate label="The panel viewer">
-                <PanelViewer
-                  panel={currentPanel}
-                  panelIndex={panelIndex}
-                  panelCount={panels.length}
+              <Isolate label="The XianScan image studio">
+                <EnginePanel
+                  chapterId={chapter.id}
+                  initialJobId={chapter.engineJobId ?? null}
+                  panels={panels}
+                  pageIndex={panelIndex}
+                  onPageChange={setPanelIndex}
                   blocks={blocks}
                   activeBlockId={activeBlockId}
-                  run={run}
-                  canRun={canRun}
-                  canRunReason={canRunReason}
-                  onRun={handleRun}
-                  onCancel={cancelRun}
-                  onRetry={handleRetry}
+                  canEdit={canEdit}
+                  canUpload={canUpload}
+                  canRun={canRunEngine}
+                  canRunReason={engineRunReason}
+                  canApprove={canManage}
                   onUpload={handleUpload}
                   uploadBusy={uploadBusy}
                   uploadProgress={uploadProgress}
@@ -1027,14 +852,52 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
                         JSON.stringify({ showBoxes: next })
                       );
                     } catch {
-                      // Preferences are a nicety; ignore a full quota.
+                      // Preferences are optional; ignore a full quota.
                     }
                   }}
-                  onPrevPanel={goPrevPanel}
-                  onNextPanel={goNextPanel}
                 />
               </Isolate>
-            </aside>
+
+              {uploadErrors.length > 0 ? (
+                <div className="ch-upload-errors" role="alert">
+                  {uploadErrors.map((failure, index) => (
+                    <div className="ch-upload-error" key={`${failure.file.name}-${index}`}>
+                      <span>
+                        <strong>{failure.file.name}</strong> — {failure.message}
+                      </span>
+                      <button
+                        type="button"
+                        className="ch-upload-retry"
+                        onClick={() => handleUpload([failure.file])}
+                        disabled={!canUpload || uploadBusy}
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              <Isolate label="Editable imported text">
+                <TextReview
+                  panel={currentPanel}
+                  panelIndex={panelIndex}
+                  panelCount={panels.length}
+                  blocks={blocks}
+                  sourceLanguage={series.language}
+                  editable={canEdit}
+                  activeBlockId={activeBlockId}
+                  onActiveBlock={setHoveredBlockId}
+                  onPinBlock={(blockId) =>
+                    setPinnedBlockId((current) =>
+                      current === blockId ? null : blockId
+                    )
+                  }
+                  onSaveBlock={saveBlock}
+                />
+              </Isolate>
+            </section>
+
           </div>
         </main>
       </div>

@@ -11,7 +11,7 @@
 
 import "server-only";
 
-import type { SourceLanguage } from "../ai/types";
+import type { SourceLanguage } from "../source-language";
 import type {
   Chapter,
   ChapterStatus,

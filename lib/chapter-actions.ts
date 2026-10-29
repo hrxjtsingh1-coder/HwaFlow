@@ -15,9 +15,7 @@ import type {
   Chapter,
   ChapterFailure,
   ChapterStatus,
-  IncomingBlock,
   Panel,
-  TextBlock,
 } from "./chapters";
 import {
   cleanChapterTitle,
@@ -26,13 +24,14 @@ import {
   validateChapterNumber,
 } from "./chapters";
 import { classifyDbError, messageForDbError } from "./errors";
-import { getViewer } from "./session";
 import {
-  mapChapterRow,
-  mapTextBlockRow,
-  type ChapterRow,
-  type TextBlockRow,
-} from "./server/chapters";
+  MAX_CHAPTER_BYTES,
+  MAX_CHAPTER_PAGES,
+  MAX_PAGE_BYTES,
+  formatMB,
+} from "./engine-limits";
+import { getViewer } from "./session";
+import { mapChapterRow, type ChapterRow } from "./server/chapters";
 import { createClient } from "./supabase/server";
 import { createAdminClient } from "./supabase/admin";
 
@@ -318,76 +317,6 @@ export async function updateBlockTextAction(input: {
   return { ok: true, data: { blockId: input.blockId, finalText } };
 }
 
-export async function setPanelBlocksAction(input: {
-  chapterId: string;
-  panelId: string;
-  blocks: IncomingBlock[];
-}): Promise<ChapterActionResult<TextBlock[]>> {
-  const auth = await requireViewer();
-  if (!auth.ok) return auth.result;
-
-  if (!isUuid(input.chapterId) || !isUuid(input.panelId)) {
-    return failure("not-found", "That panel no longer exists.");
-  }
-
-  const supabase = await createClient();
-  const { error } = await supabase.rpc("set_panel_blocks", {
-    p_chapter_id: input.chapterId,
-    p_page_id: input.panelId,
-    p_blocks: input.blocks.map((block) => ({
-      index: block.index,
-      sourceText: block.sourceText,
-      baseTranslation: block.baseTranslation ?? "",
-      finalText: block.finalText ?? "",
-      bbox: block.bbox ?? null,
-      confidence: block.confidence ?? null,
-    })),
-  });
-
-  if (error) return fromDbError(error, "Couldn't save extracted text.");
-
-  const { data, error: readError } = await supabase
-    .from("text_blocks")
-    .select(
-      "id, page_id, chapter_id, block_index, bbox, source_text, base_translation, final_text, confidence, is_edited, edited_by, edited_at"
-    )
-    .eq("page_id", input.panelId)
-    .order("block_index", { ascending: true });
-
-  if (readError) return fromDbError(readError, "Couldn't read that text.");
-
-  return {
-    ok: true,
-    data: ((data ?? []) as unknown as TextBlockRow[]).map(mapTextBlockRow),
-  };
-}
-
-export async function updateBlockPipelineTextAction(input: {
-  chapterId: string;
-  updates: Array<{
-    blockId: string;
-    baseTranslation?: string;
-    finalText?: string;
-  }>;
-}): Promise<ChapterActionResult<null>> {
-  const auth = await requireViewer();
-  if (!auth.ok) return auth.result;
-
-  if (!isUuid(input.chapterId)) {
-    return failure("not-found", "That chapter no longer exists.");
-  }
-
-  const supabase = await createClient();
-  const { error } = await supabase.rpc("update_block_pipeline_text", {
-    p_chapter_id: input.chapterId,
-    p_updates: input.updates,
-  });
-
-  if (error) return fromDbError(error, "Couldn't save the translation.");
-
-  return { ok: true, data: null };
-}
-
 /* ------------------------------------------------------------------ */
 /* Panels                                                              */
 /* ------------------------------------------------------------------ */
@@ -428,9 +357,73 @@ export async function registerPanelsAction(input: {
     ) {
       return failure("unknown", "One of those panels could not be registered.");
     }
+    if (panel.byteSize > MAX_PAGE_BYTES) {
+      return failure(
+        "unknown",
+        `One page is over ${formatMB(MAX_PAGE_BYTES)}. The engine cannot accept it.`
+      );
+    }
+    // Stored originals are PNG now, whatever the upload started as. Catch a
+    // client that skipped (or broke) the browser-side conversion here, so the
+    // bucket never receives a WebP object with a `.png` name.
+    if (typeof panel.path === "string" && !panel.path.toLowerCase().endsWith(".png")) {
+      return failure(
+        "unknown",
+        "Pages must be stored as PNG at full resolution. Reload the page and try that upload again."
+      );
+    }
   }
 
   const supabase = await createClient();
+
+  // Client-side caps are friendly, not authoritative: a second tab can upload
+  // at the same time, and register_panels can be called directly. Count what
+  // the DATABASE already has. The SQL migration adds a trigger as a backstop,
+  // but this check works even on a deployment that has not run it yet.
+  const { count: existingCount, error: countError } = await supabase
+    .from("chapter_pages")
+    .select("id", { count: "exact", head: true })
+    .eq("chapter_id", input.chapterId);
+  if (countError) return fromDbError(countError, "Couldn't check the page count.");
+
+  const { data: sizeRows, error: sizeError } = await supabase
+    .from("chapter_pages")
+    .select("byte_size")
+    .eq("chapter_id", input.chapterId);
+  if (sizeError) return fromDbError(sizeError, "Couldn't check the chapter size.");
+
+  const existing = existingCount ?? 0;
+  // Re-registering a batch after a partial failure is safe: those IDs already
+  // exist and must not count twice.
+  const incomingIds = input.panels.map((panel) => panel.id);
+  const { data: duplicateRows, error: duplicateError } = await supabase
+    .from("chapter_pages")
+    .select("id")
+    .in("id", incomingIds);
+  if (duplicateError) {
+    return fromDbError(duplicateError, "Couldn't verify whether those pages were already registered.");
+  }
+  const known = new Set((duplicateRows || []).map((row) => row.id));
+  const genuinelyNew = input.panels.filter((panel) => !known.has(panel.id));
+
+  if (existing + genuinelyNew.length > MAX_CHAPTER_PAGES) {
+    return failure(
+      "unknown",
+      `A chapter holds at most ${MAX_CHAPTER_PAGES} pages. Delete a page before adding another.`
+    );
+  }
+  const existingBytes = (sizeRows || []).reduce(
+    (sum, row) => sum + (Number(row.byte_size) || 0),
+    0
+  );
+  const newBytes = genuinelyNew.reduce((sum, panel) => sum + panel.byteSize, 0);
+  if (existingBytes + newBytes > MAX_CHAPTER_BYTES) {
+    return failure(
+      "unknown",
+      `The chapter would exceed the ${formatMB(MAX_CHAPTER_BYTES)} engine limit. Split it into two chapters.`
+    );
+  }
+
   const { data, error } = await supabase.rpc("register_panels", {
     p_chapter_id: input.chapterId,
     p_panels: input.panels,

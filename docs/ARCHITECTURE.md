@@ -1,11 +1,12 @@
 # HwaFlow — Manhwa Translation Platform
 
-> **Status:** In build. Landing, auth, workspace and the groups delivery (admin console
-> + member settings) are complete.
-> **Build mode:** Page-by-page. The user names a page; we build that page fully, then move on.
-> **Last updated:** 2026-10-23
-> **Next up:** Series module (tiles grid, create/edit, assignments). The groups build
-> spec and decision record stays at [`docs/GROUPS-PAGE.md`](GROUPS-PAGE.md).
+> **Current status (2026-10-28):** The chapter workspace uses XianScan as its sole
+> image-processing and translation engine. The site-side Gemini pipeline described
+> in older decision-log entries is retired. Current chapter details are in
+> [`docs/engine-integration.md`](engine-integration.md).
+> **Last updated:** 2026-10-28
+> **Scope:** This document remains the architecture and page-inventory reference;
+> dated entries in the decision log are historical unless reaffirmed below.
 
 This document is the single source of truth for architecture, decisions, and the page
 inventory. Read it before building anything.
@@ -19,10 +20,11 @@ inventory. Read it before building anything.
 
 A multi-tenant **scanlation operations platform**. Not a reader, not a manga site.
 
-Groups own series → series own chapters → chapters get raw panel uploads → an
-OCR + translate + localize pipeline returns structured English bubble text → staff
-refine it in a side-by-side workspace → Managers/Owners approve → a dashboard tracks
-per-member earnings and the weekly release calendar.
+Groups own series → series own chapters → staff upload original page images →
+XianScan processes them and returns images and regions → HwaFlow presents the
+before/after studio and editable imported text → Managers/Owners approve → a
+dashboard tracks per-member earnings and the weekly release calendar. HwaFlow does
+not run its own Gemini text pipeline or feed existing text back into XianScan.
 
 **Explicitly not in scope:** typesetting, image redrawing/inpainting, payment
 processing, public reading audience, reader accounts, comments/community.
@@ -38,15 +40,15 @@ processing, public reading audience, reader accounts, comments/community.
 | Auth | Username + password. No OAuth, no email flows, no email verification |
 | Invites | Owner/Manager invites **existing** platform users by username only |
 | Source languages | Korean, Japanese, Chinese → English |
-| Pipeline | OCR → base translation → second LLM localization/proofreading pass |
-| Processing UX | Async per-chapter job with progress bar; job survives page refresh |
-| Workspace | Side-by-side page image + linked bubble list; editing optional, not a submission gate |
-| Consistency | Full suite: per-series glossary, per-bubble retranslate, term-suggestion pass |
+| Chapter engine | XianScan only. HwaFlow sends original pages, source language and active glossary; it sends no imported/editable text or fallback. XianScan's Gemini provider stays on the engine. |
+| Processing UX | Async XianScan job with progress; the chapter retains its engine-job link across reloads. |
+| Workspace | Chapter rail + before/after image studio + editable imported-text review. |
+| Consistency | Per-series glossary; imported text remains human-editable and edited translations survive re-import. |
 | Chapter approval | Fully reversible; any Manager/Owner can move a chapter back a state |
 | Credits | **Derived** from approved chapters × per-series rate. Never stored as a running total |
 | Credits visibility | Dashboard shows "money earned this month" + chapters translated |
 | Release schedule | Multiple weekdays per series; weekly calendar; click a day → that day's series |
-| Storage | Purge page originals on approval by default, behind a **swappable retention policy** |
+| Storage | Full-resolution originals are retained by default; engine approval purges Supabase originals only when explicitly enabled and authorized. |
 | UI | Pastel light theme + dark theme. Desktop-first workspace; mobile shows a "best viewed on desktop" notice |
 | Admin console v1 | Groups + users only: create group, assign/change Owner, list users, deactivate user |
 | Credentials | **No credit card anywhere.** Free tiers only |
@@ -87,12 +89,12 @@ processing, public reading audience, reader accounts, comments/community.
 | Layer | Choice |
 |---|---|
 | Frontend | Next.js (App Router), TypeScript, React |
-| Backend (AI/image) | Next.js route handlers under `app/api/pipeline/`. Python/FastAPI remains the long-term plan for heavy image work but is deferred; no second deploy or CORS in this build. |
+| Backend (AI/image) | Next.js route handlers under `app/api/engine/jobs/**` bridge to the deployed XianScan service. No HwaFlow-side Gemini translation pipeline. |
 | Database | Supabase Postgres (free tier) |
 | Auth | Supabase Auth, username→synthetic-email mapping |
 | File storage | Supabase Storage |
-| OCR | Pluggable provider interface |
-| Translation | Pluggable provider interface |
+| OCR | XianScan service; HwaFlow sends original page images and source language. |
+| Translation | XianScan's Gemini provider; HwaFlow sets Gemini mode and disables translation fallback. |
 
 ### Proposed defaults (override freely)
 | Layer | Proposal | Why |
@@ -104,57 +106,44 @@ processing, public reading audience, reader accounts, comments/community.
 | Backend packaging | Deferred: current build is Next route handlers; FastAPI + Pydantic + Pillow only if heavy image work arrives | Minimal, free-tier friendly |
 | Job execution | DB-backed job table polled by an in-process async worker | Avoids paid Redis/queue services |
 
-### Provider strategy (important)
-OCR and translation are **interfaces**, not hard-coded services. The shapes below are
-language-neutral; the reference implementation is TypeScript in `lib/ai/types.ts`
-(`OCRProvider`, `Translator`), and the Gemini implementation sits behind them.
-
-```python
-class OCRProvider(Protocol):
-    async def extract(self, image_bytes: bytes, lang: str) -> list[OCRBlock]: ...
-
-class Translator(Protocol):
-    async def translate(self, texts: list[str], context: TranslationContext) -> list[str]: ...
-```
-
-Implementations to support from day one of the pipeline work:
-- `PaddleLocalOCR` — PaddleOCR run locally via Docker. Free, unlimited, no card.
-  **Default for development.**
-- `OcrSpaceOCR` — OCR.space free API. No card. Rate-limited. Deploy-time fallback.
-- `GeminiTranslator` — Gemini free tier via AI Studio key. No card.
+### Provider boundary
+XianScan owns image OCR, text generation and its Gemini credentials. HwaFlow's
+server bridge sends only original page blobs, source/target language and the active
+series glossary. Job metadata selects XianScan's Gemini provider and sets
+`allowTranslationFallback: false`; no site-side provider interface, local Gemini
+key, mock response, imported text, or HwaFlow fallback is part of the request.
 
 ---
 
 ## 5. Hard constraints and risks
 
-### R1 — OCR rate limits are the project's biggest technical risk
-OCR.space free tier caps files at ~1 MB and roughly 3 requests/minute. Manhwa pages
-are tall vertical strips, so each page is sliced into tiles — a 40-page chapter can
-produce 100+ OCR calls. At 3/min that is **30–45 minutes** per chapter, with throttling
-failures.
+### R1 — Keep page pixels intact
+The chapter upload path does not resize pages. PNG inputs pass through unchanged;
+JPEG/WebP inputs are encoded as PNG at their original width and height. If a browser
+cannot safely decode a very large image, the upload reports an error rather than
+silently shrinking it.
 
-**Mitigation:** local PaddleOCR is the dev default; OCR.space only for deploys.
-The job queue must implement exponential backoff, resumable progress, and per-tile
-retry so throttling degrades speed rather than failing the chapter.
+### R2 — Enforce the engine payload budget at every boundary
+The shared limits are 20 pages per chapter, 10 MiB per page and 80 MiB total.
+Browser preflight, the server upload action, the engine job route and the database
+page-budget trigger must agree. The worker's per-image and total request ceilings
+must remain aligned with these values.
 
-### R2 — CJK OCR accuracy sets the product's quality ceiling
-Free OCR on Japanese/Chinese vertical text in stylized comic fonts is unreliable.
-If the pilot shows poor accuracy, the product shifts from "automated translation" to
-"translation assistance." This must be measured on real pages before UI work proceeds.
-
-### R3 — Free-tier hosting limits
-- Supabase free: ~500 MB DB, 1 GB storage, project pauses after ~7 days inactivity.
-- Render/Fly free web services spin down after ~15 min idle, which would kill a
-  long-running job. Worker lives in-process and is kept warm by an external cron ping.
-- Plan for aggressive image compression: WebP, max ~1600 px wide, quality ~80.
+### R3 — Storage must accept current and legacy image objects
+New uploads are PNG; older page objects may be WebP. The `pages` bucket must allow
+both MIME types and retain its 10 MiB object cap. The source migration that updates
+this setting is present but was not applied from this workspace; deployed settings
+must be verified before relying on PNG uploads. Do not apply migrations without
+explicit confirmation.
 
 ### R4 — Reversible approval means credits must be derived
 Never store `user.total_earned`. Derive from `chapters` where `status = 'approved'`.
 This makes every transition automatically correct and avoids reconciliation bugs.
 
-### R5 — Long-strip tiling must be lossless at text level
-Slices need ~10% vertical overlap and a merge step that dedupes blocks whose
-bounding boxes intersect across the seam, or sentences get cut in half.
+### R5 — Imported translations are review data, not engine input
+Human edits stay editable and survive re-import. A later XianScan run always starts
+from original images and glossary only; no HwaFlow text, mock text or fallback text
+may be sent as translation input.
 
 ---
 
@@ -294,9 +283,10 @@ notifications
 ```
 
 Not built yet: `series_tags`, `term_suggestions` and `processing_jobs`. Tags are a
-later feature; auto-detected terms land directly in `glossary_terms` with `auto`
-origin (a human edit promotes them to `manual`); the pipeline is client-driven
-(see §8), so there is no queue row to write.
+later feature. Existing glossary terms retain their `auto` / `manual` provenance;
+the current XianScan import does not add glossary terms. Chapter processing is an
+external XianScan job linked to `chapters.engine_job_id` (see §8), not a HwaFlow
+client-side pipeline.
 
 **Built:** every content surface above is Supabase-backed. Browser-local stores
 (`hwaflow.chapters.v1`, `hwaflow.glossary.v1`, `hwaflow.notifications.v1`,
@@ -304,7 +294,9 @@ origin (a human edit promotes them to `manual`); the pipeline is client-driven
 deferred `/admin/groups/[id]` surface noted in §10. Reads happen in server
 components (`lib/server/*.ts`), writes in `"use server"` actions (`lib/*-actions.ts`),
 and panel images upload directly from the browser to the private `pages` bucket at
-`{group}/{chapter}/{panel}.webp` before `register_panels` writes the metadata row.
+`{group}/{chapter}/{panel}.png` before `register_panels` writes the metadata row.
+PNG bytes pass through unchanged; JPEG/WebP inputs are converted at native
+pixel dimensions. Legacy `.webp` objects remain readable.
 Images are read back as short-lived signed URLs, never public URLs. All content
 buckets (`group-icons`, `series-covers`, `pages`) are private.
 
@@ -327,7 +319,7 @@ buckets (`group-icons`, `series-covers`, `pages`) are private.
 | Create/edit series | — | ✅ | ✅ | — |
 | Assign staff to series | — | ✅ | ✅ | — |
 | Create chapter | — | ✅ | ✅ | assigned series |
-| Upload pages / run pipeline | — | ✅ | ✅ | assigned series |
+| Upload pages / run XianScan | — | ✅ | ✅ | assigned series |
 | Edit translations | — | ✅ | ✅ | assigned series |
 | Submit chapter | — | ✅ | ✅ | assigned series |
 | Approve / reject / revert chapter | — | ✅ | ✅ | — |
@@ -358,80 +350,47 @@ buckets (`group-icons`, `series-covers`, `pages`) are private.
 
 ---
 
-## 8. Pipeline specification
+## 8. Chapter engine and studio
 
-### Flow
-1. **Upload** — staff selects pages. Client compresses to WebP (max 1600 px wide,
-   quality 80), uploads to `pages/{group}/{chapter}/{index}.webp`, inserts
-   `chapter_pages` rows, sets chapter `status='processing'`.
-2. **Enqueue** — insert `processing_jobs` row, `status='queued'`.
-3. **Worker tick** — claims queued/expired jobs, marks `running`.
-4. **Per page:**
-   a. Load image. If height > ~2000 px, slice into tiles with 10% overlap.
-   b. Call `OCRProvider.extract()` per tile with the series source language.
-   c. Offset each tile's boxes by the tile's y-origin, merge blocks whose boxes
-      intersect across the seam (dedupe duplicates in the overlap band).
-   d. Cluster remaining blocks into logical text blocks (bubble-ish groups).
-   e. Order blocks: top→bottom, then horizontally per `series.reading_direction`
-      (`ttb`/`ltr` → left first; `rtl` → right first).
-5. **Pass 1 — base translation** — batch the page's blocks into one call. Store in
-   `base_translation`.
-6. **Pass 2 — localization** — second call with page context, series synopsis,
-   recent chapter context, and matched glossary terms. Store in `final_text`.
-7. **Persist** — upsert `text_blocks`; bump progress; on completion set job `done`
-   and chapter `ready`.
-8. **Failure** — retry with exponential backoff; after N failures mark job `failed`
-   with the failing step; keep partial results so the chapter is resumable.
+### Processing contract
 
-### Prompt contracts
-- Pass 1: literal, faithful, preserve sentence breaks and honorific intent.
-- Pass 2: enforce glossary terminology, natural English, comic register, no added
-  content, no censorship, preserve speaker intent. Output JSON keyed by block index.
+1. **Upload originals.** PNG files are stored byte-for-byte; JPEG/WebP inputs are
+   encoded to PNG at native dimensions. No downscaling. Enforce 20 pages, 10 MiB
+   per page, 80 MiB per chapter and the browser's decode-pixel guard.
+2. **Create an XianScan job.** HwaFlow validates access and original-page state,
+   then sends page blobs, source language, English target and active series glossary.
+   The job metadata selects Gemini on XianScan and explicitly disables translation
+   fallback. It does not include text blocks or any HwaFlow translation.
+3. **Review images.** The chapter studio polls the job, proxies the original and
+   XianScan output assets, and presents split/before/after views, zoom, page
+   navigation, region boxes and a full-size viewer.
+4. **Import and edit text.** XianScan regions are imported into editable
+   `text_blocks`. Re-import preserves `final_text` and `base_translation` for
+   `is_edited` rows. Stale rows are not pruned automatically.
+5. **Save output.** Finished pages are written to the private `renders` bucket and
+   `chapter_pages.clean_path` is updated. `original_path` remains untouched.
+   Individual pages and chapter ZIP downloads read from saved renders.
+6. **Approve and retain.** XianScan-side intermediate assets are cleaned up by the
+   engine's approval flow. HwaFlow originals remain unless
+   `ENGINE_PURGE_SUPABASE_ORIGINALS=1` and the purge RPC is available.
 
-### Quotas to watch
-| Provider | Limit | Consequence |
-|---|---|---|
-| OCR.space free | ~25k req/mo, ~3 req/min, 1 MB/file | Bottleneck; needs tiling + backoff |
-| Gemini free | per-model RPM/RPD caps | 40 pages × 2 passes needs pacing |
-| Supabase | 1 GB storage | Purge-on-approval default |
+### Limits and configuration
 
-### Built — the shipped pipeline
+`lib/engine-limits.ts` is the shared source for the 20-page, 10 MiB/page and
+80 MiB/chapter caps. `lib/engine.ts` is server-only and retains XianScan's Gemini
+mode with no translation fallback. `ENGINE_API_URL` and `ENGINE_WEB_TOKEN` are
+server-only settings; XianScan's Gemini provider credentials remain on XianScan.
 
-The flow above is the target. What exists today keeps the orchestration in the
-browser (no worker) but reads from and writes to Supabase:
+### Security boundary
 
-- **Provider** — Gemini only, behind the `OCRProvider` / `Translator` interfaces in
-  `lib/ai/types.ts`. Primary model `gemini-3.5-flash-lite` (500 RPD, 15 RPM, 250K TPM
-  on the free tier), with `gemini-3.8-flash` as a fallback that is only tried when the
-  primary answers 404 model-not-found. The key is read from `process.env` inside the
-  route handlers, never at module scope.
-- **Three routes** — `POST /api/pipeline/extract` (multipart, one `panel-{n}` part per
-  image plus a `meta` manifest), `POST /api/pipeline/translate` and
-  `POST /api/pipeline/proofread` (JSON, no images). Images ride as binary precisely
-  because base64 in a JSON body would exceed the request limit before the byte valve
-  could halve the batch. All three call `requirePipelineViewer` first and answer
-  `401` JSON with `no-store` when there is no session.
-- **Batching** — `splitIntoBatches` splits panels into even batches of at most 10
-  (11 → 6+5, 25 → 9+8+8, 41 → 9+8+8+8+8). A ten-panel batch plus a one-panel stub
-  wastes a request from a 500/day budget, and the stub's output drifts.
-- **Two valves** — an oversized extract batch is halved recursively
-  (`BATCH_MAX_BYTES`); a text stage that returns an unreadable body for a chapter of
-  more than 20 panels is halved once and retried.
-- **Mock mode** — `MOCK_PIPELINE=1` short-circuits all three routes with deterministic
-  fake bubbles, boxes and terms. No network call, no quota spent. This is how the
-  workspace is developed and tested.
-- **Client-driven, not a queue** — `lib/pipeline.ts` runs the three stages in the
-  browser against an explicit `PipelineContext` (signed panel URLs, blocks, glossary,
-  and server-action callbacks). There is no worker, no `processing_jobs` row, and no
-  resume: closing the tab stops the run, and the chapter stays `processing` with the
-  text it already has. A `Mark as ready` escape hatch exists for exactly that case.
-  Every write goes through a server action, so RLS and role checks still apply even
-  though the loop is client-side. This is the one place the build deliberately
-  diverges from §8's flow.
-- **Chapter-wide text passes** — translation and proofreading each run once for the
-  whole chapter rather than per panel, so pronouns, forms of address and callbacks
-  stay consistent. The proofread pass also returns the new glossary terms, so
-  deduplication happens once per chapter instead of once per panel.
+Engine routes use `requireEngineViewer` plus job/chapter capability checks.
+Engine assets are proxied by authenticated HwaFlow routes; the browser never sees
+the Worker host or bearer token. Imported text is not an engine permission or
+input. Chapter access remains governed by RLS and the `can_view_chapter` /
+`can_manage_chapter` checks.
+
+For route inventory, payload shape, retention details and the unapplied page-budget
+migration note, see [`docs/engine-integration.md`](engine-integration.md).
 
 ---
 
@@ -609,7 +568,7 @@ currency) open from the profile block in the rail on every signed-in surface.
 ### Shared states (not routes)
 Signed-out redirect, no-group-yet screen (signed in but uninvited), 403 for
 unassigned series, empty states for every list, mobile workspace notice,
-quota-exhausted pipeline banner. Every route segment also ships a `loading.tsx`
+engine configuration/failure banner. Every route segment also ships a `loading.tsx`
 skeleton shaped like its own page (`components/page-skeleton.tsx`) and an
 `error.tsx` built on `components/error-state.tsx`, so a navigation or a render
 failure never shows a blank shell.
@@ -632,6 +591,9 @@ failure never shows a blank shell.
 ---
 
 ## 12. Decision log
+
+> Entries dated before 2026-10-28 record historical design choices. Where they describe the former site-side Gemini pipeline, they are superseded by §8 and §14 below.
+
 
 | Date | Decision | Rationale |
 |---|---|---|
@@ -716,63 +678,28 @@ failure never shows a blank shell.
 
 ---
 
-## 14. Image engine bridge (XianScan)
+## 14. XianScan studio — current state
 
-An **additional** path alongside the existing OCR -> translate -> proofread
-pipeline. Nothing in that pipeline changes.
+XianScan is the sole chapter image and translation engine. HwaFlow uploads original
+pages and glossary context, then keeps imported regions editable for human review.
+No HwaFlow Gemini pipeline, mock translator or translation fallback remains active.
 
-- `lib/engine.ts` — `server-only` client for the deployed Cloudflare Worker.
-  Reads `ENGINE_API_URL` and `ENGINE_WEB_TOKEN`. The browser never sees the
-  token and never calls the engine directly.
-- `lib/engine-access.ts` — `server-only` authorization for every job-scoped
-  route. Resolves `jobId -> chapterId` once per job (10-minute memo) and then
-  asks `can_view_chapter` / `can_manage_chapter`, returning `403` on a definite
-  refusal. A job id is a handle, not a permission.
-- `app/api/engine/jobs/**` — seven route handlers: create job, get job,
-  approve, reject, proxy raw/final/approved/clean/regions assets, import the
-  engine's regions into `text_blocks`, and copy the finished pages into the
-  `renders` bucket. All use
-  `requirePipelineViewer()` (and `getViewer()` for the high-frequency asset
-  route) and return Web `Response` objects. Route params are Promises (Next 16).
-  Job creation refuses chapters above 40 pages or 80 MB with a `413`, because the
-  whole payload is buffered before it is forwarded.
-- `lib/engine-regions.ts` — maps `regions.json` onto `text_blocks`
-  (`bbox` normalised to 0..1 per panel, source and target text). Import is a
-  merge through `set_panel_blocks`, so pipeline translations and hand edits are
-  never blanked. The explicit **Remove stale lines** path calls
-  `set_panel_engine_blocks`, which prunes unedited rows the payload omits;
-  pruning is never automatic because a truncated engine response is
-  indistinguishable from a page that lost panels.
-- `lib/engine-renders.ts` + `20261106000000_engine_renders.sql` — finished pages
-  are copied into a private `renders` bucket (`pages` only accepts WebP) and
-  `chapter_pages.clean_path` points at them through
-  `set_chapter_page_render(uuid, text)`. `original_path` is never rewritten, so
-  extraction keeps OCRing the raw art; `previewUrl` is display-only and survives
-  a purge.
-- `app/api/chapters/[id]/download/route.ts` + `lib/zip.ts` — the deliverable:
-  every saved render for a chapter in one ZIP, written directly by a small
-  stored-entry writer (no dependency, no compression). Chapter-scoped because
-  renders outlive the engine job; reads use the viewer's session, so the
-  `renders` policy governs access.
-- `components/chapters/engine-panel.tsx` — mounted in `workspace-view.tsx`
-  with `chapterId`, `initialJobId` and `hasRenders`. Self-contained inline
-  styles, no new dependency.
-- `supabase/migrations/20261108000000_engine_job_link.sql` —
-  `chapters.engine_job_id` plus `set_chapter_engine_job(uuid, text)`, so the run
-  is a property of the chapter rather than of one browser tab.
-- `supabase/migrations/20261105000000_engine_purge.sql` — optional
-  `purge_chapter_originals(uuid)` RPC. It flips `chapter_pages.storage_state`
-  to `purged`, respects `groups.retention_policy = 'keep'`, and reuses
-  `can_manage_chapter(uuid)`. Inert unless `ENGINE_PURGE_SUPABASE_ORIGINALS=1`.
+- **Input:** original page images, source language, English target and active
+  series glossary only. `lib/engine.ts` sets `translationMode: "gemini"` and
+  `allowTranslationFallback: false`; it has no `translations` input field.
+- **Images:** full-resolution processing; 20 pages, 10 MiB/page and 80 MiB/chapter.
+  New PNGs and legacy WebP objects are supported by the application contract.
+- **Workspace:** `EnginePanel` provides the before/after studio; `TextReview`
+  provides editable imported lines. Re-import preserves human-edited translations
+  and does not automatically prune stale blocks.
+- **Outputs:** saved pages live in private `renders`; `clean_path` is updated while
+  `original_path` remains unchanged. The download route offers pages or a chapter ZIP.
+- **Retention:** Supabase originals remain by default. The optional purge is enabled
+  only by `ENGINE_PURGE_SUPABASE_ORIGINALS=1`.
+- **Migration status:** `20261109000000_engine_page_budget.sql` is source-only in
+  this worktree and was not applied here. Verify the deployed `pages` bucket allows
+  PNG before relying on new PNG uploads; do not apply migrations without explicit
+  confirmation.
 
-On **Approve** the Worker deletes the raw/clean/final objects from its private
-Backblaze B2 bucket immediately and keeps `approved/` for ~7 days. Supabase
-originals are only purged when the env flag and the migration are both present.
-
-Environment variables (all empty in `.env.example`, never `NEXT_PUBLIC_`):
-`ENGINE_API_URL`, `ENGINE_WEB_TOKEN`, `ENGINE_PURGE_SUPABASE_ORIGINALS`.
-`GET /api/health/engine` reports whether they are set, whether a `NEXT_PUBLIC_`
-copy leaked, and whether the Worker accepts the token — the same shape as
-`/api/health/supabase`.
-`GEMINI_API_KEY` and `MOCK_PIPELINE` belong to the existing text pipeline and
-are unrelated to the engine's own Gemini key (which lives as a Worker secret).
+See [`docs/engine-integration.md`](engine-integration.md) for the active route map,
+limits and runtime settings.

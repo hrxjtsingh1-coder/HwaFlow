@@ -1,16 +1,12 @@
 /**
  * POST /api/engine/jobs/:id/import
  *
- * Copies the engine's `regions.json` back into `text_blocks`, so the existing
- * bubble editor shows the engine's boxes and its English text.
- *
- * Merge, not replace: `set_panel_blocks` treats an empty string as "no opinion"
- * and only deletes blocks that hold no text, so pipeline translations and hand
- * edits survive. Replacing outright would need a new RPC — `text_blocks` has a
- * SELECT policy only — which this integration deliberately avoids.
+ * Copies XianScan's regions into HwaFlow's editable text blocks. This is a
+ * one-way import for human review; editor text is never sent back as engine
+ * input. Existing human-edited translations are explicitly preserved on reimport.
  */
 
-import { requirePipelineViewer } from "@/lib/pipeline-auth";
+import { requireEngineViewer } from "@/lib/engine-auth";
 import { createClient } from "@/lib/supabase/server";
 import { getEngineJob, proxyEngineAsset, engineFailureResponse } from "@/lib/engine";
 import { assertEngineJobAccess } from "@/lib/engine-access";
@@ -23,35 +19,27 @@ export const maxDuration = 120;
 type ImportSummary = {
   pages: number;
   blocks: number;
-  /** Rows deleted by the explicit prune pass. Zero on a plain merge. */
-  pruned: number;
-  /** Older lines the merge kept because the engine did not mention them. */
+  /** Older non-edited lines left in place because the engine did not mention them. */
   surplus: number;
   skipped: Array<{ page: number; reason: string }>;
 };
 
-// The real regions.json shape is owned by the Worker, which is not in this
-// repo, so the adapter in lib/engine-regions.ts accepts several spellings.
+// XianScan's regions.json shape is owned by the Worker, so the adapter in
+// lib/engine-regions.ts accepts several spellings.
+type ExistingBlock = {
+  page_id: string;
+  block_index: number;
+  base_translation: string | null;
+  final_text: string | null;
+  is_edited: boolean;
+};
 
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requirePipelineViewer();
+export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireEngineViewer();
   if (!auth.ok) return auth.response;
-
-  // `prune` is the explicit second step: a plain import merges, and only a
-  // deliberate request removes lines the engine did not mention.
-  let prune = false;
-  try {
-    const body = (await request.json()) as { prune?: unknown };
-    prune = body?.prune === true;
-  } catch {
-    /* empty body means merge */
-  }
 
   const { id } = await params;
   try {
-    // Writing blocks needs edit access, which is the same predicate as "can
-    // view" today (Owner/Manager or assigned Staff). `set_panel_blocks` checks
-    // `can_edit_chapter` again inside the database.
     const access = await assertEngineJobAccess(id, "view");
     if (!access.ok) return access.response;
 
@@ -62,8 +50,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           error: "not-ready",
           message:
             job.status === "approved"
-              ? "This run was already approved, and its intermediate files were deleted. Run the engine again to import its text."
-              : "Wait for the engine to finish before importing its text.",
+              ? "This run was already approved, and its intermediate files were deleted. Run XianScan again to import its text."
+              : "Wait for XianScan to finish before importing its text.",
         },
         { status: 409, headers: { "Cache-Control": "no-store" } }
       );
@@ -83,22 +71,38 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     const stored = (pageRows || []).filter((row) => row.storage_state === "stored");
-
-    // The engine numbered pages in the order they were uploaded. If pages were
-    // added or removed since, those numbers no longer line up and importing
-    // would put text on the wrong panels.
     if (stored.length !== job.pageCount) {
       return Response.json(
         {
           error: "pages-changed",
-          message: `This run processed ${job.pageCount} pages, but the chapter now has ${stored.length} originals. Run the engine again.`,
+          message: `This run processed ${job.pageCount} pages, but the chapter now has ${stored.length} stored originals. Run XianScan again.`,
         },
         { status: 409 }
       );
     }
 
-    const summary: ImportSummary = { pages: 0, blocks: 0, pruned: 0, surplus: 0, skipped: [] };
-    /** page id -> the block indexes the engine actually produced. */
+    const { data: existingRows, error: existingError } = await supabase
+      .from("text_blocks")
+      .select("page_id, block_index, base_translation, final_text, is_edited")
+      .eq("chapter_id", job.chapterId);
+    if (existingError) {
+      return Response.json(
+        { error: "storage", message: "Couldn't protect the existing text edits." },
+        { status: 500 }
+      );
+    }
+
+    const existingByPage = new Map<string, Map<number, ExistingBlock>>();
+    for (const row of (existingRows ?? []) as ExistingBlock[]) {
+      let byIndex = existingByPage.get(row.page_id);
+      if (!byIndex) {
+        byIndex = new Map();
+        existingByPage.set(row.page_id, byIndex);
+      }
+      byIndex.set(row.block_index, row);
+    }
+
+    const summary: ImportSummary = { pages: 0, blocks: 0, surplus: 0, skipped: [] };
     const engineIndexes = new Map<string, Set<number>>();
 
     for (const [index, page] of stored.entries()) {
@@ -127,43 +131,44 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         continue;
       }
 
-      const { data: removed, error } = await supabase.rpc(
-        prune ? "set_panel_engine_blocks" : "set_panel_blocks",
-        {
-          p_chapter_id: job.chapterId,
-          p_page_id: page.id,
-          p_blocks: blocks,
-        }
-      );
+      const oldByIndex = existingByPage.get(page.id);
+      const safeBlocks = blocks.map((block) => {
+        const old = oldByIndex?.get(block.index);
+        if (!old?.is_edited) return block;
+        return {
+          ...block,
+          baseTranslation: old.base_translation ?? "",
+          finalText: old.final_text ?? "",
+        };
+      });
+
+      const { error } = await supabase.rpc("set_panel_blocks", {
+        p_chapter_id: job.chapterId,
+        p_page_id: page.id,
+        p_blocks: safeBlocks,
+      });
       if (error) {
         summary.skipped.push({ page: index + 1, reason: error.message });
         continue;
       }
 
-      engineIndexes.set(page.id, new Set(blocks.map((block) => block.index)));
+      engineIndexes.set(page.id, new Set(safeBlocks.map((block) => block.index)));
       summary.pages += 1;
-      summary.blocks += blocks.length;
-      if (prune) summary.pruned += Number(removed ?? 0);
+      summary.blocks += safeBlocks.length;
     }
 
-    // After a merge, tell the panel how many older lines the engine did not
-    // mention. They are exactly what "Remove stale lines" would prune; counting
-    // them is read-only and cannot delete anything.
-    if (!prune) {
-      const { data: remaining } = await supabase
-        .from("text_blocks")
-        .select("page_id, block_index, base_translation, final_text, is_edited")
-        .eq("chapter_id", job.chapterId);
+    const { data: remaining } = await supabase
+      .from("text_blocks")
+      .select("page_id, block_index, base_translation, final_text, is_edited")
+      .eq("chapter_id", job.chapterId);
 
-      for (const row of remaining ?? []) {
-        if (row.is_edited) continue;
-        if (!`${row.base_translation ?? ""}${row.final_text ?? ""}`.trim()) continue;
-        const indexes = engineIndexes.get(row.page_id);
-        // Pages the engine skipped are left untouched, so they are not surplus.
-        if (!indexes) continue;
-        if (indexes.has(row.block_index)) continue;
-        summary.surplus += 1;
-      }
+    for (const row of remaining ?? []) {
+      if (row.is_edited) continue;
+      if (!`${row.base_translation ?? ""}${row.final_text ?? ""}`.trim()) continue;
+      const indexes = engineIndexes.get(row.page_id);
+      // Pages the engine skipped are left untouched, so they are not surplus.
+      if (!indexes || indexes.has(row.block_index)) continue;
+      summary.surplus += 1;
     }
 
     return Response.json(summary, { headers: { "Cache-Control": "no-store" } });

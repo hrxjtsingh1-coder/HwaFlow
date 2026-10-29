@@ -12,7 +12,7 @@
 
 import "server-only";
 
-import type { SourceLanguage } from "../ai/types";
+import type { SourceLanguage } from "../source-language";
 import type { Group, GroupMember, GroupRole } from "../groups";
 import type { AuthUser } from "../identity";
 import {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { formatMB, MAX_CHAPTER_BYTES, MAX_CHAPTER_PAGES, MAX_PAGE_BYTES } from "@/lib/engine-limits";
 import { Plus, UploadCloud } from "../icons";
 
 export type UploadProgress = { current: number; total: number } | null;
@@ -12,11 +13,16 @@ type PanelDropzoneProps = {
   /** `drop` is the viewer's empty state; `button` is the header's + Add panels. */
   variant?: "drop" | "button";
   disabled?: boolean;
+  /** Pages already stored on this chapter, so the cap can be shown up front. */
+  pageCount?: number;
+  /** Pages left before the 20-page cap. `0` renders the locked state. */
+  remaining?: number;
 };
 
 /**
- * Upload entry point. Compression happens in the caller, one file at a time, so
- * this component only collects files — and never starts a run.
+ * Upload entry point. The caller validates and prepares each page at its
+ * original pixel dimensions; this component only collects files and never
+ * starts an engine run.
  */
 export function PanelDropzone({
   onFiles,
@@ -24,11 +30,16 @@ export function PanelDropzone({
   progress,
   variant = "drop",
   disabled = false,
+  pageCount = 0,
+  remaining = MAX_CHAPTER_PAGES,
 }: PanelDropzoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 
-  const locked = busy || disabled;
+  // Once the chapter holds the maximum, uploading is not offered at all — the
+  // count is enforced on the server too, so this is the honest UI for it.
+  const atCapacity = remaining <= 0;
+  const locked = busy || disabled || atCapacity;
 
   const handleFiles = (list: FileList | null) => {
     if (!list || list.length === 0 || locked) return;
@@ -37,14 +48,14 @@ export function PanelDropzone({
 
   const progressLabel =
     progress && progress.total > 0
-      ? `Preparing panel ${Math.min(progress.current + 1, progress.total)} of ${progress.total}…`
-      : "Preparing panels…";
+      ? `Preparing page ${Math.min(progress.current + 1, progress.total)} of ${progress.total}…`
+      : "Preparing pages…";
 
   const input = (
     <input
       ref={inputRef}
       type="file"
-      accept="image/*"
+      accept="image/png,image/jpeg,image/webp,image/avif,image/bmp,image/gif,image/tiff,.png,.jpg,.jpeg,.webp,.avif,.bmp,.gif,.tif,.tiff"
       multiple
       className="ch-file-input"
       disabled={locked}
@@ -64,11 +75,20 @@ export function PanelDropzone({
           className="btn btn-ghost btn-sm"
           onClick={() => inputRef.current?.click()}
           disabled={locked}
-          title={busy ? progressLabel : "Add another panel sequence"}
+          title={
+            atCapacity
+              ? `This chapter already holds all ${MAX_CHAPTER_PAGES} pages. Delete one to add another.`
+              : busy
+                ? progressLabel
+                : `Add more full-resolution pages (${remaining} of ${MAX_CHAPTER_PAGES} left)`
+          }
         >
           <Plus className="h-3.5 w-3.5" />
-          {busy ? progressLabel : "Add panels"}
+          {busy ? progressLabel : atCapacity ? "Page limit reached" : "Add panels"}
         </button>
+        <span className="ch-page-cap" data-full={atCapacity ? "true" : "false"}>
+          {pageCount}/{MAX_CHAPTER_PAGES}
+        </span>
       </>
     );
   }
@@ -94,19 +114,37 @@ export function PanelDropzone({
         <UploadCloud className="h-5 w-5" />
       </span>
       <p className="ch-dropzone-title">
-        {busy ? progressLabel : "Drop raw panels here"}
+        {busy
+          ? progressLabel
+          : atCapacity
+            ? "This chapter is full"
+            : "Drop raw pages here"}
       </p>
-      <button
-        type="button"
-        className="btn btn-ghost btn-sm"
-        onClick={() => inputRef.current?.click()}
-        disabled={locked}
-      >
-        or choose files
-      </button>
-      <p className="ch-dropzone-hint">
-        PNG, JPG or WebP · up to 10 MB each · panels are added in selection order
-      </p>
+      {atCapacity ? (
+        <p className="ch-dropzone-hint">
+          All {MAX_CHAPTER_PAGES} pages are used. Delete a page to upload another — the
+          cap is enforced on the server as well, so nothing can be added past it.
+        </p>
+      ) : (
+        <>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => inputRef.current?.click()}
+            disabled={locked}
+          >
+            or choose files
+          </button>
+          <p className="ch-dropzone-hint">
+            PNG, JPG, WebP, AVIF, BMP, GIF, TIFF · {formatMB(MAX_PAGE_BYTES)} per page ·{" "}
+            <strong>
+              {remaining} of {MAX_CHAPTER_PAGES} pages left
+            </strong>{" "}
+            · {formatMB(MAX_CHAPTER_BYTES)} per chapter · every page is kept at full
+            resolution and converted losslessly to PNG
+          </p>
+        </>
+      )}
     </div>
   );
 }

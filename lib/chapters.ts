@@ -105,17 +105,6 @@ export type ChapterStatusEvent = {
   createdAt: string;
 };
 
-/**
- * Per-panel pipeline status. Stage-level state (which pass is running) lives on
- * `RunState` in `lib/pipeline.ts` — extraction moves in batches and the text
- * passes move as one, so a panel does not track its own step.
- */
-export type PanelPipelineState = {
-  panelId: string;
-  status: "pending" | "extracting" | "extracted" | "done" | "failed";
-  error: string | null;
-};
-
 export type ChapterState = {
   version: 1;
   chapters: Chapter[];
@@ -681,107 +670,6 @@ export function removePanel(input: RemovePanelInput): void {
         ? { ...entry, updatedAt: new Date().toISOString() }
         : entry
     ),
-  });
-}
-
-export type IncomingBlock = {
-  index: number;
-  sourceText: string;
-  baseTranslation?: string;
-  finalText?: string;
-  bbox?: { x: number; y: number; w: number; h: number } | null;
-  confidence?: number | null;
-};
-
-export type SetPanelBlocksInput = {
-  chapterId: string;
-  panelId: string;
-  blocks: IncomingBlock[];
-  actor: string;
-};
-
-/**
- * Replaces the whole block set for one panel. Extraction writes all blocks for a
- * panel at once, and the text stages then update `baseTranslation` /
- * `finalText` through `updateBlockPipelineText`.
- */
-export function setPanelBlocks(input: SetPanelBlocksInput): TextBlock[] {
-  const state = getChapterState();
-  const chapter = requireChapter(input.chapterId);
-  requireEditRights(chapter, input.actor);
-
-  const panel = state.panels.find(
-    (entry) => entry.id === input.panelId && entry.chapterId === chapter.id
-  );
-  if (!panel) {
-    throw new ChapterError("not-found", "That panel no longer exists.");
-  }
-
-  const previous = state.blocks.filter(
-    (block) => block.panelId === panel.id
-  );
-  const previousEdited = new Map(
-    previous.map((block) => [block.index, block])
-  );
-
-  const now = new Date().toISOString();
-  const created: TextBlock[] = input.blocks.map((block) => {
-    const existing = previousEdited.get(block.index);
-    const sourceText = block.sourceText.trim();
-    return {
-      id: existing?.id ?? createId("tb"),
-      panelId: panel.id,
-      chapterId: chapter.id,
-      index: block.index,
-      bbox: block.bbox ?? null,
-      sourceText,
-      baseTranslation: block.baseTranslation ?? existing?.baseTranslation ?? "",
-      finalText: block.finalText ?? existing?.finalText ?? "",
-      confidence: block.confidence ?? null,
-      isEdited: existing?.isEdited ?? false,
-      editedBy: existing?.editedBy ?? null,
-      editedAt: existing?.editedAt ?? null,
-    };
-  });
-
-  writeState({
-    ...state,
-    blocks: [
-      ...state.blocks.filter((block) => block.panelId !== panel.id),
-      ...created,
-    ],
-    chapters: state.chapters.map((entry) =>
-      entry.id === chapter.id ? { ...entry, updatedAt: now } : entry
-    ),
-  });
-
-  return created;
-}
-
-/**
- * Pipeline-only write for the two text stages. Does not mark a block as human
- * edited, so the `Edited` chip keeps meaning "a person changed this".
- */
-export function updateBlockPipelineText(input: {
-  chapterId: string;
-  updates: Array<{ blockId: string; baseTranslation?: string; finalText?: string }>;
-}): void {
-  const state = getChapterState();
-  const chapter = requireChapter(input.chapterId);
-  const byId = new Map(input.updates.map((entry) => [entry.blockId, entry]));
-  if (byId.size === 0) return;
-
-  writeState({
-    ...state,
-    blocks: state.blocks.map((block) => {
-      const update = byId.get(block.id);
-      if (!update) return block;
-      return {
-        ...block,
-        baseTranslation: update.baseTranslation ?? block.baseTranslation,
-        finalText: update.finalText ?? block.finalText,
-      };
-    }),
   });
 }
 

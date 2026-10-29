@@ -4,8 +4,9 @@
  * Kept free of `next/headers` and Supabase so the parsing and the copy can be
  * tested; `rate-limit-server.ts` does the round trip.
  *
- * Budgets are deliberately generous: a 200-panel chapter is roughly 30 pipeline
- * calls, and nobody should ever be throttled for working normally.
+ * Budgets are deliberately generous: engine uploads, status checks, and imports
+ * are performed over multiple requests, and nobody should be throttled for
+ * working normally.
  */
 
 export const LIMITS = {
@@ -13,7 +14,7 @@ export const LIMITS = {
   /** Password spraying rotates IPs, so the account is counted too. */
   loginPerUser: { limit: 6, windowSeconds: 60 },
   registerPerIp: { limit: 5, windowSeconds: 300 },
-  pipelinePerViewer: { limit: 60, windowSeconds: 60 },
+  enginePerViewer: { limit: 60, windowSeconds: 60 },
 } as const;
 
 export type RateLimit = { allowed: true } | { allowed: false; retryAfter: number };

@@ -1,140 +1,188 @@
 /**
- * POST /api/engine/jobs — start an image-cleaning + typesetting run for a chapter.
+ * POST /api/engine/jobs — start a XianScan image-processing run for a chapter.
  *
- * Reads the originals from Supabase Storage (where your dropzone already puts
- * them), forwards them to the Engine Bridge Worker, and returns a job id.
- * The browser never sees the engine URL or its token.
+ * Only the chapter's full-resolution original images, source language, and
+ * active series glossary go to XianScan. HwaFlow text blocks—whether imported,
+ * edited, mock, or empty—are deliberately not read or sent as translation input.
  */
 
-import { requirePipelineViewer } from "@/lib/pipeline-auth";
+import { requireEngineViewer } from "@/lib/engine-auth";
 import { createClient } from "@/lib/supabase/server";
 import {
   assertEngineConfigured,
   createEngineJob,
   engineFailureResponse,
 } from "@/lib/engine";
+import {
+  formatMB,
+  MAX_CHAPTER_BYTES,
+  MAX_CHAPTER_PAGES,
+  MAX_PAGE_BYTES,
+} from "@/lib/engine-limits";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-/** Matches the hard cap in lib/engine.ts, so the user gets a 413 not a 502. */
-const ENGINE_MAX_PAGES = 40;
-const ENGINE_MAX_BYTES = 80 * 1024 * 1024;
-
 const isUuid = (value: unknown): value is string =>
   typeof value === "string" &&
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
-/** HwaFlow uses ko/ja/zh; the engine's OCR loader uses ko/ja/zh-Hans. */
+/** HwaFlow uses ko/ja/zh; XianScan's OCR loader expects zh-Hans. */
 function engineSourceLang(value: unknown): string {
   if (value === "zh") return "zh-Hans";
   if (value === "ko" || value === "ja") return value;
   return "auto";
 }
 
+function tooLargeMessage(pageCount: number, totalBytes: number): string {
+  return (
+    `The image engine handles up to ${MAX_CHAPTER_PAGES} full-resolution pages, ` +
+    `${formatMB(MAX_PAGE_BYTES)} per page, and ${formatMB(MAX_CHAPTER_BYTES)} per chapter. ` +
+    `This chapter is ${pageCount} pages / ${formatMB(totalBytes)}.`
+  );
+}
+
 export async function POST(request: Request) {
-  const auth = await requirePipelineViewer();
+  const auth = await requireEngineViewer();
   if (!auth.ok) return auth.response;
 
   let body: { chapterId?: unknown };
   try {
     body = (await request.json()) as { chapterId?: unknown };
   } catch {
-    return Response.json({ error: "invalid-request", message: "Expected a JSON body." }, { status: 400 });
+    return Response.json(
+      { error: "invalid-request", message: "Expected a JSON body." },
+      { status: 400 }
+    );
   }
   if (!isUuid(body.chapterId)) {
-    return Response.json({ error: "invalid-request", message: "A valid chapterId is required." }, { status: 400 });
+    return Response.json(
+      { error: "invalid-request", message: "A valid chapterId is required." },
+      { status: 400 }
+    );
   }
 
   const supabase = await createClient();
-
-  // RLS scopes this to chapters the viewer can see. Also gives us the series
-  // id (for glossary) and the source language (for OCR).
   const { data: chapter, error: chapterError } = await supabase
     .from("chapters")
     .select("id, series_id")
     .eq("id", body.chapterId)
     .maybeSingle();
   if (chapterError || !chapter) {
-    return Response.json({ error: "not-found", message: "That chapter was not found." }, { status: 404 });
+    return Response.json(
+      { error: "not-found", message: "That chapter was not found." },
+      { status: 404 }
+    );
   }
 
-  const { data: series } = await supabase
-    .from("series")
-    .select("source_language")
-    .eq("id", chapter.series_id)
-    .maybeSingle();
+  const [{ data: series }, { data: glossaryRows }, { data: pageRows, error: pageError }] =
+    await Promise.all([
+      supabase
+        .from("series")
+        .select("source_language")
+        .eq("id", chapter.series_id)
+        .maybeSingle(),
+      supabase
+        .from("glossary_terms")
+        .select("source_term, target_term, category")
+        .eq("series_id", chapter.series_id)
+        .eq("status", "active")
+        .limit(500),
+      supabase
+        .from("chapter_pages")
+        .select("id, page_index, original_path, storage_state, byte_size")
+        .eq("chapter_id", body.chapterId)
+        .order("page_index", { ascending: true }),
+    ]);
 
-  const { data: glossaryRows } = await supabase
-    .from("glossary_terms")
-    .select("source_term, target_term, category")
-    .eq("series_id", chapter.series_id)
-    .eq("status", "active")
-    .limit(500);
-
-  const { data: pageRows, error: pageError } = await supabase
-    .from("chapter_pages")
-    .select("id, page_index, original_path, storage_state, byte_size")
-    .eq("chapter_id", body.chapterId)
-    .order("page_index", { ascending: true });
   if (pageError) {
-    return Response.json({ error: "storage", message: "Couldn't read this chapter's pages." }, { status: 500 });
+    return Response.json(
+      { error: "storage", message: "Couldn't read this chapter's pages." },
+      { status: 500 }
+    );
   }
 
-  // HwaFlow already ran Gemini extract -> translate -> proofread and keeps the
-  // approved English text here. Ship it with the images so a Kaggle kernel
-  // with NO internet can still typeset real translations (see kaggle/).
-  const { data: blockRows } = await supabase
-    .from("text_blocks")
-    .select("page_id, block_index, source_text, base_translation, final_text")
-    .eq("chapter_id", body.chapterId)
-    .order("block_index", { ascending: true });
-
-  const stored = (pageRows || []).filter((row) => row.storage_state === "stored");
+  const allPages = pageRows ?? [];
+  const stored = allPages.filter((row) => row.storage_state === "stored");
   if (stored.length === 0) {
     return Response.json(
       { error: "no-pages", message: "This chapter has no original images left to process." },
       { status: 409 }
     );
   }
+  if (stored.length !== allPages.length) {
+    return Response.json(
+      {
+        error: "originals-missing",
+        message: "Some original pages are no longer stored, so XianScan cannot safely process the complete chapter. Re-upload the missing pages first.",
+      },
+      { status: 409 }
+    );
+  }
 
-  // The whole chapter is buffered twice (Blobs, then the multipart body), so
-  // refuse oversized runs up front with a real message instead of dying on an
-  // out-of-memory 500 mid-request. 40 pages matches lib/engine.ts's contract.
-  const totalBytes = stored.reduce((sum, row) => sum + (row.byte_size ?? 0), 0);
-  if (stored.length > ENGINE_MAX_PAGES || totalBytes > ENGINE_MAX_BYTES) {
+  const recordedBytes = stored.reduce((sum, row) => sum + (Number(row.byte_size) || 0), 0);
+  const hasOversizedPage = stored.some((row) => Number(row.byte_size) > MAX_PAGE_BYTES);
+  if (
+    stored.length > MAX_CHAPTER_PAGES ||
+    recordedBytes > MAX_CHAPTER_BYTES ||
+    hasOversizedPage
+  ) {
     return Response.json(
       {
         error: "too-large",
-        message:
-          `The image engine handles up to ${ENGINE_MAX_PAGES} pages / ` +
-          `${Math.round(ENGINE_MAX_BYTES / (1024 * 1024))} MB per run. This chapter is ` +
-          `${stored.length} pages, ${(totalBytes / (1024 * 1024)).toFixed(1)} MB — ` +
-          `split it into smaller chapters or upload lighter pages.`,
+        message: tooLargeMessage(stored.length, recordedBytes),
       },
       { status: 413, headers: { "Cache-Control": "no-store" } }
     );
   }
 
   try {
-    // Before downloading up to 80 MB of pages: a server without the two engine
-    // variables should say so in milliseconds, not after the upload work.
+    // Fail before downloading page bytes if server-side engine settings are absent.
     await assertEngineConfigured();
 
     const pages: Array<{ blob: Blob; mimeType: string }> = [];
+    let actualBytes = 0;
     for (const row of stored) {
-      const { data: blob, error } = await supabase.storage.from("pages").download(row.original_path);
+      const { data: blob, error } = await supabase.storage
+        .from("pages")
+        .download(row.original_path);
       if (error || !blob) {
         return Response.json(
-          { error: "storage", message: `Couldn't read page ${row.page_index + 1}. Re-upload it and retry.` },
+          {
+            error: "storage",
+            message: `Couldn't read page ${row.page_index + 1}. Re-upload it and retry.`,
+          },
           { status: 502 }
         );
       }
-      pages.push({ blob, mimeType: blob.type || "image/webp" });
+
+      if (blob.size > MAX_PAGE_BYTES || pages.length >= MAX_CHAPTER_PAGES) {
+        return Response.json(
+          {
+            error: "too-large",
+            message: tooLargeMessage(stored.length, Math.max(recordedBytes, actualBytes + blob.size)),
+          },
+          { status: 413, headers: { "Cache-Control": "no-store" } }
+        );
+      }
+      actualBytes += blob.size;
+      if (actualBytes > MAX_CHAPTER_BYTES) {
+        return Response.json(
+          {
+            error: "too-large",
+            message: tooLargeMessage(stored.length, actualBytes),
+          },
+          { status: 413, headers: { "Cache-Control": "no-store" } }
+        );
+      }
+
+      const fallbackMime = row.original_path.toLowerCase().endsWith(".webp")
+        ? "image/webp"
+        : "image/png";
+      pages.push({ blob, mimeType: blob.type || fallbackMime });
     }
 
-    // HwaFlow categories -> the engine CLI's TermDraft categories.
     const categoryMap: Record<string, string> = {
       character: "character",
       place: "location",
@@ -148,33 +196,14 @@ export async function POST(request: Request) {
       category: categoryMap[term.category] || "other",
     }));
 
-    // Align translations to the SAME page order as `pages` (stored, sorted by
-    // page_index). XianScan numbers pages 001, 002, ... in that order.
-    const blocksByPage = new Map<string, Array<{ text: string }>>();
-    for (const block of blockRows || []) {
-      const text = (block.final_text || block.base_translation || "").trim();
-      if (!text) continue;
-      const list = blocksByPage.get(block.page_id) || [];
-      list.push({ text });
-      blocksByPage.set(block.page_id, list);
-    }
-    const translations = stored.map(
-      (row) => (blocksByPage.get(row.id) || []).map((b) => b.text)
-    );
-
     const job = await createEngineJob({
       chapterId: body.chapterId,
       pages,
       sourceLang: engineSourceLang(series?.source_language),
       targetLang: "en",
       glossary,
-      translations,
     });
 
-    // Remember the run on the chapter so it survives a reload and is visible to
-    // whoever reviews the chapter next. Best effort: a viewer without edit
-    // rights can still start a run, and the panel keeps its own localStorage
-    // fallback.
     const { error: linkError } = await supabase.rpc("set_chapter_engine_job", {
       p_chapter_id: body.chapterId,
       p_job: job.jobId,
@@ -183,7 +212,10 @@ export async function POST(request: Request) {
       console.warn(`[engine] job ${job.jobId} not linked to chapter: ${linkError.message}`);
     }
 
-    return Response.json(job, { status: 201, headers: { "Cache-Control": "no-store" } });
+    return Response.json(job, {
+      status: 201,
+      headers: { "Cache-Control": "no-store" },
+    });
   } catch (error) {
     return engineFailureResponse(error);
   }
