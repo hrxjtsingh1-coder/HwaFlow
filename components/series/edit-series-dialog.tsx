@@ -231,8 +231,8 @@ export function EditSeriesDialog({
                 ))}
               </select>
               <span className="grp-field-count">
-                Changing this applies to the next XianScan run, not to imported
-                text already in a chapter.
+                Changing this applies to the next translation run, not to text
+                already translated in a chapter.
               </span>
             </label>
 

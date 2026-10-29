@@ -47,7 +47,8 @@ export function TextReview({
       </header>
 
       <p className="xs-text-review-note">
-        Text imported from XianScan stays editable here. Starting another run sends the original page images and series glossary only—never this text or a HwaFlow fallback.
+        Translated lines stay editable here. Starting another run sends the
+        original page images and series glossary only—never this text.
       </p>
 
       {!panel ? (
@@ -59,7 +60,7 @@ export function TextReview({
         <div className="xs-text-empty">
           <ScanText className="h-5 w-5" aria-hidden="true" />
           <p>No imported lines on this page yet.</p>
-          <span>When XianScan finishes, choose <strong>Import text</strong> in the studio. Each imported English line remains editable.</span>
+          <span>Translated lines land here as soon as a run finishes. Each English line remains editable.</span>
         </div>
       ) : (
         <div className="xs-text-review-body">

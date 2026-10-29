@@ -14,3 +14,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - `docs/GROUPS-PAGE.md` — locked decisions, permissions, data model and build spec for the groups surfaces (`/admin/groups`, `/admin/groups/[id]`, `/groups/[id]/settings`). Read before starting that work; do not re-ask the decisions recorded there. Section 0 records the 2026-10-24 move away from `/settings/members` (deleted).
 - `docs/context.md` — product intent.
 
+## Copy rules
+
+- **Never name the image/translation engine in anything a user can see.** That covers JSX text, `aria-label`, `title`, `alt`, toasts, empty states, error copy and anything in `app/`. The product is the workspace: "Run translation", "Translated", "typesetting". The name may appear in server-side code, comments, migrations and docs — just never in rendered strings. Backend errors from the engine are not safe to surface either; replace them with neutral copy.
+

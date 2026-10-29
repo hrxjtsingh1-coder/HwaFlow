@@ -10,11 +10,9 @@ type PanelDropzoneProps = {
   onFiles: (files: File[]) => void;
   busy: boolean;
   progress: UploadProgress;
-  /** `drop` is the viewer's empty state; `button` is the header's + Add panels. */
+  /** `drop` is the viewer's empty state; `button` is the studio's + Add panels. */
   variant?: "drop" | "button";
   disabled?: boolean;
-  /** Pages already stored on this chapter, so the cap can be shown up front. */
-  pageCount?: number;
   /** Pages left before the 20-page cap. `0` renders the locked state. */
   remaining?: number;
 };
@@ -30,7 +28,6 @@ export function PanelDropzone({
   progress,
   variant = "drop",
   disabled = false,
-  pageCount = 0,
   remaining = MAX_CHAPTER_PAGES,
 }: PanelDropzoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -72,23 +69,20 @@ export function PanelDropzone({
         {input}
         <button
           type="button"
-          className="btn btn-ghost btn-sm"
+          className="cs-btn"
           onClick={() => inputRef.current?.click()}
           disabled={locked}
           title={
             atCapacity
-              ? `This chapter already holds all ${MAX_CHAPTER_PAGES} pages. Delete one to add another.`
+              ? `This chapter already holds all ${MAX_CHAPTER_PAGES} pages. Remove one to add another.`
               : busy
                 ? progressLabel
-                : `Add more full-resolution pages (${remaining} of ${MAX_CHAPTER_PAGES} left)`
+                : `Insert full-resolution pages after the panel you are looking at (${remaining} of ${MAX_CHAPTER_PAGES} left)`
           }
         >
-          <Plus className="h-3.5 w-3.5" />
-          {busy ? progressLabel : atCapacity ? "Page limit reached" : "Add panels"}
+          <Plus className="h-3 w-3" />
+          {busy ? progressLabel : atCapacity ? "Chapter full" : "Add panels"}
         </button>
-        <span className="ch-page-cap" data-full={atCapacity ? "true" : "false"}>
-          {pageCount}/{MAX_CHAPTER_PAGES}
-        </span>
       </>
     );
   }

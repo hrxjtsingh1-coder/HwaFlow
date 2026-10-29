@@ -330,18 +330,9 @@ export type RegisterPanelInput = {
   byteSize: number;
 };
 
-export async function registerPanelsAction(input: {
-  chapterId: string;
-  panels: RegisterPanelInput[];
-}): Promise<ChapterActionResult<{ registered: number }>> {
-  const auth = await requireViewer();
-  if (!auth.ok) return auth.result;
-
-  if (!isUuid(input.chapterId)) {
-    return failure("not-found", "That chapter no longer exists.");
-  }
-
-  for (const panel of input.panels) {
+/** Per-panel shape checks shared by the append and insert-after actions. */
+function invalidPanel(panels: RegisterPanelInput[]): string | null {
+  for (const panel of panels) {
     if (
       !isUuid(panel.id) ||
       !Number.isInteger(panel.index) ||
@@ -355,24 +346,34 @@ export async function registerPanelsAction(input: {
       !Number.isInteger(panel.byteSize) ||
       panel.byteSize <= 0
     ) {
-      return failure("unknown", "One of those panels could not be registered.");
+      return "One of those panels could not be registered.";
     }
     if (panel.byteSize > MAX_PAGE_BYTES) {
-      return failure(
-        "unknown",
-        `One page is over ${formatMB(MAX_PAGE_BYTES)}. The engine cannot accept it.`
-      );
+      return `One page is over ${formatMB(MAX_PAGE_BYTES)}. The engine cannot accept it.`;
     }
     // Stored originals are PNG now, whatever the upload started as. Catch a
     // client that skipped (or broke) the browser-side conversion here, so the
     // bucket never receives a WebP object with a `.png` name.
-    if (typeof panel.path === "string" && !panel.path.toLowerCase().endsWith(".png")) {
-      return failure(
-        "unknown",
-        "Pages must be stored as PNG at full resolution. Reload the page and try that upload again."
-      );
+    if (!panel.path.toLowerCase().endsWith(".png")) {
+      return "Pages must be stored as PNG at full resolution. Reload the page and try that upload again.";
     }
   }
+  return null;
+}
+
+export async function registerPanelsAction(input: {
+  chapterId: string;
+  panels: RegisterPanelInput[];
+}): Promise<ChapterActionResult<{ registered: number }>> {
+  const auth = await requireViewer();
+  if (!auth.ok) return auth.result;
+
+  if (!isUuid(input.chapterId)) {
+    return failure("not-found", "That chapter no longer exists.");
+  }
+
+  const panelError = invalidPanel(input.panels);
+  if (panelError) return failure("unknown", panelError);
 
   const supabase = await createClient();
 
@@ -437,6 +438,50 @@ export async function registerPanelsAction(input: {
     typeof data === "number" ? data : input.panels.length;
 
   return { ok: true, data: { registered } };
+}
+
+/**
+ * Insert pages after `afterIndex`, keeping the pages already stored. The row
+ * indexes are the database's job: `insert_panels_after` shifts the tail and
+ * renumbers the whole list, so the caller sends only the new rows.
+ */
+export async function registerPanelsAfterAction(input: {
+  chapterId: string;
+  afterIndex: number;
+  panels: Array<Omit<RegisterPanelInput, "index">>;
+}): Promise<ChapterActionResult<{ registered: number }>> {
+  const auth = await requireViewer();
+  if (!auth.ok) return auth.result;
+
+  if (!isUuid(input.chapterId)) {
+    return failure("not-found", "That chapter no longer exists.");
+  }
+
+  if (!Number.isInteger(input.afterIndex) || input.afterIndex < -1) {
+    return failure("unknown", "Couldn't work out where to insert those panels.");
+  }
+
+  const panels: RegisterPanelInput[] = input.panels.map((panel, offset) => ({
+    ...panel,
+    index: input.afterIndex + 1 + offset,
+  }));
+
+  const panelError = invalidPanel(panels);
+  if (panelError) return failure("unknown", panelError);
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("insert_panels_after", {
+    p_chapter_id: input.chapterId,
+    p_after_index: input.afterIndex,
+    p_panels: panels,
+  });
+
+  if (error) return fromDbError(error, "Couldn't add those panels.");
+
+  return {
+    ok: true,
+    data: { registered: typeof data === "number" ? data : panels.length },
+  };
 }
 
 export async function removePanelAction(input: {

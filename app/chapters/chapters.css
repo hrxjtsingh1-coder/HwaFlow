@@ -1658,1053 +1658,780 @@
 }
 
 /* ------------------------------------------------------------------ */
-/* XianScan before/after studio                                       */
+/* Chapter studio                                                      */
 /* ------------------------------------------------------------------ */
+/* One frame around the whole job: a top bar holding every control, a   */
+/* status strip, the raw page beside its typeset twin, and a filmstrip. */
+/* The sheet stays paper-white in both themes, so it sets its own ink.  */
 
-.xs-studio {
+.cs-studio {
+  --cs-paper: #fffdf6;
+  --cs-ink: oklch(0.182 0 89.88);
+  --cs-rule: oklch(0.8 0.012 90);
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   min-width: 0;
+  min-height: 34rem;
   margin: 1rem;
-  border: 1px solid var(--border);
+  border: 2px solid var(--edge);
   background: var(--surface);
-  box-shadow: var(--shadow-hard-sm);
+  box-shadow: var(--shadow-hard);
 }
 
-.xs-studio-header {
+.cs-grow {
+  flex: 1;
+}
+
+/* --- top bar ------------------------------------------------------ */
+
+.cs-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 1rem 1.1rem;
+  gap: 0.5rem;
+  padding: 0.5rem 0.625rem;
   border-bottom: 1px solid var(--border);
-  background: color-mix(in oklab, var(--surface) 85%, var(--accent-soft));
+  background: color-mix(in oklab, var(--surface) 78%, var(--accent-soft));
 }
 
-.xs-studio-heading,
-.xs-studio-primary-actions,
-.xs-studio-title-copy,
-.xs-studio-actions,
-.xs-studio-action-copy,
-.xs-studio-secondary-actions,
-.xs-status-leading,
-.xs-status-trailing,
-.xs-studio-toolbar,
-.xs-page-nav,
-.xs-review-controls,
-.xs-image-pane-head,
-.xs-image-pane-foot,
-.xs-text-review-title,
-.xs-text-review-counts,
-.xs-lightbox-head,
-.xs-lightbox-controls,
-.xs-confirm-actions {
+.cs-divider {
+  width: 1px;
+  height: 1.375rem;
+  margin: 0 0.125rem;
+  background: var(--border);
+}
+
+.cs-pager {
   display: flex;
   align-items: center;
+  gap: 0.3125rem;
 }
 
-.xs-studio-heading {
-  min-width: 0;
-  gap: 0.8rem;
-}
-
-.xs-studio-mark,
-.xs-text-review-icon {
-  display: grid;
-  flex: 0 0 auto;
-  place-items: center;
-  width: 2.55rem;
-  height: 2.55rem;
-  border: 1px solid color-mix(in oklab, var(--accent) 30%, var(--border));
-  background: var(--accent-soft);
-  color: var(--accent-ink);
-}
-
-.xs-studio-title-copy {
-  min-width: 0;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.12rem;
-}
-
-.xs-studio-eyebrow {
-  margin: 0;
-  color: var(--accent-ink);
-  font-size: 0.58rem;
-  font-weight: 750;
-  letter-spacing: 0.13em;
-}
-
-.xs-studio-title-copy h2,
-.xs-lightbox-head h2,
-.xs-confirm-dialog h2 {
-  margin: 0;
+.cs-page-num {
+  min-width: 4.625rem;
+  text-align: center;
   color: var(--text);
-  font-size: 1.12rem;
-  font-weight: 700;
-  letter-spacing: -0.025em;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.05em;
 }
 
-.xs-studio-title-copy > p:last-child {
-  margin: 0.08rem 0 0;
-  color: var(--muted);
-  font-size: 0.72rem;
-  line-height: 1.4;
+.cs-page-num b {
+  font-weight: 600;
 }
 
-.xs-studio-primary-actions {
-  flex: 0 0 auto;
-  gap: 0.45rem;
+.cs-icon {
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.6875rem;
+  border: 1px solid var(--edge);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-hard-sm);
+  transition: background-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease), translate var(--t-fast) var(--ease);
 }
 
-.xs-studio-primary-actions > button {
-  white-space: nowrap;
+.cs-icon:hover:not(:disabled) {
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
-.xs-studio-status {
-  display: flex;
+.cs-icon:active:not(:disabled) {
+  translate: 1px 1px;
+  box-shadow: none;
+}
+
+.cs-icon:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Compact mono button — the studio bar is denser than page-level .btn. */
+.cs-btn {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.8rem;
-  min-height: 2.5rem;
-  padding: 0.55rem 1.1rem;
-  border-bottom: 1px solid var(--border);
+  gap: 0.375rem;
+  padding: 0.375rem 0.625rem;
+  border: 1px solid var(--edge);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  box-shadow: var(--shadow-hard-sm);
+  transition: background-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease), translate var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease);
+}
+
+.cs-btn svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.cs-btn:hover:not(:disabled):not([data-disabled="true"]) {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.cs-btn:active:not(:disabled):not([data-disabled="true"]) {
+  translate: 1px 1px;
+  box-shadow: none;
+}
+
+.cs-btn:disabled,
+.cs-btn[data-disabled="true"] {
+  opacity: 0.38;
+  cursor: not-allowed;
+  box-shadow: none;
   background: var(--surface-2);
 }
 
-.xs-status-leading {
-  min-width: 0;
-  gap: 0.5rem;
+.cs-btn[data-primary="true"] {
+  background: var(--accent);
+  color: var(--paper);
 }
 
-.xs-status-dot {
-  width: 0.48rem;
-  height: 0.48rem;
+.cs-btn[data-primary="true"]:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--paper);
+  opacity: 0.88;
+}
+
+.cs-btn[data-primary="true"]:disabled {
+  background: var(--surface-2);
+  color: var(--muted);
+  opacity: 0.42;
+}
+
+:root[data-theme="dark"] .cs-btn[data-primary="true"] {
+  color: oklch(0.14 0 0);
+}
+
+:root[data-theme="dark"] .cs-btn[data-primary="true"]:hover:not(:disabled) {
+  color: oklch(0.14 0 0);
+}
+
+/* --- status strip ------------------------------------------------- */
+
+.cs-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.625rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.02em;
+}
+
+.cs-status-dot {
   flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--faint);
 }
 
-.xs-studio-status[data-status="pending"] .xs-status-dot,
-.xs-studio-status[data-status="working"] .xs-status-dot {
+.cs-status[data-live="true"] .cs-status-dot {
   background: var(--warning);
-  animation: ch-pulse 1.6s var(--ease) infinite;
+  animation: cs-pulse 1.8s var(--ease) infinite;
 }
 
-.xs-studio-status[data-status="done"] .xs-status-dot,
-.xs-studio-status[data-status="approved"] .xs-status-dot {
+.cs-status[data-live="done"] .cs-status-dot {
   background: var(--success);
 }
 
-.xs-studio-status[data-status="failed"] .xs-status-dot,
-.xs-studio-status[data-status="rejected"] .xs-status-dot {
-  background: var(--danger);
-}
-
-.xs-status-title {
-  flex: 0 0 auto;
+.cs-status-copy {
   color: var(--text);
-  font-size: 0.68rem;
-  font-weight: 700;
-  text-transform: capitalize;
 }
 
-.xs-status-copy {
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 0.68rem;
-  line-height: 1.4;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.xs-status-trailing {
-  flex: 0 0 auto;
-  gap: 0.6rem;
-}
-
-.xs-run-pages,
-.xs-page-state {
+.cs-status-meta {
   color: var(--faint);
-  font-size: 0.61rem;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-.xs-progress {
+.cs-status-track {
+  flex: 0 0 7.5rem;
   height: 3px;
   overflow: hidden;
   background: var(--surface-3);
 }
 
-.xs-progress-fill {
+.cs-status-track i {
   display: block;
+  width: 100%;
   height: 100%;
   background: var(--accent);
-  transition: width 240ms var(--ease);
+  transform-origin: left center;
+  transform: scaleX(0);
+  transition: transform 420ms var(--ease);
 }
 
-.xs-engine-alert {
+.cs-alert {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.5rem;
-  margin: 0.65rem 1rem 0;
-  padding: 0.55rem 0.7rem;
-  border: 1px solid color-mix(in oklab, var(--danger) 30%, var(--border));
-  background: color-mix(in oklab, var(--danger) 7%, var(--surface));
-  color: var(--danger);
+  padding: 0.5rem 0.625rem;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in oklab, var(--surface) 82%, var(--blush));
+  color: var(--text);
   font-size: 0.7rem;
   line-height: 1.45;
 }
 
-.xs-engine-alert svg {
+.cs-alert svg {
   flex: 0 0 auto;
-  margin-top: 0.05rem;
-}
-
-.xs-engine-alert--warning {
-  border-color: color-mix(in oklab, var(--warning) 36%, var(--border));
-  background: color-mix(in oklab, var(--warning) 9%, var(--surface));
-  color: var(--text);
-}
-
-.xs-studio-toolbar {
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 0.55rem;
-  padding: 0.55rem 0.8rem;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
-}
-
-.xs-page-nav {
-  min-width: 0;
-  gap: 0.35rem;
-}
-
-.xs-page-nav strong {
-  color: var(--text);
-  font-size: 0.69rem;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.xs-page-state {
-  padding: 0.14rem 0.4rem;
-  border: 1px solid var(--border);
-  text-transform: capitalize;
-}
-
-.xs-page-state[data-status="done"],
-.xs-page-state[data-status="saved"] {
-  border-color: color-mix(in oklab, var(--success) 35%, var(--border));
-  color: var(--success);
-}
-
-.xs-page-state[data-status="failed"] {
-  border-color: color-mix(in oklab, var(--danger) 35%, var(--border));
   color: var(--danger);
 }
 
-.xs-review-controls {
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 0.35rem;
+.cs-hint {
+  margin: 0;
+  padding: 0 0.75rem 0.625rem;
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.04em;
 }
 
-.xs-icon-button,
-.xs-tool-button,
-.xs-zoom-controls button,
-.xs-view-modes button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.3rem;
-  min-height: 1.85rem;
-  padding: 0.25rem 0.45rem;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  font-size: 0.63rem;
-  line-height: 1;
-  transition: background-color 140ms var(--ease), border-color 140ms var(--ease), color 140ms var(--ease);
-}
+/* --- split -------------------------------------------------------- */
 
-.xs-icon-button {
-  width: 1.9rem;
-  padding: 0;
-}
-
-.xs-icon-button:hover:not(:disabled),
-.xs-tool-button:hover:not(:disabled),
-.xs-zoom-controls button:hover:not(:disabled),
-.xs-view-modes button:hover:not(:disabled) {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent-ink);
-}
-
-.xs-icon-button:disabled,
-.xs-zoom-controls button:disabled {
-  cursor: not-allowed;
-  opacity: 0.42;
-}
-
-.xs-view-modes {
-  display: inline-flex;
-  padding: 0.12rem;
-  border: 1px solid var(--border);
+.cs-split {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-height: 0;
   background: var(--surface-2);
 }
 
-.xs-view-modes button {
-  min-height: 1.55rem;
-  border-color: transparent;
-  background: transparent;
-  color: var(--muted);
-  font-size: 0.59rem;
-}
-
-.xs-view-modes button[aria-pressed="true"] {
-  border-color: var(--border);
+.cs-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
   background: var(--surface);
-  color: var(--accent-ink);
-  box-shadow: var(--shadow-hard-sm);
 }
 
-.xs-tool-button {
-  text-decoration: none;
+.cs-pane + .cs-pane {
+  border-left: 1px solid var(--border);
+}
+
+.cs-pane-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5625rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.cs-pane-label {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.cs-kicker {
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: 0.53125rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.cs-title {
+  color: var(--text);
+  font-size: 0.71875rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.cs-dims {
+  margin-left: auto;
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: 0.5625rem;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-.xs-tool-button[aria-pressed="true"] {
-  border-color: color-mix(in oklab, var(--accent) 50%, var(--border));
-  background: var(--accent-soft);
-  color: var(--accent-ink);
-}
-
-.xs-zoom-controls {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.15rem;
-  padding: 0.12rem;
+.cs-tag {
+  padding: 2px 5px;
   border: 1px solid var(--border);
   background: var(--surface-2);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.53125rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
-.xs-zoom-controls button {
-  min-height: 1.55rem;
-  min-width: 1.55rem;
-  padding: 0.2rem;
-  border: 0;
-  background: transparent;
-  font-weight: 700;
-}
-
-.xs-zoom-controls button:last-child {
-  min-width: 2rem;
-  border-left: 1px solid var(--border);
-  font-size: 0.56rem;
+.cs-tag[data-tone="ready"] {
+  border-color: var(--edge);
+  background: var(--mint);
+  color: var(--cs-ink);
   font-weight: 600;
 }
 
-.xs-zoom-controls span {
-  min-width: 2.2rem;
-  color: var(--muted);
-  font-size: 0.58rem;
-  font-variant-numeric: tabular-nums;
-  text-align: center;
-}
-
-/*
- * The stage is the product. It gets its own scroll viewport sized off the
- * viewport height so a full page is legible at 100% zoom without the user
- * hunting for a "bigger" button — the old 17rem box was the complaint.
- */
-.xs-compare {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.65rem;
-  padding: 0.65rem;
+.cs-stage {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  min-height: 10rem;
+  padding: 0.75rem;
+  overflow: hidden;
   background: var(--surface-2);
 }
 
-.xs-compare[data-mode="split"] {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.xs-compare[data-mode="before"] {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.xs-compare[data-mode="after"] {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.xs-compare[data-mode="before"] .xs-image-pane[data-side="after"],
-.xs-compare[data-mode="after"] .xs-image-pane[data-side="before"] {
-  display: none;
-}
-
-.xs-image-pane {
+.cs-frame {
+  position: relative;
   display: flex;
-  flex-direction: column;
-  min-width: 0;
-  margin: 0;
-  border: 1px solid var(--border);
-  background: var(--surface);
-}
-
-.xs-image-pane-head {
-  justify-content: space-between;
-  gap: 0.5rem;
-  min-height: 2.65rem;
-  padding: 0.45rem 0.6rem;
-  border-bottom: 1px solid var(--border);
-}
-
-.xs-image-pane-head > div {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 0.08rem;
-}
-
-.xs-image-pane-kicker {
-  color: var(--faint);
-  font-size: 0.5rem;
-  font-weight: 750;
-  letter-spacing: 0.12em;
-}
-
-.xs-image-pane-head strong {
-  overflow: hidden;
-  color: var(--text);
-  font-size: 0.68rem;
-  font-weight: 650;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.xs-image-dimensions {
-  flex: 0 0 auto;
-  color: var(--faint);
-  font-size: 0.54rem;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.xs-image-open {
-  display: flex;
-  min-height: clamp(20rem, 54vh, 44rem);
-  max-height: clamp(20rem, 54vh, 44rem);
-  flex: 1;
-  align-items: stretch;
+  align-items: center;
   justify-content: center;
-  overflow: hidden;
-  padding: 0;
-  border: 0;
-  background:
-    linear-gradient(45deg, color-mix(in oklab, var(--surface-2) 70%, transparent) 25%, transparent 25%),
-    linear-gradient(-45deg, color-mix(in oklab, var(--surface-2) 70%, transparent) 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, color-mix(in oklab, var(--surface-2) 70%, transparent) 75%),
-    linear-gradient(-45deg, transparent 75%, color-mix(in oklab, var(--surface-2) 70%, transparent) 75%);
-  background-position: 0 0, 0 0.35rem, 0.35rem -0.35rem, -0.35rem 0;
-  background-size: 0.7rem 0.7rem;
+  height: 100%;
+  max-height: 100%;
+  max-width: 100%;
+  border: 1px solid var(--cs-ink);
+  background: var(--cs-paper);
+  box-shadow: var(--shadow-hard);
   cursor: zoom-in;
 }
 
-.xs-image-scroll {
-  display: flex;
-  width: 100%;
-  min-height: clamp(20rem, 54vh, 44rem);
-  max-height: clamp(20rem, 54vh, 44rem);
-  align-items: flex-start;
-  justify-content: center;
-  overflow: auto;
-  padding: 0.45rem;
-}
-
-.xs-image-layer {
-  position: relative;
-  flex: 0 0 auto;
-  max-width: none;
-  margin: auto;
-  line-height: 0;
-}
-
-.xs-preview-image {
+.cs-page {
   display: block;
   width: 100%;
-  height: auto;
-  max-width: none;
-  user-select: none;
+  height: 100%;
+  object-fit: contain;
 }
 
-.xs-preview-box {
-  position: absolute;
-  z-index: 1;
-  border: 1px solid color-mix(in oklab, var(--accent) 72%, white);
-  background: color-mix(in oklab, var(--accent) 10%, transparent);
-  pointer-events: none;
-  transition: background-color 120ms var(--ease), border-color 120ms var(--ease);
-}
-
-.xs-preview-box[data-active="true"] {
-  z-index: 2;
-  border: 2px solid var(--accent);
-  background: color-mix(in oklab, var(--accent) 22%, transparent);
-}
-
-.xs-image-placeholder {
+.cs-pane-foot {
   display: flex;
-  min-height: clamp(20rem, 54vh, 44rem);
-  max-height: clamp(20rem, 54vh, 44rem);
-  flex: 1;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3125rem 0.5625rem;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: 0.5625rem;
+  letter-spacing: 0.03em;
+}
+
+/* The 20-panel cap, pinned under the original page. */
+.cs-cap {
+  display: flex;
+  align-items: center;
+  gap: 0.4375rem;
+  white-space: nowrap;
+}
+
+.cs-cap-cells {
+  display: flex;
+  gap: 2px;
+}
+
+.cs-cap-cells i {
+  width: 4px;
+  height: 9px;
+  border: 1px solid var(--border);
+  background: var(--surface-3);
+}
+
+.cs-cap-cells i[data-on="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.cs-cap-num {
+  color: var(--text);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.cs-cap[data-full="true"] .cs-cap-num {
+  color: var(--danger);
+}
+
+.cs-drop-wrap {
+  width: 100%;
+  max-width: 26rem;
+}
+
+.cs-stub {
+  display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 0.6rem;
+  gap: 0.5rem;
+  max-width: 20rem;
   padding: 1rem;
-  background: var(--surface-2);
-  color: var(--muted);
+  color: var(--faint);
   text-align: center;
 }
 
-.xs-image-placeholder p {
-  max-width: 19rem;
-  margin: 0;
-  font-size: 0.7rem;
-  line-height: 1.5;
-}
-
-.xs-image-placeholder-mark {
-  display: grid;
-  place-items: center;
-  width: 2.2rem;
-  height: 2.2rem;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--accent-ink);
-}
-
-.xs-image-pane-foot {
-  min-height: 1.8rem;
-  padding: 0.35rem 0.6rem;
-  border-top: 1px solid var(--border);
-  color: var(--faint);
-  font-size: 0.56rem;
-  line-height: 1.3;
-}
-
-.xs-studio-empty {
-  display: grid;
-  grid-template-columns: minmax(13rem, 0.8fr) minmax(14rem, 1fr);
-  align-items: center;
-  gap: 1rem;
-  padding: 1rem;
-  background: var(--surface-2);
-}
-
-.xs-studio-empty > div:last-child {
-  max-width: 25rem;
-}
-
-.xs-studio-empty h3 {
-  margin: 0 0 0.3rem;
-  color: var(--text);
-  font-size: 0.9rem;
-}
-
-.xs-studio-empty p {
-  margin: 0;
+.cs-stub svg {
   color: var(--muted);
-  font-size: 0.7rem;
+}
+
+.cs-stub p {
+  margin: 0;
+  font-size: 0.75rem;
   line-height: 1.55;
 }
 
-.xs-filmstrip {
-  display: flex;
-  align-items: stretch;
-  gap: 0.45rem;
-  overflow-x: auto;
-  padding: 0.55rem 0.65rem;
-  border-top: 1px solid var(--border);
-  background: var(--surface);
-  scrollbar-color: var(--border-strong) transparent;
+.cs-stamp {
+  position: absolute;
+  top: 0.5625rem;
+  right: 0.5625rem;
+  z-index: 3;
+  padding: 3px 7px;
+  border: 1px solid var(--edge);
+  background: var(--mint);
+  color: var(--cs-ink);
+  font-family: var(--font-mono);
+  font-size: 0.53125rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  box-shadow: var(--shadow-hard-sm);
 }
 
-.xs-filmstrip-page {
+/* --- the waiting sheet -------------------------------------------- */
+
+.cs-sheet {
+  position: relative;
+  height: 100%;
+  max-height: 100%;
+  width: auto;
+  max-width: 100%;
+  border: 1px solid var(--cs-ink);
+  background: var(--cs-paper);
+  box-shadow: var(--shadow-hard);
+}
+
+.cs-ghost {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--cs-paper);
+}
+
+.cs-ghost-ruled,
+.cs-ghost-ink-rows {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 2.1%;
+  padding: 11% 13% 18%;
+}
+
+.cs-ghost-ruled i,
+.cs-ghost-ink-rows i {
+  display: block;
+  height: 1.55%;
+  background: var(--cs-rule);
+  opacity: 0.55;
+}
+
+.cs-ghost-ruled i[data-short="true"],
+.cs-ghost-ink-rows i[data-short="true"] {
+  width: 62%;
+}
+
+.cs-ghost-ruled i[data-mid="true"],
+.cs-ghost-ink-rows i[data-mid="true"] {
+  width: 84%;
+}
+
+.cs-ghost-gap {
+  height: 2.2%;
+  background: none;
+}
+
+/* The ink a passing band is "printing": a window the height of the band
+   slides down the sheet while the rows inside counter-slide, so the ink
+   stays pinned to the page. Both are transforms — no repaint. */
+.cs-ghost-ink {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 19%;
+  overflow: hidden;
+  pointer-events: none;
+  animation: cs-band-pass 3.6s linear infinite;
+}
+
+.cs-ghost-ink-rows {
+  height: 526.3158%;
+  animation: cs-ink-pass 3.6s linear infinite;
+}
+
+.cs-ghost-ink-rows i {
+  background: var(--cs-ink);
+  opacity: 0.82;
+}
+
+.cs-ghost-band {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 19%;
+  pointer-events: none;
+  animation: cs-band-pass 3.6s linear infinite;
+}
+
+.cs-ghost-band::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    color-mix(in oklab, var(--accent) 6%, transparent) 34%,
+    color-mix(in oklab, var(--accent) 16%, transparent) 76%,
+    color-mix(in oklab, var(--accent) 30%, transparent) 96%,
+    transparent 100%
+  );
+}
+
+.cs-ghost-band::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1.5px;
+  background: color-mix(in oklab, var(--accent) 85%, transparent);
+  box-shadow: 0 0 10px color-mix(in oklab, var(--accent) 40%, transparent);
+}
+
+/* Registration marks, drawn once per mount. */
+.cs-ghost-reg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.cs-ghost-reg path {
+  fill: none;
+  stroke: var(--cs-ink);
+  stroke-width: 1.2;
+  opacity: 0.85;
+  stroke-dasharray: 22;
+  stroke-dashoffset: 22;
+  animation: cs-reg-draw 620ms var(--ease-out) 80ms forwards;
+}
+
+.cs-ghost-label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 6.5%;
+  color: oklch(0.62 0.02 90);
+  font-family: var(--font-mono);
+  font-size: 0.46rem;
+  letter-spacing: 0.22em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+/* Draft: panels present, nothing started, so the sheet sits unprinted. */
+.cs-ghost[data-still="true"] .cs-ghost-band,
+.cs-ghost[data-still="true"] .cs-ghost-ink {
+  display: none;
+}
+
+.cs-ghost[data-still="true"] .cs-ghost-ruled i {
+  background: oklch(0.755 0.014 90);
+  opacity: 0.9;
+}
+
+.cs-ghost[data-still="true"] .cs-ghost-reg path {
+  animation: none;
+  stroke-dashoffset: 0;
+  opacity: 0.45;
+}
+
+@keyframes cs-band-pass {
+  0% {
+    transform: translateY(-100%);
+  }
+  82%,
+  100% {
+    transform: translateY(526%);
+  }
+}
+
+@keyframes cs-ink-pass {
+  0% {
+    transform: translateY(19%);
+  }
+  82%,
+  100% {
+    transform: translateY(-100%);
+  }
+}
+
+@keyframes cs-reg-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes cs-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.82);
+  }
+}
+
+/* --- filmstrip ---------------------------------------------------- */
+
+.cs-strip {
+  display: flex;
+  align-items: stretch;
+  gap: 5px;
+  padding: 0.4375rem 0.5625rem;
+  overflow-x: auto;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.cs-thumb {
+  position: relative;
   display: flex;
   flex: 0 0 auto;
   flex-direction: column;
   align-items: center;
-  gap: 0.22rem;
-  width: 4.15rem;
-  padding: 0.2rem;
+  gap: 3px;
+  width: 3rem;
+  padding: 3px;
   border: 1px solid transparent;
   background: transparent;
-  color: var(--muted);
-  transition: border-color 140ms var(--ease), background-color 140ms var(--ease);
+  color: inherit;
 }
 
-.xs-filmstrip-page:hover,
-.xs-filmstrip-page[aria-selected="true"] {
+.cs-thumb:hover {
   border-color: var(--accent);
   background: var(--accent-soft);
-  color: var(--accent-ink);
 }
 
-.xs-filmstrip-thumb {
+.cs-thumb[data-selected="true"] {
+  border-color: var(--edge);
+  background: var(--accent-soft);
+  box-shadow: var(--shadow-hard-sm);
+}
+
+.cs-thumb-box {
   position: relative;
   display: grid;
   place-items: center;
-  width: 3.1rem;
-  height: 3.9rem;
+  width: 2.125rem;
+  height: 2.875rem;
   overflow: hidden;
   border: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--faint);
 }
 
-.xs-filmstrip-thumb img {
-  display: block;
+.cs-thumb-box img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.xs-filmstrip-dot {
+.cs-thumb-dot {
   position: absolute;
-  right: 0.15rem;
-  bottom: 0.15rem;
-  width: 0.42rem;
-  height: 0.42rem;
-  border: 1px solid var(--surface);
+  right: 2px;
+  bottom: 2px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: var(--warning);
+  border: 1px solid var(--surface);
+  background: var(--faint);
 }
 
-.xs-filmstrip-dot[data-status="done"] {
+.cs-thumb[data-state="done"] .cs-thumb-dot {
   background: var(--success);
 }
 
-.xs-filmstrip-dot[data-status="failed"] {
-  background: var(--danger);
+.cs-thumb[data-state="live"] .cs-thumb-dot {
+  background: var(--warning);
+  animation: cs-pulse 1.6s var(--ease) infinite;
 }
 
-.xs-filmstrip-number {
-  font-size: 0.57rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.xs-filmstrip-budget {
-  align-self: center;
-  margin-left: auto;
-  padding: 0 0.35rem;
-  color: var(--faint);
-  font-size: 0.56rem;
-  white-space: nowrap;
-}
-
-.xs-studio-actions {
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.65rem 0.8rem;
-  border-top: 1px solid var(--border);
-  background: color-mix(in oklab, var(--surface) 82%, var(--surface-2));
-}
-
-.xs-studio-action-copy {
-  min-width: 0;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.25rem;
-  color: var(--success);
-  font-size: 0.62rem;
-  line-height: 1.45;
-}
-
-.xs-studio-action-copy > span {
-  display: inline-flex;
-  align-items: flex-start;
-  gap: 0.3rem;
-}
-
-.xs-studio-action-copy svg {
-  flex: 0 0 auto;
-  margin-top: 0.02rem;
-}
-
-.xs-studio-hint {
-  color: var(--muted);
-}
-
-.xs-studio-secondary-actions {
-  flex: 0 0 auto;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 0.35rem;
-}
-
-.xs-link-button {
-  padding: 0.25rem 0.15rem;
-  color: var(--accent-ink);
-  font: inherit;
-  font-size: 0.63rem;
-  text-decoration: underline;
-  text-underline-offset: 0.15em;
-}
-
-.xs-link-button:disabled {
-  cursor: default;
-  opacity: 0.6;
-}
-
-.xs-destructive-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 2rem;
-  padding: 0.35rem 0.65rem;
-  border: 1px solid color-mix(in oklab, var(--danger) 38%, var(--border));
-  background: color-mix(in oklab, var(--danger) 7%, var(--surface));
-  color: var(--danger);
-  font: inherit;
-  font-size: 0.68rem;
-  font-weight: 650;
-}
-
-.xs-destructive-button:hover:not(:disabled) {
-  border-color: var(--danger);
-  background: color-mix(in oklab, var(--danger) 14%, var(--surface));
-}
-
-.xs-destructive-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
-.xs-text-review {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  margin: 0 1rem 1.2rem;
-  border: 1px solid var(--border);
-  background: var(--surface);
-}
-
-.xs-text-review-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.8rem;
-  padding: 0.75rem 0.85rem;
-  border-bottom: 1px solid var(--border);
-  background: color-mix(in oklab, var(--surface) 84%, var(--accent-soft));
-}
-
-.xs-text-review-title {
-  gap: 0.55rem;
-}
-
-.xs-text-review-icon {
-  width: 2rem;
-  height: 2rem;
-}
-
-.xs-text-review-title h2 {
-  margin: 0.08rem 0 0;
-  color: var(--text);
-  font-size: 0.88rem;
-  font-weight: 700;
-}
-
-.xs-text-review-counts {
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 0.35rem;
-}
-
-.xs-text-review-counts span {
-  padding: 0.2rem 0.4rem;
-  border: 1px solid var(--border);
-  color: var(--muted);
-  font-size: 0.57rem;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.xs-text-review-note {
-  margin: 0;
-  padding: 0.55rem 0.85rem;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface-2);
-  color: var(--muted);
-  font-size: 0.65rem;
-  line-height: 1.5;
-}
-
-.xs-text-review-body {
-  max-height: 48vh;
-  overflow-y: auto;
-  padding: 0.4rem 0.8rem 0.85rem;
-}
-
-.xs-text-review-body .ch-bubble-list {
-  padding-top: 0.35rem;
-}
-
-.xs-text-empty {
-  display: flex;
-  min-height: 7.5rem;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-  padding: 1.1rem;
-  color: var(--muted);
-  text-align: center;
-}
-
-.xs-text-empty > svg {
-  color: var(--accent-ink);
-}
-
-.xs-text-empty p {
-  margin: 0;
-  color: var(--text);
-  font-size: 0.73rem;
-  font-weight: 650;
-}
-
-.xs-text-empty span {
-  max-width: 31rem;
-  color: var(--muted);
-  font-size: 0.64rem;
-  line-height: 1.5;
-}
-
-.xs-lightbox-layer,
-.xs-confirm-layer {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: grid;
-  place-items: center;
-  padding: 1rem;
-  background: var(--scrim-strong);
-}
-
-.xs-lightbox {
-  display: flex;
-  width: min(100%, 90rem);
-  max-height: calc(100dvh - 2rem);
-  flex-direction: column;
-  overflow: hidden;
-  outline: none;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  box-shadow: var(--shadow-hard-lg);
-}
-
-.xs-lightbox-head {
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.65rem 0.85rem;
-  border-bottom: 1px solid var(--border);
-}
-
-.xs-lightbox-head h2 {
-  margin-top: 0.1rem;
-  font-size: 0.95rem;
-}
-
-.xs-lightbox-controls {
-  gap: 0.3rem;
-}
-
-.xs-lightbox-body {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  min-height: 0;
-  overflow: auto;
-  gap: 0.55rem;
-  padding: 0.65rem;
-  background: var(--surface-2);
-}
-
-.xs-lightbox-body .xs-image-pane {
-  min-height: 0;
-}
-
-.xs-lightbox-body .xs-image-open,
-.xs-lightbox-body .xs-image-scroll,
-.xs-lightbox-body .xs-image-placeholder {
-  min-height: min(72vh, 50rem);
-  max-height: none;
-}
-
-.xs-confirm-layer {
-  z-index: 110;
-}
-
-.xs-confirm-dialog {
-  display: flex;
-  width: min(100%, 30rem);
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.55rem;
-  padding: 1.25rem;
-  outline: none;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  box-shadow: var(--shadow-hard-lg);
-}
-
-.xs-confirm-icon {
-  display: grid;
-  place-items: center;
-  width: 2.3rem;
-  height: 2.3rem;
-  border: 1px solid color-mix(in oklab, var(--warning) 38%, var(--border));
-  background: color-mix(in oklab, var(--warning) 10%, var(--surface));
-  color: var(--warning);
-}
-
-.xs-confirm-dialog h2 {
-  margin-top: 0.05rem;
-}
-
-.xs-confirm-dialog > p:last-of-type {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.73rem;
-  line-height: 1.55;
-}
-
-.xs-confirm-actions {
-  align-self: flex-end;
-  justify-content: flex-end;
-  gap: 0.4rem;
-  margin-top: 0.5rem;
-}
-
-/*
- * Below ~1400px two side-by-side pages stop being readable, so the split view
- * stacks: one full-width page at a time is better than two thumbnails. The
- * before/after toggle still works, and the filmstrip keeps navigation fast.
- */
-@media (max-width: 1400px) {
-  .xs-compare[data-mode="split"] {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .xs-image-open,
-  .xs-image-scroll,
-  .xs-image-placeholder {
-    min-height: clamp(20rem, 58vh, 44rem);
-    max-height: clamp(20rem, 64vh, 50rem);
-  }
-
-  .xs-lightbox-body {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .xs-lightbox-body .xs-image-open,
-  .xs-lightbox-body .xs-image-scroll,
-  .xs-lightbox-body .xs-image-placeholder {
-    min-height: min(55vh, 38rem);
-  }
-}
-
-@media (max-width: 899.98px) {
-  .xs-studio,
-  .xs-text-review {
-    margin-inline: 0.65rem;
-  }
-}
-
-@media (max-width: 680px) {
-  .xs-studio-header,
-  .xs-studio-actions {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .xs-studio-primary-actions,
-  .xs-studio-secondary-actions {
-    width: 100%;
-    justify-content: flex-start;
-  }
-
-  .xs-studio-status {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .xs-status-copy {
-    white-space: normal;
-  }
-
-  .xs-review-controls {
-    justify-content: flex-start;
-  }
-
-  .xs-studio-toolbar {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .xs-studio-empty {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .xs-text-review-head {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .xs-text-review-counts {
-    justify-content: flex-start;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .xs-progress-fill,
-  .xs-icon-button,
-  .xs-tool-button,
-  .xs-filmstrip-page,
-  .xs-preview-box {
-    transition: none;
-  }
-
-  .xs-studio-status[data-status="pending"] .xs-status-dot,
-  .xs-studio-status[data-status="working"] .xs-status-dot {
-    animation: none;
-  }
-}
-
-/* Page-cap counter next to "Add panels" — the 20-page rule, visible at all times. */
-.ch-page-cap {
-  display: inline-grid;
-  place-items: center;
-  min-width: 2.6rem;
-  padding: 0.15rem 0.35rem;
-  border: 1px solid var(--border);
-  background: var(--surface-2);
+.cs-thumb-n {
   color: var(--muted);
   font-family: var(--font-mono);
-  font-size: 0.56rem;
+  font-size: 0.5625rem;
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.04em;
 }
 
-.ch-page-cap[data-full="true"] {
-  border-color: var(--fill-edge);
-  background: var(--peach);
-  color: var(--text);
-  font-weight: 700;
+.cs-thumb[data-selected="true"] .cs-thumb-n {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* --- responsive --------------------------------------------------- */
+
+@media (max-width: 1100px) {
+  .cs-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cs-pane + .cs-pane {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+}
+
+/* Reduced motion: the sweep is dropped, the counter stays. */
+@media (prefers-reduced-motion: reduce) {
+  .cs-ghost-band,
+  .cs-ghost-ink {
+    display: none;
+  }
+
+  .cs-ghost-reg path {
+    animation: none;
+    stroke-dashoffset: 0;
+    opacity: 0.6;
+  }
+
+  .cs-status[data-live="true"] .cs-status-dot,
+  .cs-thumb[data-state="live"] .cs-thumb-dot {
+    animation: none;
+  }
+
+  .cs-status-track i {
+    transition: none;
+  }
 }

@@ -2,27 +2,20 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { signOut } from "@/lib/auth";
 import { titlePayload } from "@/lib/chapters-format";
 import {
   canEditChapter,
   type Chapter,
   type ChapterStatus,
-  type TextBlock,
 } from "@/lib/chapters";
 import {
   createChapterAction,
   deleteChapterAction,
-  registerPanelsAction,
+  registerPanelsAfterAction,
+  removePanelAction,
   setChapterStatusAction,
-  updateBlockTextAction,
   updateChapterDetailsAction,
 } from "@/lib/chapter-actions";
 import { preparePanel, PanelImageError } from "@/lib/panel-image";
@@ -40,33 +33,21 @@ import { DashboardTopbar } from "../dashboard/dashboard-topbar";
 import { workspaceLinks } from "../dashboard/workspace-nav";
 import { Isolate } from "../error-boundary";
 import { NotFoundState } from "../not-found-state";
-import {
-  AlertCircle,
-  ArrowLeft,
-  Check,
-  Clock,
-  Download,
-  Play,
-  Stamp,
-} from "../icons";
-import { EnginePanel } from "./engine-panel";
+import { AlertCircle, ArrowLeft, Check, Clock, Play, Stamp } from "../icons";
+import { ChapterStudio } from "./chapter-studio";
 import { ChapterRail, type RailTab } from "./chapter-rail";
 import { ChapterStatusChip } from "./chapter-status-dot";
 import { DeleteChapterDialog } from "./delete-chapter-dialog";
 import { GlossaryPanel } from "./glossary-panel";
 import type { UploadProgress } from "./panel-dropzone";
 import { RejectChapterDialog } from "./reject-chapter-dialog";
-import { TextReview } from "./text-review";
 import { Tooltip } from "../tooltip";
-
-const PREFS_KEY = "hwaflow.workspace.prefs.v1";
 
 type Notice = { tone: "success" | "error"; text: string };
 
 /**
- * The chapter workspace: a chapter/glossary rail, a XianScan image studio,
- * and an editable review of imported text. HwaFlow does not run a separate
- * translation pipeline; engine text is kept in the editor for human review.
+ * The chapter workspace: a chapter/glossary rail, the studio that pairs the raw
+ * page with its typeset result, and the chapter's review controls.
  */
 type WorkspaceViewProps = {
   viewer: AuthUser;
@@ -80,16 +61,10 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
     bundle?.chapters ?? []
   );
   const [panels, setPanels] = useState<WorkspacePanel[]>(bundle?.panels ?? []);
-  const [allBlocks, setAllBlocks] = useState<TextBlock[]>(
-    bundle?.blocks ?? []
-  );
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [tab, setTab] = useState<RailTab>("chapters");
   const [panelIndex, setPanelIndex] = useState(0);
-  const [hoveredBlockId, setHoveredBlockId] = useState<string | null>(null);
-  const [pinnedBlockId, setPinnedBlockId] = useState<string | null>(null);
-  const [showBoxes, setShowBoxes] = useState(false);
   const [numberDraft, setNumberDraft] = useState("");
   const [titleDraft, setTitleDraft] = useState("");
   const [headerError, setHeaderError] = useState<string | null>(null);
@@ -99,6 +74,7 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
   const [creatingChapter, setCreatingChapter] = useState(false);
   const [uploadBusy, setUploadBusy] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress>(null);
+  const [removingPanel, setRemovingPanel] = useState(false);
   const [uploadErrors, setUploadErrors] = useState<
     Array<{ file: File; message: string }>
   >([]);
@@ -120,7 +96,6 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
     setChapter(bundle?.chapter ?? null);
     setSeriesChapters(bundle?.chapters ?? []);
     setPanels(bundle?.panels ?? []);
-    setAllBlocks(bundle?.blocks ?? []);
   }, [bundle]);
 
   useEffect(() => {
@@ -137,31 +112,11 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
     };
   }, [menuOpen]);
 
-  useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(PREFS_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as { showBoxes?: boolean };
-      if (parsed.showBoxes === true) setShowBoxes(true);
-    } catch {
-      // A corrupt preference is not worth a warning.
-    }
-  }, []);
-
   const user = viewer;
   const series = bundle?.series ?? null;
   const group = bundle?.group ?? null;
   const member = bundle?.viewerMember ?? null;
   const assigned = bundle?.viewerRole === "staff";
-
-  const currentPanel = panels[panelIndex] ?? null;
-
-  const blocks = useMemo(() => {
-    if (!currentPanel) return [];
-    return allBlocks
-      .filter((entry) => entry.panelId === currentPanel.id)
-      .sort((a, b) => a.index - b.index);
-  }, [allBlocks, currentPanel]);
 
   const terms = bundle?.glossary ?? [];
 
@@ -173,7 +128,6 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
 
   useEffect(() => {
     setPanelIndex(0);
-    setPinnedBlockId(null);
     setTab("chapters");
   }, [chapter?.id]);
 
@@ -182,25 +136,6 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
     setNumberDraft(String(chapter.number));
     setTitleDraft(chapter.title ?? "");
   }, [chapter?.id, chapter?.number, chapter?.title]);
-
-  useEffect(() => {
-    if (!pinnedBlockId) return;
-    const onPointer = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (!target) return;
-      if (target.closest(".ch-bubble")) return;
-      setPinnedBlockId(null);
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setPinnedBlockId(null);
-    };
-    document.addEventListener("mousedown", onPointer);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onPointer);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [pinnedBlockId]);
 
   const goPrevPanel = useCallback(() => {
     setPanelIndex((index) => Math.max(0, index - 1));
@@ -272,7 +207,6 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
   const canEdit = canEditChapter(member.role, assigned);
   const canManage = canManageSeries(member.role);
   const canCreate = canManage || member.role === "staff";
-  const activeBlockId = hoveredBlockId ?? pinnedBlockId;
 
   const status = chapter.status;
   const canSubmit = canEdit && (status === "ready" || status === "rejected");
@@ -281,8 +215,10 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
   const canMarkReady = canEdit && status === "processing";
   const canUpload = canEdit && status !== "submitted" && status !== "approved";
 
+  // Submitting needs at least one saved line; the studio writes those in
+  // automatically when a run finishes, so this is a read of server state.
   const panelsWithText = panels.some((panel) =>
-    allBlocks.some(
+    bundle.blocks.some(
       (block) =>
         block.panelId === panel.id && block.finalText.trim().length > 0
     )
@@ -290,7 +226,7 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
 
   let engineRunReason: string | null = null;
   if (!canEdit) engineRunReason = "You don't have access to run this chapter.";
-  else if (panels.length === 0) engineRunReason = "Upload a page first.";
+  else if (panels.length === 0) engineRunReason = "Add a panel first.";
   else if (status === "submitted") engineRunReason = "This chapter is awaiting review.";
   else if (status === "approved") engineRunReason = "Reopen this chapter before running it again.";
   const canRunEngine = engineRunReason === null;
@@ -344,7 +280,7 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
     router.refresh();
   };
 
-  const handleUpload = async (files: File[]) => {
+  const handleUpload = async (files: File[], afterIndex: number) => {
     if (!canUpload || uploadBusy || files.length === 0) return;
 
     const existingBytes = panels.reduce((sum, panel) => sum + panel.byteSize, 0);
@@ -415,13 +351,11 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
         const uploadedPaths: string[] = [];
         const registered: Array<{
           id: string;
-          index: number;
           path: string;
           width: number;
           height: number;
           byteSize: number;
         }> = [];
-        let nextIndex = panels.length;
 
         for (const page of pagesToUpload) {
           const id = crypto.randomUUID();
@@ -439,18 +373,18 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
           uploadedPaths.push(path);
           registered.push({
             id,
-            index: nextIndex,
             path,
             width: page.width,
             height: page.height,
             byteSize: page.byteSize,
           });
-          nextIndex += 1;
         }
 
         if (registered.length > 0) {
-          const result = await registerPanelsAction({
+          // The rows land directly behind the panel the user was looking at.
+          const result = await registerPanelsAfterAction({
             chapterId: chapter.id,
+            afterIndex,
             panels: registered,
           });
 
@@ -464,6 +398,9 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
               "success",
               `${added} page${added === 1 ? "" : "s"} added at full resolution.${detail}`
             );
+            // Land on the first page that was just inserted, so the upload is
+            // visible instead of hidden behind the panel the user started from.
+            setPanelIndex(afterIndex < 0 ? 0 : afterIndex + 1);
             router.refresh();
           }
         } else if (budgetWarning) {
@@ -481,6 +418,25 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
       setUploadProgress(null);
       setUploadBusy(false);
       if (failures.length > 0) setUploadErrors(failures);
+    }
+  };
+
+  const handleRemovePanel = async (panel: WorkspacePanel) => {
+    if (!canUpload || removingPanel) return;
+    setRemovingPanel(true);
+    try {
+      const result = await removePanelAction({
+        chapterId: chapter.id,
+        panelId: panel.id,
+      });
+      if (!result.ok) {
+        notify("error", result.message);
+        return;
+      }
+      setPanelIndex((index) => Math.max(0, Math.min(index, panels.length - 2)));
+      router.refresh();
+    } finally {
+      setRemovingPanel(false);
     }
   };
 
@@ -593,32 +549,6 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
     );
   };
 
-  const saveBlock = async (blockId: string, text: string) => {
-    const result = await updateBlockTextAction({
-      blockId,
-      finalText: text,
-    });
-
-    if (!result.ok) {
-      notify("error", result.message);
-      return false;
-    }
-
-    setAllBlocks((current) =>
-      current.map((block) =>
-        block.id === blockId
-          ? {
-              ...block,
-              finalText: result.data.finalText,
-              isEdited: true,
-            }
-          : block
-      )
-    );
-
-    return true;
-  };
-
   return (
     <div className="dash-shell ws-shell" data-workspace="true">
       <DashboardRail
@@ -642,9 +572,9 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
             <p className="eyebrow">Workspace</p>
             <h1 className="ch-mobile-title">Turn on Desktop mode</h1>
             <p className="ch-mobile-copy">
-              This workspace pairs the chapter rail with a full-size image studio
-              and editable text review, so it needs a desktop-width screen. On a
-              phone or tablet, turn on Desktop mode. On a computer, widen the
+              This workspace pairs the chapter rail with a full-size split view of
+              the raw and translated pages, so it needs a desktop-width screen. On
+              a phone or tablet, turn on Desktop mode. On a computer, widen the
               window for side-by-side page review.
             </p>
             <ul className="ch-mobile-steps">
@@ -747,17 +677,6 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
                 </div>
 
                 <div className="ch-header-actions">
-                  {panels.some((panel) => panel.hasRender) ? (
-                    <a
-                      className="btn btn-ghost btn-sm"
-                      href={`/api/chapters/${chapter.id}/download`}
-                      title="Download every saved finished page as one ZIP"
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                      Pages
-                    </a>
-                  ) : null}
-
                   {canMarkReady ? (
                     <Tooltip label="Clear a chapter left in the legacy processing state before review.">
                       <button
@@ -826,35 +745,22 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
                 </div>
               </div>
 
-              <Isolate label="The XianScan image studio">
-                <EnginePanel
+              <Isolate label="The chapter studio">
+                <ChapterStudio
                   chapterId={chapter.id}
                   initialJobId={chapter.engineJobId ?? null}
                   panels={panels}
-                  pageIndex={panelIndex}
-                  onPageChange={setPanelIndex}
-                  blocks={blocks}
-                  activeBlockId={activeBlockId}
+                  panelIndex={panelIndex}
+                  onPanelChange={setPanelIndex}
                   canEdit={canEdit}
                   canUpload={canUpload}
                   canRun={canRunEngine}
                   canRunReason={engineRunReason}
-                  canApprove={canManage}
-                  onUpload={handleUpload}
                   uploadBusy={uploadBusy}
                   uploadProgress={uploadProgress}
-                  showBoxes={showBoxes}
-                  onToggleBoxes={(next) => {
-                    setShowBoxes(next);
-                    try {
-                      window.localStorage.setItem(
-                        PREFS_KEY,
-                        JSON.stringify({ showBoxes: next })
-                      );
-                    } catch {
-                      // Preferences are optional; ignore a full quota.
-                    }
-                  }}
+                  onUpload={handleUpload}
+                  onRemovePanel={(panel) => void handleRemovePanel(panel)}
+                  removing={removingPanel}
                 />
               </Isolate>
 
@@ -868,7 +774,12 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
                       <button
                         type="button"
                         className="ch-upload-retry"
-                        onClick={() => handleUpload([failure.file])}
+                        onClick={() =>
+                          handleUpload(
+                            [failure.file],
+                            panels.length === 0 ? -1 : panelIndex
+                          )
+                        }
                         disabled={!canUpload || uploadBusy}
                       >
                         Retry
@@ -877,25 +788,6 @@ export function WorkspaceView({ viewer, bundle }: WorkspaceViewProps) {
                   ))}
                 </div>
               ) : null}
-
-              <Isolate label="Editable imported text">
-                <TextReview
-                  panel={currentPanel}
-                  panelIndex={panelIndex}
-                  panelCount={panels.length}
-                  blocks={blocks}
-                  sourceLanguage={series.language}
-                  editable={canEdit}
-                  activeBlockId={activeBlockId}
-                  onActiveBlock={setHoveredBlockId}
-                  onPinBlock={(blockId) =>
-                    setPinnedBlockId((current) =>
-                      current === blockId ? null : blockId
-                    )
-                  }
-                  onSaveBlock={saveBlock}
-                />
-              </Isolate>
             </section>
 
           </div>

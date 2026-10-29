@@ -42,7 +42,7 @@ processing, public reading audience, reader accounts, comments/community.
 | Source languages | Korean, Japanese, Chinese → English |
 | Chapter engine | XianScan only. HwaFlow sends original pages, source language and active glossary; it sends no imported/editable text or fallback. XianScan's Gemini provider stays on the engine. |
 | Processing UX | Async XianScan job with progress; the chapter retains its engine-job link across reloads. |
-| Workspace | Chapter rail + before/after image studio + editable imported-text review. |
+| Workspace | Chapter rail + permanent split view: the original page on the left, its typeset twin on the right, every control in one top bar. |
 | Consistency | Per-series glossary; imported text remains human-editable and edited translations survive re-import. |
 | Chapter approval | Fully reversible; any Manager/Owner can move a chapter back a state |
 | Credits | **Derived** from approved chapters × per-series rate. Never stored as a running total |
@@ -294,7 +294,8 @@ client-side pipeline.
 deferred `/admin/groups/[id]` surface noted in §10. Reads happen in server
 components (`lib/server/*.ts`), writes in `"use server"` actions (`lib/*-actions.ts`),
 and panel images upload directly from the browser to the private `pages` bucket at
-`{group}/{chapter}/{panel}.png` before `register_panels` writes the metadata row.
+`{group}/{chapter}/{panel}.png` before `register_panels` (append) or
+`insert_panels_after` (insert behind the current panel) writes the metadata rows.
 PNG bytes pass through unchanged; JPEG/WebP inputs are converted at native
 pixel dimensions. Legacy `.webp` objects remain readable.
 Images are read back as short-lived signed URLs, never public URLs. All content
@@ -460,6 +461,10 @@ edges, square corners. Depth comes from a 2–6 px offset, never from blur.
 - **Contrast:** all text pairs meet WCAG AA — body 16.9:1, muted 8.0:1, faint
   5.0:1 on paper; ink on every pastel ≥ 11:1; dark body 17.0:1, muted 9.4:1,
   faint 5.8:1. Status colours were darkened for AA on their pastel fills.
+- **Copy:** user-visible strings never name the image/translation engine. The
+  product is the workspace — "Run translation", "Translated", "typesetting".
+  Engine names live only in server code, comments, migrations and docs. Engine
+  error text is never surfaced either; the studio reports its own neutral lines.
 - **Motion:** `app/motion.css` is the interaction layer. Route CSS keeps its
   own surface entrances; the motion layer fills in navigation, rows, menus,
   tabs, fields, skeletons and press feedback. 90–130 ms for input response,
@@ -689,9 +694,14 @@ No HwaFlow Gemini pipeline, mock translator or translation fallback remains acti
   `allowTranslationFallback: false`; it has no `translations` input field.
 - **Images:** full-resolution processing; 20 pages, 10 MiB/page and 80 MiB/chapter.
   New PNGs and legacy WebP objects are supported by the application contract.
-- **Workspace:** `EnginePanel` provides the before/after studio; `TextReview`
-  provides editable imported lines. Re-import preserves human-edited translations
-  and does not automatically prune stale blocks.
+- **Workspace:** `ChapterStudio` is the only studio surface — one bar for panel
+  paging, add/remove, ZIP download and the run button; a status strip; the raw
+  page beside its typeset twin; and a filmstrip. Waiting is a ghost press sheet
+  with an accent ink sweep (transform-only, dropped under reduced motion). A
+  finished run is imported and rendered automatically, so there is no separate
+  import/save step. `TextReview` is kept in the repo but is no longer rendered;
+  re-import still preserves human-edited translations and does not prune stale
+  blocks.
 - **Outputs:** saved pages live in private `renders`; `clean_path` is updated while
   `original_path` remains unchanged. The download route offers pages or a chapter ZIP.
 - **Retention:** Supabase originals remain by default. The optional purge is enabled
@@ -699,7 +709,9 @@ No HwaFlow Gemini pipeline, mock translator or translation fallback remains acti
 - **Migration status:** `20261109000000_engine_page_budget.sql` is source-only in
   this worktree and was not applied here. Verify the deployed `pages` bucket allows
   PNG before relying on new PNG uploads; do not apply migrations without explicit
-  confirmation.
+  confirmation. `20261110090000_insert_panels_after.sql` (insert-after RPC) is also
+  source-only and must be applied before "Add panels" can insert behind the current
+  panel.
 
 See [`docs/engine-integration.md`](engine-integration.md) for the active route map,
 limits and runtime settings.

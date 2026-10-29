@@ -4,19 +4,20 @@
 
 ## What the studio does
 
-- Presents each chapter page in an accessible before/after image studio, with split, before-only and after-only views, zoom, fit, region boxes, page navigation, a full-size viewer and downloads.
+- Shows one chapter page at a time as a permanent split: the original at full resolution on the left, its typeset result on the right, paged together from one shared panel index.
+- Keeps every run control in one top bar — previous/next panel, add panels (inserted directly after the current panel), remove panel, ZIP download and run — and locks add/remove/run while a run is in flight.
 - Sends the original page images, the series source language, and active glossary terms to XianScan. XianScan remains configured to use its Gemini provider (`translationMode: "gemini"`, `allowTranslationFallback: false`).
 - Does **not** read or send `text_blocks`, imported translations, edited text, mock content, or any HwaFlow fallback as XianScan translation input.
-- Imports XianScan regions into HwaFlow's editable text review. Human-edited translations are preserved if a run is imported again; omitted/stale text blocks are not automatically deleted.
-- Stores finished pages separately from originals, and can download saved renders as individual images or a ZIP.
+- Imports XianScan regions and saves page renders automatically when a run finishes, so the workspace has no separate import/save step. Human-edited translations are preserved if a run is imported again; omitted/stale text blocks are not automatically deleted.
+- Stores finished pages separately from originals, and downloads saved renders as a ZIP.
 
 ## Active code map
 
 | File | Responsibility |
 | --- | --- |
-| `components/chapters/workspace-view.tsx` | Chapter header, rail, upload orchestration, XianScan studio and editable text review. |
-| `components/chapters/engine-panel.tsx` | Before/after controls, page strip, job status, asset review, import/approve/reject/render actions and full-size viewer. |
-| `components/chapters/text-review.tsx` | Editable imported lines with source-language labels. |
+| `components/chapters/workspace-view.tsx` | Chapter header, rail, upload and remove orchestration around the studio. |
+| `components/chapters/chapter-studio.tsx` | Top bar controls, status strip, raw/translated split view, waiting sheet, filmstrip, job polling and the automatic import + render after a run. |
+| `components/chapters/text-review.tsx` | Editable imported lines with source-language labels. Retained but not rendered by the workspace. |
 | `components/chapters/panel-dropzone.tsx` | Multi-page image selection and full-resolution upload progress/copy. |
 | `lib/panel-image.ts` | Validates and prepares pages without resizing. PNG uploads pass through unchanged; JPEG/WebP inputs are encoded to PNG at their original pixel dimensions. |
 | `lib/engine-limits.ts` | Shared page, per-file, chapter-byte and MIME limits used by browser, server and tests. |
@@ -43,11 +44,19 @@ The `pages` Storage bucket must accept `image/png` (and `image/webp` for legacy 
 
 ### Page cap in the UI
 
-The 20-page cap is visible, not just enforced: the studio header shows a `20/20` counter, the add-pages control becomes **Page limit reached** and is disabled at capacity, and the empty-state drop zone explains that deleting a page is the only way to add another. `registerPanelsAction` re-checks the count against the database, so two tabs cannot exceed it.
+The 20-page cap is visible, not just enforced: the raw pane footer shows a
+`12 / 20 panels` counter with twenty cells, the add control becomes **Chapter full**
+and is disabled at capacity, and the empty-state drop zone says the cap out loud.
+Panels are inserted directly behind the panel in view through `insert_panels_after`,
+which re-checks the count against the database, so two tabs cannot exceed it.
 
 ### Preview reliability
 
-Engine image previews retry a failed load three times with a short backoff before falling back to the other available source (live engine asset vs. saved render), and only then show an error with a **Try again** button. A page that the engine is still writing, or one dropped connection through the proxy, therefore no longer surfaces as "that image is no longer available" while the output is in fact fine.
+A page image that fails to load retries once after a short delay, then shows a
+**Try again** control. Pages render at full resolution fitted to the pane; clicking
+one opens the original file in a new tab rather than an in-app zoom or lightbox. The
+translated pane prefers the saved render and falls back to the engine asset only
+when the job is `done` and its page count still matches the chapter.
 
 ## Job input and text import
 
@@ -59,6 +68,8 @@ Engine image previews retry a failed load three times with a short backoff befor
 4. XianScan metadata selecting Gemini with fallback disabled.
 
 The route does not select `text_blocks`, nor does the engine client accept a `translations` field. On import, `/api/engine/jobs/:id/import` maps XianScan regions into `text_blocks` through `set_panel_blocks`. For an existing block marked `is_edited`, the existing `base_translation` and `final_text` are carried forward. The import only changes blocks present in a valid XianScan payload; stale blocks are left in place and surfaced as a surplus count rather than pruned automatically.
+
+The studio calls import and render itself the moment a job reports `done` with a page count that still matches the chapter, so there is no manual import step and reviewed chapters no longer start without text. Neither call's error body is shown: the workspace reports its own neutral line, because engine errors name the batch service and leak worker internals.
 
 ## Images, retention and downloads
 
