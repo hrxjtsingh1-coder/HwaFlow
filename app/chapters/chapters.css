@@ -156,8 +156,9 @@
 }
 
 .ch-tab[data-active="true"] {
-  background: var(--accent-soft);
-  color: var(--accent-ink);
+  background: var(--surface-2);
+  color: var(--text);
+  box-shadow: var(--shadow-hard-sm);
 }
 
 .ch-tab-count {
@@ -231,7 +232,7 @@
   bottom: 0.45rem;
   width: 2px;
   border-radius: 0;
-  background: var(--accent);
+  background: var(--edge);
 }
 
 .ch-rail-link {
@@ -1692,7 +1693,7 @@
   gap: 0.5rem;
   padding: 0.5rem 0.625rem;
   border-bottom: 1px solid var(--border);
-  background: color-mix(in oklab, var(--surface) 78%, var(--accent-soft));
+  background: var(--surface);
 }
 
 .cs-divider {
@@ -1731,17 +1732,17 @@
   background: var(--surface);
   color: var(--text);
   box-shadow: var(--shadow-hard-sm);
-  transition: background-color var(--t-fast) var(--ease),
-    color var(--t-fast) var(--ease), translate var(--t-fast) var(--ease);
+  transition: translate var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease);
 }
 
 .cs-icon:hover:not(:disabled) {
-  background: var(--accent-soft);
-  color: var(--accent);
+  translate: -2px -2px;
+  box-shadow: var(--shadow-hard);
 }
 
 .cs-icon:active:not(:disabled) {
-  translate: 1px 1px;
+  translate: 2px 2px;
   box-shadow: none;
 }
 
@@ -1768,8 +1769,7 @@
   text-transform: uppercase;
   white-space: nowrap;
   box-shadow: var(--shadow-hard-sm);
-  transition: background-color var(--t-fast) var(--ease),
-    color var(--t-fast) var(--ease), translate var(--t-fast) var(--ease),
+  transition: translate var(--t-fast) var(--ease),
     box-shadow var(--t-fast) var(--ease);
 }
 
@@ -1779,12 +1779,12 @@
 }
 
 .cs-btn:hover:not(:disabled):not([data-disabled="true"]) {
-  background: var(--accent-soft);
-  color: var(--accent);
+  translate: -2px -2px;
+  box-shadow: var(--shadow-hard);
 }
 
 .cs-btn:active:not(:disabled):not([data-disabled="true"]) {
-  translate: 1px 1px;
+  translate: 2px 2px;
   box-shadow: none;
 }
 
@@ -1797,14 +1797,8 @@
 }
 
 .cs-btn[data-primary="true"] {
-  background: var(--accent);
+  background: var(--edge);
   color: var(--paper);
-}
-
-.cs-btn[data-primary="true"]:hover:not(:disabled) {
-  background: var(--accent);
-  color: var(--paper);
-  opacity: 0.88;
 }
 
 .cs-btn[data-primary="true"]:disabled {
@@ -1814,10 +1808,6 @@
 }
 
 :root[data-theme="dark"] .cs-btn[data-primary="true"] {
-  color: oklch(0.14 0 0);
-}
-
-:root[data-theme="dark"] .cs-btn[data-primary="true"]:hover:not(:disabled) {
   color: oklch(0.14 0 0);
 }
 
@@ -1875,7 +1865,7 @@
   display: block;
   width: 100%;
   height: 100%;
-  background: var(--accent);
+  background: var(--edge);
   transform-origin: left center;
   transform: scaleX(0);
   transition: transform 420ms var(--ease);
@@ -2063,8 +2053,8 @@
 }
 
 .cs-cap-cells i[data-on="true"] {
-  border-color: var(--accent);
-  background: var(--accent);
+  border-color: var(--edge);
+  background: var(--edge);
 }
 
 .cs-cap-num {
@@ -2205,9 +2195,9 @@
   background: linear-gradient(
     180deg,
     transparent 0%,
-    color-mix(in oklab, var(--accent) 6%, transparent) 34%,
-    color-mix(in oklab, var(--accent) 16%, transparent) 76%,
-    color-mix(in oklab, var(--accent) 30%, transparent) 96%,
+    color-mix(in oklab, var(--cs-ink) 6%, var(--cs-paper)) 34%,
+    color-mix(in oklab, var(--cs-ink) 16%, var(--cs-paper)) 76%,
+    color-mix(in oklab, var(--cs-ink) 30%, var(--cs-paper)) 96%,
     transparent 100%
   );
 }
@@ -2219,8 +2209,8 @@
   right: 0;
   bottom: 0;
   height: 1.5px;
-  background: color-mix(in oklab, var(--accent) 85%, transparent);
-  box-shadow: 0 0 10px color-mix(in oklab, var(--accent) 40%, transparent);
+  background: color-mix(in oklab, var(--cs-ink) 85%, var(--cs-paper));
+  box-shadow: 0 0 10px color-mix(in oklab, var(--cs-ink) 40%, var(--cs-paper));
 }
 
 /* Registration marks, drawn once per mount. */
@@ -2338,13 +2328,13 @@
 }
 
 .cs-thumb:hover {
-  border-color: var(--accent);
-  background: var(--accent-soft);
+  border-color: var(--edge);
+  background: var(--surface-2);
 }
 
 .cs-thumb[data-selected="true"] {
   border-color: var(--edge);
-  background: var(--accent-soft);
+  background: var(--surface-3);
   box-shadow: var(--shadow-hard-sm);
 }
 
@@ -2394,7 +2384,7 @@
 }
 
 .cs-thumb[data-selected="true"] .cs-thumb-n {
-  color: var(--accent);
+  color: var(--text);
   font-weight: 600;
 }
 
