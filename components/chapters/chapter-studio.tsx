@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { MAX_CHAPTER_PAGES } from "@/lib/engine-limits";
 import type { WorkspacePanel } from "@/lib/server/chapters";
@@ -153,22 +152,8 @@ function GhostSheet({
 /* Pane image                                                          */
 /* ------------------------------------------------------------------ */
 
-/**
- * Full-resolution page, fitted to the pane. Clicking opens the original file in
- * a new tab, which is why there is no zoom control: the browser already has a
- * better one.
- */
-function PageImage({
-  src,
-  alt,
-  ratio,
-  children,
-}: {
-  src: string;
-  alt: string;
-  ratio: string;
-  children?: ReactNode;
-}) {
+/** Full-resolution page, fitted to the pane's width. */
+function PageImage({ src, alt, ratio }: { src: string; alt: string; ratio: string }) {
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const timer = useRef<number | null>(null);
@@ -215,18 +200,10 @@ function PageImage({
   const url = attempt > 0 ? `${src}${src.includes("?") ? "&" : "?"}retry=${attempt}` : src;
 
   return (
-    <a
-      className="cs-frame"
-      style={{ aspectRatio: ratio }}
-      href={src}
-      target="_blank"
-      rel="noreferrer"
-      title="Open this panel at full resolution"
-    >
+    <div className="cs-frame" style={{ aspectRatio: ratio }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img className="cs-page" src={url} alt={alt} onError={handleError} />
-      {children}
-    </a>
+    </div>
   );
 }
 
@@ -726,9 +703,7 @@ export function ChapterStudio({
                 src={translatedUrl}
                 alt={`Translated page ${panelIndex + 1}`}
                 ratio={ratio}
-              >
-                <span className="cs-stamp">Ready</span>
-              </PageImage>
+              />
             ) : (
               <div className="cs-stub" role="status">
                 <p>This panel hasn&apos;t been typeset yet. Run translation to fill it in.</p>

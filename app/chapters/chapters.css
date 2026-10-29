@@ -2020,7 +2020,6 @@
   border: 1px solid var(--cs-ink);
   background: var(--cs-paper);
   box-shadow: var(--shadow-hard);
-  cursor: zoom-in;
 }
 
 .cs-page {
@@ -2104,23 +2103,6 @@
   margin: 0;
   font-size: 0.75rem;
   line-height: 1.55;
-}
-
-.cs-stamp {
-  position: absolute;
-  top: 0.5625rem;
-  right: 0.5625rem;
-  z-index: 3;
-  padding: 3px 7px;
-  border: 1px solid var(--edge);
-  background: var(--mint);
-  color: var(--cs-ink);
-  font-family: var(--font-mono);
-  font-size: 0.53125rem;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  box-shadow: var(--shadow-hard-sm);
 }
 
 /* --- the waiting sheet -------------------------------------------- */
@@ -2330,6 +2312,9 @@
 
 .cs-strip {
   display: flex;
+  /* Never shrink: a tall page overflows the split, and a shrinkable strip
+     would be squeezed into a row of bars. */
+  flex: 0 0 auto;
   align-items: stretch;
   gap: 5px;
   padding: 0.4375rem 0.5625rem;

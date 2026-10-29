@@ -54,10 +54,9 @@ which re-checks the count against the database, so two tabs cannot exceed it.
 
 A page image that fails to load retries once after a short delay, then shows a
 **Try again** control. Pages render at full resolution, zoomed to the pane's width
-and scrolled vertically; clicking one opens the original file in a new tab rather
-than an in-app zoom or lightbox. The translated pane prefers the saved render and
-falls back to the engine asset only when the job is `done` and its page count still
-matches the chapter.
+and scrolled vertically, with no in-app zoom, lightbox or click-through. The
+translated pane prefers the saved render and falls back to the engine asset only
+when the job is `done` and its page count still matches the chapter.
 
 ## Job input and text import
 
