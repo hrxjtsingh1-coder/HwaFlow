@@ -696,8 +696,10 @@ No HwaFlow Gemini pipeline, mock translator or translation fallback remains acti
   New PNGs and legacy WebP objects are supported by the application contract.
 - **Workspace:** `ChapterStudio` is the only studio surface — one bar for panel
   paging, add/remove, ZIP download and the run button; a status strip; the raw
-  page beside its typeset twin; and a filmstrip. Waiting is a ghost press sheet
-  with an accent ink sweep (transform-only, dropped under reduced motion). A
+  page beside its typeset twin; and a filmstrip. Pages are fitted to the pane
+  width and scroll, with both panes scrolling in lockstep, because manhwa pages
+  are far taller than one screen. Waiting is a ghost press sheet at the real page
+  size with an accent ink sweep (transform-only, dropped under reduced motion). A
   finished run is imported and rendered automatically, so there is no separate
   import/save step. `TextReview` is kept in the repo but is no longer rendered;
   re-import still preserves human-edited translations and does not prune stale

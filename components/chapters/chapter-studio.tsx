@@ -33,6 +33,9 @@ type EngineJob = {
 
 type Mode = "empty" | "draft" | "waiting" | "saving" | "ready";
 
+/** The two panes, which scroll as one. */
+type Pane = "raw" | "translated";
+
 type Props = {
   chapterId: string;
   initialJobId?: string | null;
@@ -256,6 +259,9 @@ export function ChapterStudio({
   const [now, setNow] = useState(() => Date.now());
 
   const stripRef = useRef<HTMLDivElement | null>(null);
+  const rawStage = useRef<HTMLDivElement | null>(null);
+  const translatedStage = useRef<HTMLDivElement | null>(null);
+  const scrollLock = useRef<Pane | null>(null);
   const finalizedFor = useRef<string | null>(null);
   const mounted = useRef(true);
 
@@ -370,6 +376,35 @@ export function ChapterStudio({
     else if (box.right > bounds.right) strip.scrollLeft += box.right - bounds.right + 8;
   }, [panelIndex, panels.length]);
 
+  /* ---- the two panes scroll as one -------------------------------- */
+
+  /**
+   * Both panes show the same page at the same fit, so one scrollbar drives the
+   * other by the same amount. The two images can differ by a few pixels in
+   * height (a saved render vs. the original), so the offset is scaled by the
+   * scrollable ranges, which is a no-op while they match.
+   */
+  function syncScroll(side: Pane) {
+    const from = side === "raw" ? rawStage.current : translatedStage.current;
+    const to = side === "raw" ? translatedStage.current : rawStage.current;
+    if (!from || !to || from === to) return;
+    // This event is the echo of our own write to the pane being scrolled.
+    if (scrollLock.current === (side === "raw" ? "translated" : "raw")) return;
+
+    scrollLock.current = side;
+    const fromRange = from.scrollHeight - from.clientHeight;
+    const toRange = to.scrollHeight - to.clientHeight;
+    const next =
+      fromRange > 0 && toRange > 0
+        ? (from.scrollTop / fromRange) * toRange
+        : 0;
+    if (Math.abs(to.scrollTop - next) > 0.5) to.scrollTop = next;
+
+    requestAnimationFrame(() => {
+      if (scrollLock.current === side) scrollLock.current = null;
+    });
+  }
+
   /* ---- actions --------------------------------------------------- */
 
   async function startRun() {
@@ -418,6 +453,12 @@ export function ChapterStudio({
   const savedRender = current?.hasRender ? current.previewUrl : null;
   const engineFinal = job && jobComplete ? assetUrl(job.jobId, panelIndex) : null;
   const translatedUrl = savedRender ?? engineFinal;
+
+  // A new page starts at its top, in both panes.
+  useEffect(() => {
+    if (rawStage.current) rawStage.current.scrollTop = 0;
+    if (translatedStage.current) translatedStage.current.scrollTop = 0;
+  }, [panelIndex, translatedUrl]);
 
   const elapsedSeconds = (() => {
     if (!job?.createdAt) return 0;
@@ -597,7 +638,12 @@ export function ChapterStudio({
             <span className="cs-dims">{current ? rawDims : "—"}</span>
           </div>
 
-          <div className="cs-stage">
+          <div
+            className="cs-stage"
+            ref={rawStage}
+            onScroll={() => syncScroll("raw")}
+            data-pane="raw"
+          >
             {current?.imageUrl ? (
               <PageImage
                 src={current.imageUrl}
@@ -657,7 +703,12 @@ export function ChapterStudio({
             <span className="cs-dims">{mode === "ready" && current ? rawDims : "—"}</span>
           </div>
 
-          <div className="cs-stage">
+          <div
+            className="cs-stage"
+            ref={translatedStage}
+            onScroll={() => syncScroll("translated")}
+            data-pane="translated"
+          >
             {mode === "empty" ? (
               <div className="cs-stub" role="status">
                 <p>Add panels, then run translation. The finished pages appear here.</p>

@@ -4,7 +4,7 @@
 
 ## What the studio does
 
-- Shows one chapter page at a time as a permanent split: the original at full resolution on the left, its typeset result on the right, paged together from one shared panel index.
+- Shows one chapter page at a time as a permanent split: the original at full resolution on the left, its typeset result on the right, paged together from one shared panel index. Long pages are fitted to the pane's width and scroll; scrolling either pane moves the other by the same amount.
 - Keeps every run control in one top bar — previous/next panel, add panels (inserted directly after the current panel), remove panel, ZIP download and run — and locks add/remove/run while a run is in flight.
 - Sends the original page images, the series source language, and active glossary terms to XianScan. XianScan remains configured to use its Gemini provider (`translationMode: "gemini"`, `allowTranslationFallback: false`).
 - Does **not** read or send `text_blocks`, imported translations, edited text, mock content, or any HwaFlow fallback as XianScan translation input.
@@ -53,10 +53,11 @@ which re-checks the count against the database, so two tabs cannot exceed it.
 ### Preview reliability
 
 A page image that fails to load retries once after a short delay, then shows a
-**Try again** control. Pages render at full resolution fitted to the pane; clicking
-one opens the original file in a new tab rather than an in-app zoom or lightbox. The
-translated pane prefers the saved render and falls back to the engine asset only
-when the job is `done` and its page count still matches the chapter.
+**Try again** control. Pages render at full resolution, zoomed to the pane's width
+and scrolled vertically; clicking one opens the original file in a new tab rather
+than an in-app zoom or lightbox. The translated pane prefers the saved render and
+falls back to the engine asset only when the job is `done` and its page count still
+matches the chapter.
 
 ## Job input and text import
 

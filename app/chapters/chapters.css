@@ -1912,9 +1912,13 @@
 .cs-split {
   display: grid;
   flex: 1 1 auto;
+  /* The 1px seam is a grid gap, not a border: a border would make the right
+     pane 1px narrower, which makes its page 3px shorter and the two scroll
+     ranges disagree. */
+  gap: 1px;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   min-height: 0;
-  background: var(--surface-2);
+  background: var(--border);
 }
 
 .cs-pane {
@@ -1924,10 +1928,6 @@
   min-height: 0;
   margin: 0;
   background: var(--surface);
-}
-
-.cs-pane + .cs-pane {
-  border-left: 1px solid var(--border);
 }
 
 .cs-pane-head {
@@ -1993,22 +1993,30 @@
   position: relative;
   display: flex;
   flex: 1 1 auto;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   min-height: 10rem;
   padding: 0.75rem;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   background: var(--surface-2);
 }
 
+/* Long manhwa pages fill the pane's width and scroll, so the art stays legible
+   instead of shrinking to fit the height. `margin-block: auto` keeps a short
+   page centred and still lets a tall one start at the top. */
 .cs-frame {
   position: relative;
   display: flex;
-  align-items: center;
+  flex: 0 0 auto;
+  align-items: flex-start;
   justify-content: center;
-  height: 100%;
-  max-height: 100%;
+  width: 100%;
   max-width: 100%;
+  height: auto;
+  margin-block: auto;
   border: 1px solid var(--cs-ink);
   background: var(--cs-paper);
   box-shadow: var(--shadow-hard);
@@ -2073,6 +2081,7 @@
 .cs-drop-wrap {
   width: 100%;
   max-width: 26rem;
+  margin-block: auto;
 }
 
 .cs-stub {
@@ -2081,6 +2090,7 @@
   align-items: center;
   gap: 0.5rem;
   max-width: 20rem;
+  margin-block: auto;
   padding: 1rem;
   color: var(--faint);
   text-align: center;
@@ -2115,12 +2125,15 @@
 
 /* --- the waiting sheet -------------------------------------------- */
 
+/* The waiting sheet is the finished page at the same fit: full pane width, its
+   own height from the panel's aspect ratio, and scrolling with the original. */
 .cs-sheet {
   position: relative;
-  height: 100%;
-  max-height: 100%;
-  width: auto;
+  flex: 0 0 auto;
+  width: 100%;
   max-width: 100%;
+  height: auto;
+  margin-block: auto;
   border: 1px solid var(--cs-ink);
   background: var(--cs-paper);
   box-shadow: var(--shadow-hard);
@@ -2405,11 +2418,6 @@
 @media (max-width: 1100px) {
   .cs-split {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .cs-pane + .cs-pane {
-    border-left: 0;
-    border-top: 1px solid var(--border);
   }
 }
 
