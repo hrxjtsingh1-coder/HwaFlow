@@ -7,6 +7,8 @@ type BubbleRowProps = {
   block: TextBlock;
   /** 1-based position within the panel. */
   position: number;
+  /** BCP-47 source language code for screen readers. */
+  sourceLang?: string;
   editable: boolean;
   active: boolean;
   onActivate: () => void;
@@ -30,6 +32,7 @@ type BubbleRowProps = {
 export function BubbleRow({
   block,
   position,
+  sourceLang = "und",
   editable,
   active,
   onActivate,
@@ -101,7 +104,7 @@ export function BubbleRow({
               </span>
             )}
           </p>
-          <p className="ch-bubble-source" lang="ko">
+          <p className="ch-bubble-source" lang={sourceLang}>
             {block.sourceText}
           </p>
         </div>
@@ -154,7 +157,7 @@ export function BubbleRow({
             }
           }}
         />
-        <p className="ch-bubble-source" lang="ko">
+        <p className="ch-bubble-source" lang={sourceLang}>
           {block.sourceText}
         </p>
         <div className="ch-bubble-meta">

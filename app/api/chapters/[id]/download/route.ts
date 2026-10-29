@@ -10,7 +10,7 @@
  * The archive is buffered, so there is a hard ceiling rather than an OOM.
  */
 
-import { requirePipelineViewer } from "@/lib/pipeline-auth";
+import { requireEngineViewer } from "@/lib/engine-auth";
 import { createClient } from "@/lib/supabase/server";
 import { buildZip, type ZipEntry } from "@/lib/zip";
 
@@ -20,7 +20,7 @@ export const maxDuration = 300;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** 40 pages x 25 MB would be 1 GB; nobody needs that in one request. */
+/** Keep the buffered archive under a hard memory ceiling. */
 const MAX_ARCHIVE_BYTES = 200 * 1024 * 1024;
 
 function archiveName(number: number, title: string | null): string {
@@ -41,7 +41,7 @@ function pageFileName(pageIndex: number, path: string): string {
 }
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requirePipelineViewer();
+  const auth = await requireEngineViewer();
   if (!auth.ok) return auth.response;
 
   const { id } = await params;

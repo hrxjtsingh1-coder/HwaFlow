@@ -29,7 +29,7 @@ import {
   MAX_SERIES_COVER_BYTES,
   seriesCoverByteSize,
 } from "./series-cover";
-import { isSourceLanguage, type SourceLanguage } from "./ai/types";
+import { isSourceLanguage, type SourceLanguage } from "./source-language";
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */

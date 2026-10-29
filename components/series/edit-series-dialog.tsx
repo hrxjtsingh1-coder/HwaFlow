@@ -6,7 +6,7 @@ import {
   SOURCE_LANGUAGES,
   SOURCE_LANGUAGE_LABELS,
   type SourceLanguage,
-} from "@/lib/ai/types";
+} from "@/lib/source-language";
 import {
   MAX_SERIES_DESCRIPTION,
   MAX_SERIES_GENRE,
@@ -231,8 +231,8 @@ export function EditSeriesDialog({
                 ))}
               </select>
               <span className="grp-field-count">
-                Changing this applies to the next pipeline run, not to chapters
-                already translated.
+                Changing this applies to the next XianScan run, not to imported
+                text already in a chapter.
               </span>
             </label>
 

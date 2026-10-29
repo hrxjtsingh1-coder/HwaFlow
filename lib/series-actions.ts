@@ -12,7 +12,7 @@
  * keeps the generated pastel cover until someone uploads again.
  */
 
-import type { SourceLanguage } from "./ai/types";
+import type { SourceLanguage } from "./source-language";
 import type { Series, SeriesAssignment } from "./series";
 import {
   cleanSeriesTitle,

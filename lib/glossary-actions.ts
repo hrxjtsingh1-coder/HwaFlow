@@ -3,8 +3,8 @@
 /**
  * Glossary mutations.
  *
- * The RPCs own permissions and the manual-vs-auto rules; this module validates
- * the browser payload and maps SQLSTATEs to the UI's failure names.
+ * The RPCs own permissions and manual glossary rules; this module validates the
+ * browser payload and maps SQLSTATEs to the UI's failure names.
  */
 
 import {
@@ -170,38 +170,4 @@ export async function setGlossaryStatusAction(input: {
   }
 
   return { ok: true, data: mapGlossaryRow(data as never) };
-}
-
-/* ------------------------------------------------------------------ */
-/* Auto                                                                */
-/* ------------------------------------------------------------------ */
-
-export async function upsertAutoGlossaryTermsAction(input: {
-  seriesId: string;
-  chapterId: string | null;
-  terms: Array<{
-    sourceTerm: string;
-    targetTerm: string;
-    category: string;
-  }>;
-}): Promise<GlossaryActionResult<{ written: number }>> {
-  const auth = await requireViewer();
-  if (!auth.ok) return auth.result;
-
-  if (input.terms.length === 0) {
-    return { ok: true, data: { written: 0 } };
-  }
-
-  const supabase = await createClient();
-  const { data, error } = await supabase.rpc("upsert_glossary_terms", {
-    p_series_id: input.seriesId,
-    p_chapter_id: input.chapterId,
-    p_terms: input.terms,
-  });
-
-  if (error) {
-    return fromDbError(error, "Couldn't save detected terms.");
-  }
-
-  return { ok: true, data: { written: Number(data ?? 0) } };
 }

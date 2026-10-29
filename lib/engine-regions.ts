@@ -9,8 +9,8 @@
  * spaces (0..1 fractions or page pixels, detected per axis and scaled by the
  * page's real width/height).
  *
- * Normalised 0..1 boxes are what `text_blocks.bbox` already stores — see
- * lib/ai/prompts.ts ("fractions of ITS OWN panel").
+ * Normalised 0..1 boxes are what `text_blocks.bbox` stores; each box is
+ * relative to the original page's own width and height.
  *
  * Nothing here writes to the database; the import route calls the RPC.
  */

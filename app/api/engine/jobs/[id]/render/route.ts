@@ -5,14 +5,14 @@
  * points `chapter_pages.clean_path` at them, so the workspace shows the typeset
  * page — including after the raw uploads were purged.
  *
- * `original_path` is never rewritten: extraction still OCRs the raw art, so the
- * text pipeline keeps seeing what the author drew, not the lettered page.
+ * `original_path` is never rewritten: XianScan always starts from the original
+ * art, while the saved render is only a preview and download artifact.
  *
  * One object per page id, uploaded with `upsert`, so re-running the engine
  * replaces the previous render instead of accumulating objects.
  */
 
-import { requirePipelineViewer } from "@/lib/pipeline-auth";
+import { requireEngineViewer } from "@/lib/engine-auth";
 import { createClient } from "@/lib/supabase/server";
 import { getEngineJob, proxyEngineAsset, engineFailureResponse } from "@/lib/engine";
 import { assertEngineJobAccess } from "@/lib/engine-access";
@@ -30,7 +30,7 @@ type RenderSummary = {
 };
 
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requirePipelineViewer();
+  const auth = await requireEngineViewer();
   if (!auth.ok) return auth.response;
 
   const { id } = await params;
