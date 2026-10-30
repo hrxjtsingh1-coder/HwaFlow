@@ -317,7 +317,7 @@ export function ChapterStudio({
         setJob(next);
         if (next.status !== "pending" && next.status !== "working") {
           // Job reached a terminal state — stop checking.
-          if (intervalId) window.clearInterval(intervalId);
+          if (intervalId) clearInterval(intervalId);
         }
       } catch {
         // Best-effort; next tick tries again.
@@ -326,10 +326,10 @@ export function ChapterStudio({
 
     // First check now (we're past the estimate), then every 10s.
     void tick();
-    intervalId = window.setInterval(tick, 10_000);
+    intervalId = setInterval(tick, 10_000);
 
     return () => {
-      if (intervalId) window.clearInterval(intervalId);
+      if (intervalId) clearInterval(intervalId);
     };
   }, [jobId, jobActive, estimateElapsed, readJob]);
 
