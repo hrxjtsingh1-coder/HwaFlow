@@ -284,13 +284,54 @@ export function ChapterStudio({
   else if (finalizing) mode = "saving";
   else if (jobComplete || savedAny || job?.status === "approved") mode = "ready";
 
-  /* ---- polling -------------------------------------------------- */
+  /* ---- polling (hardcoded timing, no live refresh) ---------------- */
+
+  // Estimated time: seconds per page. The backend/Kaggle runs the job and
+  // the frontend shows a countdown; the first status check fires after the
+  // estimate, then every 10s until done. No polling while pending/working
+  // before the estimate elapses, and none at all once the job is terminal.
+  const SECONDS_PER_PAGE = 45;
+  const estimatedSeconds = (job?.pageCount ?? 0) * SECONDS_PER_PAGE;
+  const createdAtMs = job?.createdAt ? Date.parse(job.createdAt) : 0;
+  const checkAt = createdAtMs > 0 ? createdAtMs + estimatedSeconds * 1000 : 0;
+  const timeRemaining = checkAt > 0 ? Math.max(0, checkAt - Date.now()) : 0;
+  const estimateElapsed = checkAt > 0 ? Date.now() - checkAt : 0;
+
+  const [nextCheckMs, setNextCheckMs] = useState<number | null>(null);
 
   useEffect(() => {
+    // No polling at all for terminal or non-existent jobs.
     if (!jobId || !jobActive) return;
-    const id = window.setInterval(() => void readJob(jobId), 2500);
-    return () => window.clearInterval(id);
-  }, [jobId, jobActive, readJob]);
+    // Don't start checking before the estimated time elapses.
+    if (estimateElapsed < 0) return;
+
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const tick = async () => {
+      try {
+        const response = await fetch(`/api/engine/jobs/${encodeURIComponent(jobId)}`, {
+          cache: "no-store",
+        });
+        if (!response.ok) return;
+        const next = (await response.json()) as EngineJob;
+        setJob(next);
+        if (next.status !== "pending" && next.status !== "working") {
+          // Job reached a terminal state — stop checking.
+          if (intervalId) window.clearInterval(intervalId);
+        }
+      } catch {
+        // Best-effort; next tick tries again.
+      }
+    };
+
+    // First check now (we're past the estimate), then every 10s.
+    void tick();
+    intervalId = window.setInterval(tick, 10_000);
+
+    return () => {
+      if (intervalId) window.clearInterval(intervalId);
+    };
+  }, [jobId, jobActive, estimateElapsed, readJob]);
 
   useEffect(() => {
     if (!jobActive && !finalizing) return;
@@ -410,6 +451,22 @@ export function ChapterStudio({
     }
   }
 
+  /** After the user downloads, purge raw images from B2 so storage stays image-light. */
+  async function purgeRawAfterDownload() {
+    if (!jobId) return;
+    try {
+      const response = await fetch(`/api/engine/jobs/${encodeURIComponent(jobId)}/raw`, {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+      });
+      if (!response.ok) {
+        console.error("[raw-purge]", await response.text());
+      }
+    } catch {
+      // Non-fatal: the download already succeeded; raw cleanup is best-effort.
+    }
+  }
+
   /* ---- derived copy ---------------------------------------------- */
 
   const locked = jobActive || finalizing;
@@ -456,7 +513,10 @@ export function ChapterStudio({
     statusMeta = `0 of ${MAX_CHAPTER_PAGES} panels`;
   } else if (mode === "waiting" || mode === "saving") {
     statusCopy = "Working — this usually takes a few minutes";
-    statusMeta = `${mode === "saving" ? panels.length : pageDone} of ${panels.length} panels typeset`;
+    const remaining = Math.max(0, Math.ceil(timeRemaining / 1000));
+    statusMeta = remaining > 0
+      ? `Estimated ${mmss(remaining)} remaining · ${pageDone} of ${panels.length} panels typeset`
+      : `Checking for completion… · ${pageDone} of ${panels.length} panels typeset`;
   } else if (mode === "ready") {
     statusCopy = `Chapter ready — ${panels.length} panel${panels.length === 1 ? "" : "s"} translated and saved`;
     statusMeta = job?.finishedAt ? `Finished in ${mmss(elapsedSeconds)}` : `${panels.length} panels`;
@@ -557,9 +617,10 @@ export function ChapterStudio({
           className="cs-btn"
           href={savedAny ? `/api/chapters/${chapterId}/download` : undefined}
           download
+          onClick={() => void purgeRawAfterDownload()}
           aria-disabled={savedAny ? undefined : "true"}
           data-disabled={savedAny ? undefined : "true"}
-          title={savedAny ? "Download every saved panel as one ZIP" : "Nothing saved to download yet"}
+          title={savedAny ? "Download every saved panel as one ZIP — raw images are purged after download" : "Nothing saved to download yet"}
         >
           <Download className="h-3 w-3" />
           Download ZIP
