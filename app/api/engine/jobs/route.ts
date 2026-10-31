@@ -35,6 +35,26 @@ function engineSourceLang(value: unknown): string {
   return "auto";
 }
 
+/**
+ * A stored original must be a real page. Blank placeholders (the 51-byte PNGs
+ * that used to reach the bridge and sit in "working" forever) are refused here,
+ * before any job exists.
+ */
+function pngPlaceholderReason(bytes: Uint8Array): string | null {
+  const isPng =
+    bytes.length >= 24 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e;
+  if (isPng) {
+    const width = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(16);
+    const height = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(20);
+    if (width * height < 40_000) {
+      return `is a ${width}\u00d7${height} placeholder, not a page`;
+    }
+    return null;
+  }
+  if (bytes.length < 2048) return "is too small to be a page image";
+  return null;
+}
+
 function tooLargeMessage(pageCount: number, totalBytes: number): string {
   return (
     `The image engine handles up to ${MAX_CHAPTER_PAGES} full-resolution pages, ` +
@@ -154,6 +174,19 @@ export async function POST(request: Request) {
             message: `Couldn't read page ${row.page_index + 1}. Re-upload it and retry.`,
           },
           { status: 502 }
+        );
+      }
+
+      const placeholder = pngPlaceholderReason(
+        new Uint8Array(await blob.slice(0, 32).arrayBuffer())
+      );
+      if (placeholder) {
+        return Response.json(
+          {
+            error: "bad-page",
+            message: `Page ${row.page_index + 1} in storage ${placeholder}. Re-upload that page, then start the run again.`,
+          },
+          { status: 409, headers: { "Cache-Control": "no-store" } }
         );
       }
 
